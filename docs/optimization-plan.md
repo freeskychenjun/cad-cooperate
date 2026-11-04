@@ -1,5 +1,8 @@
 # zwcad-cooperate 项目分析与优化方案
 
+> **执行状态（2026-11-05 更新）**：本报告的建议已逐项评审并执行了一部分 —— 采纳/未采纳决策、实际改动与验证证据见
+> [`docs/optimization-executed-2026-11-05.md`](optimization-executed-2026-11-05.md)。本文保持原样作为**分析底稿**（不改写结论）。
+
 > 生成日期：2026-11-05 ｜ 版本基线：v0.9.0（commit `88b1a06`）+ 工作树未提交改动（M3-E6）
 > 性质：**只读分析报告，未执行任何优化**。所有建议均标注证据位置（文件:行号），供逐项评审后排期。
 > 分析范围：`scripts/`（C# helper/client + Python 数据侧）、`tests/`、`bin/`、`publish.ps1`、`docs/`、`.gitignore`、git 工作树状态。

@@ -8,7 +8,7 @@
 | 文件 | 作用 |
 |---|---|
 | `scripts\section\prepare.py` | xlsx/xls → `section.model.json`（DESIGN §4.1 输入、§4.2 映射、§4.3 实体清单 + `computed`；`--profile yssd` 见 §9） |
-| `scripts\section\qa_yssd.py` | 实测大断面成果表 QA：块清单、可疑点逐条、两次施测对比 → `.qa.json` + `.qa.md` |
+| `scripts\section\qa_yssd.py` | 实测大断面成果表 QA：块清单、可疑点逐条、两次施测对比 → `.qa.json` + `.qa.md`（`--block N` 选定块真正生效，默认第 1 块；跨块对比仍覆盖全部块） |
 | `tests\verify_model_self.py` | 模型**自洽**核对（任意 profile，独立重算 §4.2/§4.3 后比对 entities/computed/dataQuality） |
 | `tests\make_fixtures.py` | 生成 `tests\fixtures\*.xlsx`（可重复再生） |
 | `tests\make_expected.py` | **独立**按 §4.2/§4.3 算出 `section-30.expected.json`（不 import prepare.py） |
@@ -159,7 +159,8 @@ powershell -File tests\run_m1.ps1 -DryRunOnly    # PASS 9 / FAIL 0 / SKIP 2（CA
 ## 9. 实测大断面成果表（`--profile yssd`，2026-11-04 增补）
 
 真实数据：示例站 2025 实测大断面成果表（`.xls`）。**现有两列格式行为完全不变**（`selftest.py` 41 项回归验证）。
-详见 `tmp\real\README.md`（含逐条证据与复现命令）。
+逐条证据与复现命令见本机 `tmp\real\README.md`（`/tmp/` 不入库，fresh clone 没有它）；**契约类文档已移入
+`docs\section-model-v2.md`**（fresh clone 可读），本节 9.1–9.3 即是契约摘要。
 
 ### 9.1 识别与 CLI
 
@@ -214,7 +215,8 @@ python tmp\real\build_all.py     # 4 模型 + QA 报告 + 边界/分支用例，
 
 > 结论：**`.xls` 的高程截断是源文件本身的问题**（单元格就是文本 `28`/`45`/`98`），而
 > `hydro_data.db` 里存的是正确值（28.28/28.45/28.98）⇒ 主数据源改为 **DB**，xls 解析保留兜底。
-> 契约见 `tmp\real\SCHEMA-v2.md`；逐点证据见 `tmp\real\DB-VS-XLS.md`。
+> 契约见 `docs\section-model-v2.md`（**已脱敏入库**，原 `tmp\real\SCHEMA-v2.md`）；逐点证据见本机
+> `tmp\real\DB-VS-XLS.md`（含真实站点数据，按脱敏要求不入库）。
 
 ### 10.1 新 CLI
 
@@ -256,7 +258,7 @@ python scripts\section\prepare.py --from-db <站码> --years 2025 --compare-sour
 | `tmp\real\db-2025-01-19.model.json` | 单序列 70 点（含左右岸行），385.5×123.5 mm |
 | `tmp\real\db-last2.model.json` / `db-list-dates.json` | `--last 2`（70/113）/ 103 个可选日期 |
 | `tmp\real\db-vs-xls-2025.model.json` | 带 `sourceCompare`：183 比对点，93 一致、**90 不同**（88 处 xls 截断 + 2 处待人工核对） |
-| `tmp\real\SCHEMA-v2.md` | v2 契约（给 core-cad 的 helper 侧实现） |
+| `docs\section-model-v2.md` | v2 契约（已脱敏入库，供 helper 侧实现；原 `tmp\real\SCHEMA-v2.md`） |
 | `tmp\real\DB-VS-XLS.md` | DB vs xls 逐点对比报告（向用户证明用 DB 的理由） |
 | `tmp\real\build_db.py` | 一键重建以上全部 + 边界/分支用例（`ALL = PASS`） |
 

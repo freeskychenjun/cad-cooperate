@@ -23,7 +23,8 @@ scripts\zwc.cmd <cmd> [flags...]            # 等价薄壳（cmd → 上面那�
 powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底/管理的 serve 命令（~2.5 s）
 ```
 
-- **stdout 永远是一段 JSON**（顶层 `ok` 是唯一判据）；退出码：`0`=ok、`2`=命令失败、`3`=门禁类失败（`VERIFY_FAILED`/`BAD_DATA`/`TOO_WIDE` 等）、`4`=引擎/输入错误。
+- **stdout 永远是一段 JSON**（顶层 `ok` 是唯一判据）；退出码只看**顶层 `ok` 与 `error.code`**：`0`=ok、`2`=命令失败、`3`=门禁类失败（`VERIFY_FAILED`/`BAD_DATA`/`TOO_WIDE`/`CMD_STATE_POLLUTED`/`SENDCMD_TOO_LONG`/`LISP_UNBALANCED`/`OPEN_FAILED`）、`4`=引擎/输入错误。**message/detail 里出现这些词不影响退出码**（旧实现靠全文搜子串，已废除）。
+- 离线/排障专用子命令（不开 CAD、不连 daemon）：`bin\ZwcClient.exe hash`（打印本机算出的 helper 源码哈希）、`bin\ZwcClient.exe --prune-cache [-Keep N]`、`bin\ZwcClient.exe --selftest-exitcode [sample.json]`（退出码判据单测入口）。
 - 中文、几何、`-Items` 大 JSON **一律走文件**（`-RequestFile`/`-Items <file>`），命令行只传 ASCII 短参数（PS 5.1 按 ANSI 读 .ps1、cmd 会吃掉 `^` `=` `%`）。
 - **产品选择**：`-App zwcad|autocad`（默认 zwcad）；**强烈建议显式 `-ProgId ZWCAD.Application.16` / `ZWCAD.Application.2025` / `AutoCAD.Application.17`**。本机无版本 ProgID `ZWCAD.Application` 会被"最后启动的产品"改写；只开一个产品时不带 `-ProgId` 也能按进程自动识别，两个产品同开则返回 `MULTI_PRODUCT`（不猜）。
 
@@ -39,7 +40,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | `hint` | 用户可见提示：系统托盘「AI」图标 + 标题前缀 + 命令行横幅 | `-Text`、`-Tray`、`-Clear` |
 | `show` | 把当前附着的 CAD 窗口显示/置前（用户第一反应"看不到窗口"时用） | 返回 `hwnd/visible/foreground` |
 | `finish` | 收尾：关本次开的文档、只退**自己起的**实例、移除托盘图标、还原标题 | `-Quit`（必须给才会退出实例）、`-SweepHidden`（清理隐藏自动化实例）、`-TimeoutSec` |
-| `serve` | daemon 生命周期 | `-Action start\|status\|stop\|reset\|recover` |
+| `serve` | daemon 生命周期与本地维护 | `-Action start\|status\|stop\|reset\|recover\|prune`；`status` 另回 `helperSha/clientSha/recipeMatch`（哈希配方双侧自检，不一致报 `HASH_RECIPE_MISMATCH`）；`prune` = **纯本地**清 `bin\cache`（保最近 10 个非空 + 当前 sha + 运行中目录，空目录必清，被占目录只报不删；幂等） |
 
 ### 用户可见提示（接管标记）
 
@@ -104,8 +105,8 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 8. 多文档时**必须给 `-Doc`**（写命令缺省会 `DOC_AMBIGUOUS`；只有 `-DryRun` 允许 ActiveDocument 兜底）。
 9. 夹具/示例 DXF 版本 ≤ 最老目标产品（AutoCAD 2007 只能开 R2007/AC1021）。
 10. 并发多 agent 同图：靠文档级锁串行（`Local\zwc-doc-<sha16>`）；不要在同一张图上并行发起写命令。
-11. **不要手写 LISP 探针**：LISP 文件必须是 **ASCII、无 BOM**（带 BOM 会报 `Error: 输入的列表有缺陷`），且**括号必须配平**（少一个就只回 `Error: 语法错误`，不指向行号）；写文件注入后要**轮询 `__DONE__` 哨兵**而不是看 `SendCommand` 返回值。取几何数据优先用工具模板，手写时先把文件写成 `(load)` 可加载的最小骨架再逐步加逻辑。
-12. **大图取几何（坐标/顶点/高程属性）不要用 COM 全扫**：36,558 实体逐实体读约 **5 分钟**；ZWCAD 2025 / ACAD2007 上用 LISP `ssget`+`entget` 写 `%TEMP%` 文本只要 **0.4 s**。当前 `read`/`query` 的 lisp-file 快路径只回 `handle/type/layer/text`，**不含坐标**（能力缺口，见下）；需要坐标时先确认图纸规模，别直接全量扫。
+11. **不要手写 LISP 探针**：LISP 文件必须是 **ASCII、无 BOM**（带 BOM 会报 `Error: 输入的列表有缺陷`），且**括号必须配平**（少一个就只回 `Error: 语法错误`，不指向行号）；写文件注入后要**轮询 `__DONE__` 哨兵**而不是看 `SendCommand` 返回值。取几何数据优先用工具模板，手写时先把文件写成 `(load)` 可加载的最小骨架再逐步加逻辑。工具生成的模板已自带 `__START__`/`__DONE__` 两阶段哨兵与 AutoLISP `*error*` 处理器（脚本中途报错也会还原 `CMDECHO`）；**注入超时时工具不会删除可能仍在写的临时文件**（改名 `*.orphan` 留证，超过 24 h 的孤儿下次扫描清理）——所以看到 `%TEMP%\zwcad-cooperate\*.orphan` 是"超时现场"，别当成垃圾直接怀疑工具坏了。
+12. **大图取几何（坐标/顶点/高程属性）不要用 COM 全扫**：36,558 实体逐实体读约 **5 分钟**；ZWCAD 2025 / ACAD2007 上用 LISP `ssget`+`entget` 写 `%TEMP%` 文本只要 **0.4 s**。需要几何**显式给 `-Mode geom`**：实体数 >2000 时自动走 `readPath:"lisp-file-geom"`，一次 dump 回 x/y/z、顶点、等高线 `Elevation`、字高、闭合标志与圆/弧**半径**（36 k 实体约 1.4–1.8 s）；`handles/summary` 模式仍只回 `handle/type/layer/text`（不含坐标）——先确认图纸规模与要的字段，别直接全量 COM 扫。
 13. **开工前先问清关键约定**（图层语义 / 高程在哪 / 起点方向 / 编号规则），一次问清通常省掉一半时间；不要用"全图扫 + 反推"去猜用户意图——反推的结果经常需要返工。
 14. **绝对不要调用 `SelectionSet.Delete()`**：ZWCAD 2025 的 COM 把它实现成**删除选择集里的实体**（不是删选择集对象）。2026-11-04 实测：一句 `$ss.Delete()` 删掉了 3,850 个实体（304 断面线 + 2,938 高程块 + 608 文字），靠 `UNDO` 两步才救回。要按层筛选：LISP 用 `(ssget "X" (list (cons 8 layer)))`；COM 用 `Select(...)` 但**只读不删**（选择集留在会话里无副作用，不随图纸保存）。
 15. **对用户正在编辑的图纸只读**：任何 `SendCommand`/LISP 注入都可能改变命令状态、污染撤销栈甚至改图；需要注入类测试时，一律在**自己 launch 的空图/夹具图**上做，用户图只做 `read/query/info/status`。
@@ -114,7 +115,8 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 
 | 限制 | 说明 |
 |---|---|
-| **大图几何快路径** | lisp-file 快路径当前只回 `handle/type/layer/text`（36 k 实体 0.4–0.9 s）；**取坐标/顶点/等高线 Elevation 仍需 COM 逐实体（36 k ≈ 5 min）**。待补：几何 dump 快路径（坐标+顶点+`Elevation`）与 LISP 模板自动生成/括号校验。 |
+| **大图几何快路径** | `read -Mode geom`（实体数 >2000 自动走 `readPath:"lisp-file-geom"`）一次 dump 回 `x/y/z`、`point`、`p2`、`vertices/points`、`elevation`（等高线）、`height`（文字）、`closed`、圆/弧 `radius` —— 36 k 实体约 1.4–1.8 s，与 COM 路径**字段同构**。仍未覆盖：`read` 的 lisp 快路径不带 `-Layer/-Type` 下推（全量 dump 后客户端过滤）、极坐标/表格类对象、`snapshot/diff` 仍走 COM 指纹。 |
+| **单次响应体上限** | 全量几何（约 41 k 实体的 `read -Mode geom`，不带 `-Limit`）时 **LISP 扫描只需 ≈1.5 s 且成功**（dump 4.8 MB，与实测基线逐字节相同），但"41k 实体 → JSON 响应"这一步产生不出应答：经 client 180 s 超时且 **stdout 0 字节**，直连 one-shot helper 也不写 response 文件（**既有边界**，改动前同形，协议未变）。做法：`-Limit` 分页（实测最大成功档 `-Limit 500` = 152 KB JSON，其 dump 仍覆盖全部实体），或直接消费 `%TEMP%` 的 dump 文件（`build_sections_*.py` 即此路线）。 |
 | XData 读侧 | ZWCAD 的 `GetXData` 是 by-ref VARIANT，.NET 晚绑定取不回 ⇒ 写入真实（`SetXData` + 注册 App），但**读侧依赖同机 `%TEMP%` 镜像**；跨机器/跨会话读不到，需重新打标。 |
 | 中望 2025 | **没有 LISP 变量桥**（`Get/SetLispVariable`、`EvaluateLispExpression` 都 `DISP_E_UNKNOWNNAME`）⇒ 读侧只能 COM，比 Classic 慢 3–5 倍。 |
 | Classic 16 | 所有实体都不实现 `GetBoundingBox` ⇒ `read -Mode summary` 的 bbox 覆盖约 97%，其余记 `BBOX_UNAVAILABLE_FOR_TYPE`。 |
@@ -135,11 +137,11 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | 单实体写复杂度 | **O(1)**（图内 0→624 实体，p50 195→334 ms）|
 | 任务级（20 条真实任务基准） | 读/查 0.6–0.8 s、改图 2–12 s、断面 8–28 s |
 
-> 大图快路径：ZWCAD 2025 / AutoCAD 2007 **没有 LISP 变量桥**时，`read`/`query` 在实体数 >2000 会自动改走「LISP 写 `%TEMP%` 文本 + `__DONE__` 哨兵 + GBK 读回」（`readPath:"lisp-file"`），失败回退 COM 并 `LISP_FILE_FALLBACK`。
+> 大图快路径：ZWCAD 2025 / AutoCAD 2007 **没有 LISP 变量桥**时，`read`/`query` 在实体数 >2000 会自动改走「LISP 写 `%TEMP%` 文本 + `__START__`/`__DONE__` 两阶段哨兵 + GBK 读回」，`readPath:"lisp-file"`（handles/summary）或 `"lisp-file-geom"`（geom，含坐标/顶点/半径），失败回退 COM 并 `LISP_FILE_FALLBACK`。脚本由 `LispTemplate` 生成并过 **ASCII / 括号配平 / 只读白名单** 三重校验后才注入；模板带 AutoLISP `*error*` 处理器，脚本中途报错也会把 `CMDECHO` 还原；注入超时不会删除可能仍在写的临时文件（改名 `*.orphan` 留证，超过 24 h 的孤儿在下次扫描时清理）。
 >
 > **取几何数据（顶点/坐标/等高线高程）时的实测对比**（36,558 实体地形图）：LISP `ssget`+`entget` 写文件 **0.36 s**，COM 逐实体 **310 s**（800×）。教训：先判断"要的是不是几何"，要几何就一次性 LISP dump 全部（含 `assoc 10/11/38`），不要分实体 COM 读。
 >
-> **断面提取参考**：`scripts\section\build_sections_from_dmx.py` —— 从几何 JSON 生成「桩号 × 起点距 × 高程」Excel（含等高线求交补点、左岸起算、宽表/长表/仅高程点），同图重跑 10 s。
+> **断面提取参考**：`scripts\section\build_sections_from_dmx.py` —— 从几何 JSON 生成「桩号 × 起点距 × 高程」Excel（含等高线求交补点、左岸起算、宽表/长表/仅高程点），同图重跑 10 s；`--tmp-dir/--outdir/--name`（及 gcd 的 `--preview-chainage/--check-chainage`）可换路径/输出名，**默认值与历史行为完全一致**；坏输入给 `NO_INPUT/BAD_INPUT/NO_OPENPYXL` + exit 2（不再裸 traceback）。
 
 ## 故障排查（按错误码）
 
@@ -158,8 +160,14 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | `READONLY_DOC` / `READONLY_LAYER` | 只读图纸/锁定图层 | 不写，报告用户 |
 | `VERIFY_FAILED` / `GEOMETRY_MISMATCH` / `TEXT_MISMATCH` | 写入后回读不符（已整体回滚） | 检查 `expect`/`set` 值 |
 | `SENDCMD_TOO_LONG` | 命令串超 2 KB | 拆批 |
+| `LISP_TEMPLATE_NOT_ASCII` / `LISP_TEMPLATE_UNBALANCED` / `LISP_TEMPLATE_UNSAFE` | 生成的 LISP 脚本没过 ASCII/括号/只读白名单校验，**未注入** | 修生成器（`LispTemplate`）；不要手写脚本 |
+| `LISP_NOT_STARTED` | 注入后脚本连第一行都没执行（命令态/管道问题，`__START__` 未出现） | CAD 里按 Esc 清场、确认无模态框后重试 |
+| `LISP_FILE_TIMEOUT` | 脚本已开始执行但 `__DONE__` 未出现（图太大/超时太短）；现场文件改名 `*.orphan` 留在 `%TEMP%\zwcad-cooperate` | 加大 `lispTimeoutSec`，或改用 COM 路径；别删用户 CAD 现场 |
+| `LISP_FILE_FALLBACK`（warning） | LISP 快路径失败已回退 COM 逐实体，大图会慢 1–2 个数量级 | 排 LISP 通道；大图优先修 LISP |
 | `XDATA_READ_FALLBACK` | xdata 读走同机镜像 | 见能力边界 |
 | `TIMEOUT` / `CAD_HUNG` | 调用超时/CAD 疑似挂死 | `doctor -Deep` 确认；`serve -Action reset`（只杀本版本 daemon） |
+| `HASH_RECIPE_MISMATCH` | `serve -Action status` 自检发现 ps1 与 client 算出的 helper 源码哈希不一致（配方被只改了一边） | 对照 `hash` 子命令的 `key` 与 ps1 侧算法；只改一边会导致 client 连不上 daemon 且重复编译 |
+| `PRUNE_FAILED` / `deleted[]`/`skippedRunning[]` | `serve -Action prune` 的 cache 清理结果（被占目录只报不删） | 见 `deleted[]`/`failedDirs[]`；`bin\cache` 只该有 `\*.exe` 与目录，散落文件不会被清 |
 
 ## 复跑与验收
 
@@ -175,9 +183,15 @@ bin\ZwcClient.exe undo -Token <token> -ProgId ZWCAD.Application.16
 bin\ZwcClient.exe finish -Quit -ProgId ZWCAD.Application.16
 
 # 回归（开发用，不随包分发）
-powershell -File tests\run_m1.ps1 -DryRunOnly      # 离线 9/0/2
+powershell -File tests\run_m1.ps1 -DryRunOnly -Python <完整 python 路径>   # 离线 10/0/2（含 lisp.wire）
+powershell -File tests\selftest_lisp.ps1                                  # C# LISP 行解析 + 模板生成（csc，离线）
 powershell -File scripts\bench\run_bench.ps1 -Entry client -Product zwcad16 -Repeat 1   # 20 条任务基准
+
+# helper 编译缓存维护（源码每改一次会多一个 bin\cache\<sha12>\ 副本；实测 141 个目录→9 个、释放 12 MB）
+scripts\zwc.ps1 serve -Action prune
 ```
+
+> 离线层已接入 `.github\workflows\offline-ci.yml`（push/PR 跑数据侧自测 + 体检规则 + 端到端 dry-run + csc 解析测试；**在线 CAD 一律不进 CI**）。
 
 ## 目录
 
@@ -190,5 +204,7 @@ scripts\client\          原生客户端源码（编译成 bin\ZwcClient.exe）
 scripts\helper\          helper 源码（csc 按源码哈希编译缓存）
 scripts\section\         数据侧：xlsx/xls/hydro_data.db → section model
 scripts\audit\           只读图纸体检
+requirements.txt         数据侧依赖（Python 3.9+；离线兜底库 tools\py-libs 不入库）
+tests\                   离线回归：数据侧自测 / 体检规则 / LISP 解析（csc）/ 端到端 dry-run
 bin\                     运行期产物（ZwcClient.exe、helper 编译缓存）
 ```

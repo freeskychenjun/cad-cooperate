@@ -1,6 +1,6 @@
 # A-2 多序列套绘 + 图例 + 标注密度自适应（helper 侧验收）
 
-> 2026-11-04 13:05–13:40，core-cad（task-10）。数据侧 schema v2 由 section-gen 提供（`tmp\real\SCHEMA-v2.md`），本文件只记 **helper 侧实现与实机验收**。
+> 2026-11-04 13:05–13:40，core-cad（task-10）。数据侧 schema v2 由 section-gen 提供（**已脱敏入库存于 `docs\section-model-v2.md`**，原 `tmp\real\SCHEMA-v2.md`），本文件只记 **helper 侧实现与实机验收**。
 > 证据 JSON：`tmp\evidence-overlay\*`、`tmp\compare\*`；截图；坑台账：`tmp\core-cad-notes.md` 附录 4。（已按脱敏要求移除）
 > **A-1 交付定稿（2026-11-04 13:5x，Lead 三产品复跑）**：图 1 = 示例站 <站码> 四序列套绘（84 实体）、图 2 = 2025-01-19 单序列（87 实体），三产品 `verify.ok` + `cross_app_diff` **ALL MATCH**；正式截图 6 张，明细见 `tmp\real\A1-DELIVERABLES.md §1–§2b`。（已按脱敏要求移除）
 

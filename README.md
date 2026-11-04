@@ -109,7 +109,7 @@ CAD 里的 AI 助手通常只有两条路：**离线改文件**（ezdxf/ODA：�
 - Windows 10/11（本机实测）
 - .NET Framework 4.x（首次运行用系统 `csc.exe` 编译 client 与 helper，约 1–2 s，之后走哈希缓存）
 - 中望CAD 2016 Classic / 中望CAD 2025 专业版 / AutoCAD 2007（其它 AutoCAD 版本可显式给 ProgID）
-- Python 3.9+（**可选**，只有数据侧 `prepare.py` 与体检 `audit.py` 需要；`xlrd`/`openpyxl`/`ezdxf` 视用法 `pip install`）
+- Python 3.9+（**可选**，只有数据侧 `prepare.py` 与体检 `audit.py` 需要；依赖见 [`requirements.txt`](requirements.txt)：`xlrd>=2.0` / `openpyxl` / `ezdxf`）
 
 ### 拉下来跑第一条命令
 
@@ -165,6 +165,8 @@ python scripts\section\prepare.py --from-db <站码> --last 4 --out %TEMP%\m.jso
 ```
 
 `section` 会按图幅/比例尺建层（`AI-SEC-*`）、画地面线、水位虚线、点号与高程标注、深泓标记、可选比例尺；多序列时每序列独立图层+颜色+图例，标注密度按"点位间距 / 字高"自动降级（`labelPolicy`）。画完**回读校验**，不符整体回滚。
+
+**数据侧输出约定**（`prepare.py` / `audit.py` / `build_sections_*.py`）：stdout 恒为**单段 ASCII 安全 JSON**（中文走 `\u` 转义，PS 5.1 可直接 `ConvertFrom-Json`）；**非致命内部失败写 stderr** 一行 `[prepare] warn <CODE>: ...`（如 `DB_STATION_INFO_FAILED` / `DB_WATER_LEVEL_FAILED` / `WORKBOOK_CLOSE_FAILED` / `TMP_CLEANUP_FAILED` / `CONFLICT_FLAG_INVALID`，同一告警只打一次）——「DB 表坏了」与「确实没记录」因此可区分。退出码：`0` 成功、`2` 坏输入/用法（含 `NO_INPUT`/`BAD_INPUT`/`NO_OPENPYXL`/报告路径不可写）；`audit.py -ExitCode` 命中 blocker 时为 `3`。
 
 ### 2. 批量改文字 / 换图层（锚点 + 回读 + 回滚）
 
@@ -294,15 +296,17 @@ publish.ps1               打包部署（staging + 原子切换 + 干跑 + 安�
 scripts\
   zwc.ps1 / zwc.cmd       入口（兼容包装 + 管理命令 + 首次编译 bootstrap）
   client\ZwcClient.cs     原生客户端（→ bin\ZwcClient.exe，命名管道）
-  helper\ZwcHelper.cs     COM 晚绑定主体（205 KB 单文件，C#5，按源码哈希编译缓存）
-  helper\{Edits,EditsQuery,SectionOverlay,Stability,LispFile}.cs
+  helper\ZwcHelper.cs     COM 晚绑定主体（4,300+ 行单文件，C#5，按源码哈希编译缓存）
+  helper\{Edits,EditsQuery,SectionOverlay,Stability}.cs
+  helper\{LispTemplate,LispWire,LispFile,LispGeom}.cs   LISP 快路径：模板生成/三重校验、dump 行解析、E5 canvas、E6 几何 dump
   section\prepare.py      数据侧：xlsx/xls/数据库 → section 模型 JSON（零 COM）
   section\qa_yssd.py      实测大断面成果表 QA（块清单/可疑点/两次施测对比）
   audit\                  只读图纸体检（17 条规则 + runner + 报告）
   tray\                   WinForms 托盘徽标（纯 ASCII 源码 + ui.json 中文文案）
   probe\                  COM 能力探针（立项期的实测脚本，保留作证据）
   bench\run_bench.ps1     20 条任务级基准 runner
-tests\                    计算侧自测 / 独立核对器 / 跨产品几何比对 / DXF 往返
+tests\                    计算侧自测 / 独立核对器 / 跨产品几何比对 / DXF 往返 / LISP 解析离线测试
+.github\workflows\        离线 CI（windows runner，无 CAD：数据侧自测 + 体检规则 + 端到端 dry-run + csc 解析测试）
 docs\                     全部深入文档与实测截图（见下）
 research\                 立项前的可行性研究（COM 探针、API 面、同类模式）
 ```
@@ -313,7 +317,10 @@ research\                 立项前的可行性研究（COM 探针、API 面、�
 
 ```powershell
 # 计算侧自测 + 端到端回归（-NoCad 表示不开 CAD，纯离线分支应全绿；跑不起来的检查项会如实记 SKIP）
-python tests\selftest.py
+python tests\selftest.py                     # 41 项：prepare/verify/夹具/负例/schema 往返
+python tests\audit\test_audit.py             # 体检规则引擎 + 报告渲染
+python tests\bench\selftest_checkers.py      # 基准检查器负例（必须拒错）
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\selftest_lisp.ps1                      # C# LISP 行解析 + 模板生成（csc 编译后离线断言）
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -DryRunOnly -NoCad -Python <你的python路径>
 
 # 20 条任务级基准（自起独占实例，采成功率/命令数/墙钟，收尾归零进程）
@@ -323,7 +330,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bench\run_bench.ps1 
 python tests\cross_app_diff.py --read a=tmp\compare\zwcad16\read.json --read b=tmp\compare\zwcad2025\read.json
 ```
 
-测试与基准的产物一律写 `tmp\`（已在 `.gitignore`，按需再生）。数据侧 `.xls` 解析需要 `xlrd`：`pip install xlrd openpyxl ezdxf`（本机开发环境里另有离线兜底库 `tools\py-libs`，不入库）。
+以上离线层已接进 `.github\workflows\offline-ci.yml`（push/PR 自动跑；**在线 CAD 部分永远不在 CI 里跑**，领域固有约束）。测试与基准的产物一律写 `tmp\`（已在 `.gitignore`，按需再生）。数据侧依赖统一见 [`requirements.txt`](requirements.txt)（本机开发环境里另有离线兜底库 `tools\py-libs`，不入库）。
 
 ## 深入文档
 
@@ -336,6 +343,9 @@ python tests\cross_app_diff.py --read a=tmp\compare\zwcad16\read.json --read b=t
 | [docs/audit-rules.md](docs/audit-rules.md) | 图纸体检 17 条规则的判据、阈值与误报边界 |
 | [docs/M3-E1-perf.md](docs/M3-E1-perf.md) | 性能底座：daemon / client / read 分级的改造与实测 |
 | [docs/M3-E5-lisp-file-canvas.md](docs/M3-E5-lisp-file-canvas.md) | LISP 写文件大图读侧、接管可见性与 UX 修复 |
+| [docs/M3-E6-geometry-dump.md](docs/M3-E6-geometry-dump.md) | 大图**几何 dump 快路径**（坐标/顶点/等高线高程）、LISP 模板纪律、注入治理与复测（含"单次响应体上限"这条已知限制） |
+| [docs/section-model-v2.md](docs/section-model-v2.md) | `section.model.json` **schema v2** 契约（多序列套绘；已脱敏入库） |
+| [docs/optimization-plan.md](docs/optimization-plan.md) / [docs/optimization-executed-2026-11-05.md](docs/optimization-executed-2026-11-05.md) | 一轮只读分析报告 + 它的执行记录（采纳/未采纳、验证矩阵、遗留） |
 | [docs/M3-E3-acceptance.md](docs/M3-E3-acceptance.md) / [docs/M3-E2-acceptance.md](docs/M3-E2-acceptance.md) | 验收记录：并发、chaos 六类、跨产品、负例 |
 | [docs/M3-E4-baseline.md](docs/M3-E4-baseline.md) | 20 条任务基准的对照基线 |
 | [docs/real-data-three-cad-comparison.md](docs/real-data-three-cad-comparison.md) | 真实断面数据在三套 CAD 上的逐字段对比 |
