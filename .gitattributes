@@ -1,0 +1,14 @@
+# Byte-exact checkout: this project is Windows-only and several files are BOM/CRLF sensitive
+# (PowerShell 5.1 parses a BOM-less .ps1 with the ANSI code page). Never let git rewrite line
+# endings -- what is committed is what runs.
+* -text
+
+*.ps1   -text
+*.cmd   -text
+
+*.png   binary
+*.jpg   binary
+*.xlsx  binary
+*.dxf   -text
+*.dwg   binary
+*.exe   binary

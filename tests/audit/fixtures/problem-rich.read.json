@@ -1,0 +1,1363 @@
+{
+  "wallMs": 1,
+  "ok": true,
+  "cmd": "read",
+  "doc": {
+    "path": "",
+    "fullName": "",
+    "name": "problem-rich.dxf",
+    "saved": true,
+    "readOnly": false,
+    "active": true,
+    "count": 0
+  },
+  "result": {
+    "entities": [
+      {
+        "handle": "36",
+        "type": "AcDbLwpolyline",
+        "kind": "LWPOLYLINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            0.0,
+            8.0
+          ],
+          "max": [
+            100.0,
+            20.0
+          ]
+        },
+        "vertices": [
+          [
+            0.0,
+            20.0
+          ],
+          [
+            10.0,
+            14.0
+          ],
+          [
+            20.0,
+            10.0
+          ],
+          [
+            30.0,
+            12.0
+          ],
+          [
+            40.0,
+            8.0
+          ],
+          [
+            50.0,
+            9.0
+          ],
+          [
+            60.0,
+            11.0
+          ],
+          [
+            70.0,
+            10.0
+          ],
+          [
+            80.0,
+            12.0
+          ],
+          [
+            90.0,
+            15.0
+          ],
+          [
+            100.0,
+            20.0
+          ]
+        ],
+        "points": [
+          [
+            0.0,
+            20.0
+          ],
+          [
+            10.0,
+            14.0
+          ],
+          [
+            20.0,
+            10.0
+          ],
+          [
+            30.0,
+            12.0
+          ],
+          [
+            40.0,
+            8.0
+          ],
+          [
+            50.0,
+            9.0
+          ],
+          [
+            60.0,
+            11.0
+          ],
+          [
+            70.0,
+            10.0
+          ],
+          [
+            80.0,
+            12.0
+          ],
+          [
+            90.0,
+            15.0
+          ],
+          [
+            100.0,
+            20.0
+          ]
+        ],
+        "closed": false
+      },
+      {
+        "handle": "37",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            0.0,
+            5.0
+          ],
+          "max": [
+            100.0,
+            5.0
+          ]
+        },
+        "start": [
+          0.0,
+          5.0
+        ],
+        "end": [
+          100.0,
+          5.0
+        ],
+        "points": [
+          [
+            0.0,
+            5.0
+          ],
+          [
+            100.0,
+            5.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "38",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            0.0,
+            25.0
+          ],
+          "max": [
+            100.0,
+            25.0
+          ]
+        },
+        "start": [
+          0.0,
+          25.0
+        ],
+        "end": [
+          100.0,
+          25.0
+        ],
+        "points": [
+          [
+            0.0,
+            25.0
+          ],
+          [
+            100.0,
+            25.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "39",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            0.0,
+            35.0
+          ],
+          "max": [
+            100.0,
+            35.0
+          ]
+        },
+        "start": [
+          0.0,
+          35.0
+        ],
+        "end": [
+          100.0,
+          35.0
+        ],
+        "points": [
+          [
+            0.0,
+            35.0
+          ],
+          [
+            100.0,
+            35.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "3A",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            0.0,
+            45.0
+          ],
+          "max": [
+            100.0,
+            45.0
+          ]
+        },
+        "start": [
+          0.0,
+          45.0
+        ],
+        "end": [
+          100.0,
+          45.0
+        ],
+        "points": [
+          [
+            0.0,
+            45.0
+          ],
+          [
+            100.0,
+            45.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "3B",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            0.0,
+            55.0
+          ],
+          "max": [
+            100.0,
+            55.0
+          ]
+        },
+        "start": [
+          0.0,
+          55.0
+        ],
+        "end": [
+          100.0,
+          55.0
+        ],
+        "points": [
+          [
+            0.0,
+            55.0
+          ],
+          [
+            100.0,
+            55.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "3C",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            10.0,
+            0.0
+          ],
+          "max": [
+            10.0,
+            60.0
+          ]
+        },
+        "start": [
+          10.0,
+          0.0
+        ],
+        "end": [
+          10.0,
+          60.0
+        ],
+        "points": [
+          [
+            10.0,
+            0.0
+          ],
+          [
+            10.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "3D",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            20.0,
+            0.0
+          ],
+          "max": [
+            20.0,
+            60.0
+          ]
+        },
+        "start": [
+          20.0,
+          0.0
+        ],
+        "end": [
+          20.0,
+          60.0
+        ],
+        "points": [
+          [
+            20.0,
+            0.0
+          ],
+          [
+            20.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "3E",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            30.0,
+            0.0
+          ],
+          "max": [
+            30.0,
+            60.0
+          ]
+        },
+        "start": [
+          30.0,
+          0.0
+        ],
+        "end": [
+          30.0,
+          60.0
+        ],
+        "points": [
+          [
+            30.0,
+            0.0
+          ],
+          [
+            30.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "3F",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            40.0,
+            0.0
+          ],
+          "max": [
+            40.0,
+            60.0
+          ]
+        },
+        "start": [
+          40.0,
+          0.0
+        ],
+        "end": [
+          40.0,
+          60.0
+        ],
+        "points": [
+          [
+            40.0,
+            0.0
+          ],
+          [
+            40.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "40",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            50.0,
+            0.0
+          ],
+          "max": [
+            50.0,
+            60.0
+          ]
+        },
+        "start": [
+          50.0,
+          0.0
+        ],
+        "end": [
+          50.0,
+          60.0
+        ],
+        "points": [
+          [
+            50.0,
+            0.0
+          ],
+          [
+            50.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "41",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            60.0,
+            0.0
+          ],
+          "max": [
+            60.0,
+            60.0
+          ]
+        },
+        "start": [
+          60.0,
+          0.0
+        ],
+        "end": [
+          60.0,
+          60.0
+        ],
+        "points": [
+          [
+            60.0,
+            0.0
+          ],
+          [
+            60.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "42",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            70.0,
+            0.0
+          ],
+          "max": [
+            70.0,
+            60.0
+          ]
+        },
+        "start": [
+          70.0,
+          0.0
+        ],
+        "end": [
+          70.0,
+          60.0
+        ],
+        "points": [
+          [
+            70.0,
+            0.0
+          ],
+          [
+            70.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "43",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            80.0,
+            0.0
+          ],
+          "max": [
+            80.0,
+            60.0
+          ]
+        },
+        "start": [
+          80.0,
+          0.0
+        ],
+        "end": [
+          80.0,
+          60.0
+        ],
+        "points": [
+          [
+            80.0,
+            0.0
+          ],
+          [
+            80.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "44",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            90.0,
+            0.0
+          ],
+          "max": [
+            90.0,
+            60.0
+          ]
+        },
+        "start": [
+          90.0,
+          0.0
+        ],
+        "end": [
+          90.0,
+          60.0
+        ],
+        "points": [
+          [
+            90.0,
+            0.0
+          ],
+          [
+            90.0,
+            60.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "45",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            10.0,
+            10.0
+          ],
+          "max": [
+            10.0,
+            10.0
+          ]
+        },
+        "start": [
+          10.0,
+          10.0
+        ],
+        "end": [
+          10.0,
+          10.0
+        ],
+        "points": [
+          [
+            10.0,
+            10.0
+          ],
+          [
+            10.0,
+            10.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "46",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            20.0,
+            0.0
+          ],
+          "max": [
+            20.0,
+            10.0
+          ]
+        },
+        "start": [
+          20.0,
+          0.0
+        ],
+        "end": [
+          20.0,
+          10.0
+        ],
+        "points": [
+          [
+            20.0,
+            0.0
+          ],
+          [
+            20.0,
+            10.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "47",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            20.0,
+            0.0
+          ],
+          "max": [
+            20.0,
+            10.0
+          ]
+        },
+        "start": [
+          20.0,
+          0.0
+        ],
+        "end": [
+          20.0,
+          10.0
+        ],
+        "points": [
+          [
+            20.0,
+            0.0
+          ],
+          [
+            20.0,
+            10.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "48",
+        "type": "AcDbCircle",
+        "kind": "CIRCLE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            55.0,
+            35.0
+          ],
+          "max": [
+            65.0,
+            45.0
+          ]
+        },
+        "center": [
+          60.0,
+          40.0
+        ],
+        "radius": 5.0
+      },
+      {
+        "handle": "49",
+        "type": "AcDbCircle",
+        "kind": "CIRCLE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            55.0,
+            35.0
+          ],
+          "max": [
+            65.0,
+            45.0
+          ]
+        },
+        "center": [
+          60.0,
+          40.0
+        ],
+        "radius": 5.0
+      },
+      {
+        "handle": "4A",
+        "type": "AcDbLwpolyline",
+        "kind": "LWPOLYLINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            70.0,
+            20.0
+          ],
+          "max": [
+            80.0,
+            30.0
+          ]
+        },
+        "vertices": [
+          [
+            70.0,
+            20.0
+          ],
+          [
+            80.0,
+            20.0
+          ],
+          [
+            80.0,
+            30.0
+          ],
+          [
+            70.0,
+            30.0
+          ],
+          [
+            70.08,
+            20.08
+          ]
+        ],
+        "points": [
+          [
+            70.0,
+            20.0
+          ],
+          [
+            80.0,
+            20.0
+          ],
+          [
+            80.0,
+            30.0
+          ],
+          [
+            70.0,
+            30.0
+          ],
+          [
+            70.08,
+            20.08
+          ]
+        ],
+        "closed": false
+      },
+      {
+        "handle": "4B",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            0.0,
+            30.0
+          ],
+          "max": [
+            20.0,
+            35.0
+          ]
+        },
+        "start": [
+          0.0,
+          30.0
+        ],
+        "end": [
+          20.0,
+          35.0
+        ],
+        "points": [
+          [
+            0.0,
+            30.0
+          ],
+          [
+            20.0,
+            35.0
+          ]
+        ],
+        "linetype": "WATER_DASH"
+      },
+      {
+        "handle": "4C",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "FROZEN-L",
+        "space": "model",
+        "bbox": {
+          "min": [
+            0.0,
+            45.0
+          ],
+          "max": [
+            15.0,
+            50.0
+          ]
+        },
+        "start": [
+          0.0,
+          45.0
+        ],
+        "end": [
+          15.0,
+          50.0
+        ],
+        "points": [
+          [
+            0.0,
+            45.0
+          ],
+          [
+            15.0,
+            50.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "4D",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "FROZEN-L",
+        "space": "model",
+        "bbox": {
+          "min": [
+            15.0,
+            45.0
+          ],
+          "max": [
+            30.0,
+            50.0
+          ]
+        },
+        "start": [
+          15.0,
+          50.0
+        ],
+        "end": [
+          30.0,
+          45.0
+        ],
+        "points": [
+          [
+            15.0,
+            50.0
+          ],
+          [
+            30.0,
+            45.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      },
+      {
+        "handle": "4E",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P1",
+        "insertion": [
+          2.0,
+          50.0
+        ],
+        "pos": [
+          2.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "4F",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P2",
+        "insertion": [
+          9.0,
+          50.0
+        ],
+        "pos": [
+          9.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "50",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P3",
+        "insertion": [
+          16.0,
+          50.0
+        ],
+        "pos": [
+          16.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "51",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P4",
+        "insertion": [
+          23.0,
+          50.0
+        ],
+        "pos": [
+          23.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "52",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P5",
+        "insertion": [
+          30.0,
+          50.0
+        ],
+        "pos": [
+          30.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "53",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P6",
+        "insertion": [
+          37.0,
+          50.0
+        ],
+        "pos": [
+          37.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "54",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P7",
+        "insertion": [
+          44.0,
+          50.0
+        ],
+        "pos": [
+          44.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "55",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P8",
+        "insertion": [
+          51.0,
+          50.0
+        ],
+        "pos": [
+          51.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "56",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P9",
+        "insertion": [
+          58.0,
+          50.0
+        ],
+        "pos": [
+          58.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "57",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P10",
+        "insertion": [
+          65.0,
+          50.0
+        ],
+        "pos": [
+          65.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "58",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P11",
+        "insertion": [
+          72.0,
+          50.0
+        ],
+        "pos": [
+          72.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "59",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "P12",
+        "insertion": [
+          79.0,
+          50.0
+        ],
+        "pos": [
+          79.0,
+          50.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "5A",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "TOO-SMALL",
+        "insertion": [
+          5.0,
+          30.0
+        ],
+        "pos": [
+          5.0,
+          30.0
+        ],
+        "height": 0.3,
+        "style": "Standard"
+      },
+      {
+        "handle": "5B",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "TOO-LARGE-MID",
+        "insertion": [
+          30.0,
+          5.0
+        ],
+        "pos": [
+          30.0,
+          5.0
+        ],
+        "height": 8.0,
+        "style": "Standard"
+      },
+      {
+        "handle": "5C",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "TOO-BIG-TITLE-LIKE",
+        "insertion": [
+          5.0,
+          5.0
+        ],
+        "pos": [
+          5.0,
+          5.0
+        ],
+        "height": 12.0,
+        "style": "Standard"
+      },
+      {
+        "handle": "5D",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "",
+        "insertion": [
+          85.0,
+          55.0
+        ],
+        "pos": [
+          85.0,
+          55.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "5E",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "OVERLAP-A",
+        "insertion": [
+          70.0,
+          42.0
+        ],
+        "pos": [
+          70.0,
+          42.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "5F",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "OVERLAP-B",
+        "insertion": [
+          70.5,
+          42.5
+        ],
+        "pos": [
+          70.5,
+          42.5
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "60",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "OVERLAP-B",
+        "insertion": [
+          70.5,
+          42.5
+        ],
+        "pos": [
+          70.5,
+          42.5
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "61",
+        "type": "AcDbDimension",
+        "kind": "ACDB32",
+        "layer": "0",
+        "space": "model"
+      },
+      {
+        "handle": "75",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "bbox": {
+          "min": [
+            5000.0,
+            5000.0
+          ],
+          "max": [
+            5010.0,
+            5000.0
+          ]
+        },
+        "start": [
+          5000.0,
+          5000.0
+        ],
+        "end": [
+          5010.0,
+          5000.0
+        ],
+        "points": [
+          [
+            5000.0,
+            5000.0
+          ],
+          [
+            5010.0,
+            5000.0
+          ]
+        ],
+        "linetype": "ByLayer"
+      }
+    ],
+    "counts": {
+      "model": 45,
+      "paper": 0,
+      "returned": 45
+    },
+    "readPath": "fixture",
+    "scope": "model",
+    "truncated": false,
+    "matchedBy": "new"
+  },
+  "warnings": [],
+  "undoToken": null,
+  "elapsedMs": 1,
+  "app": {
+    "progId": "fixture",
+    "product": "offline fixture",
+    "mappedBy": "fixture",
+    "version": "0",
+    "hwnd": 0,
+    "found": true,
+    "launched": false,
+    "pid": 0,
+    "name": "fixture",
+    "fullName": "fixture"
+  }
+}

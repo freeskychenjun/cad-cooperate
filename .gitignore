@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------- runtime / test artifacts
+# Test , bench and chaos scripts write all their evidence here (models, read.json, screenshots,
+# bench output). Regenerated on demand -- never commit it.
+/tmp/
+
+# ---------------------------------------------------------------- compiled binaries
+# bin\cache\<sha12>\ZwcHelper.exe : helper compiled from scripts\helper\*.cs, keyed by source
+# hash. bin\ZwcClient.exe + .sha are built by `scripts\zwc.cmd` on first use (csc, 1-2 s).
+# A fresh clone bootstraps all of them, so the binaries stay out of the repo: a committed exe
+# would go stale against the .cs sources it was built from.
+/bin/cache/
+/bin/ZwcClient.exe
+/bin/ZwcClient.sha
+/bin/ZwcClient.exe.build-*.exe
+/bin/tray/ZwcTray.exe
+
+# ---------------------------------------------------------------- python
+__pycache__/
+*.py[cod]
+
+# Offline fallback wheels for the data side (numpy / openpyxl / xlrd / ezdxf ...). Large and
+# machine specific; install with pip instead (see README "数据侧").
+/tools/py-libs/
+
+# ---------------------------------------------------------------- editor / OS noise
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,102 @@
+{
+  "wallMs": 1,
+  "ok": true,
+  "cmd": "info",
+  "doc": {
+    "path": "",
+    "fullName": "",
+    "name": "strict.dxf",
+    "saved": true,
+    "readOnly": false,
+    "active": true,
+    "count": 0
+  },
+  "result": {
+    "units": {
+      "insunits": 4,
+      "dimscale": 100,
+      "ltscale": 100,
+      "textsize": 2.5,
+      "measurement": 1,
+      "annoallvisible": 1
+    },
+    "extents": {
+      "min": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max": [
+        50.0,
+        50.0,
+        0.0
+      ]
+    },
+    "layers": [
+      {
+        "name": "0",
+        "color": 7,
+        "frozen": false,
+        "locked": false,
+        "linetype": "CONTINUOUS"
+      },
+      {
+        "name": "水系",
+        "color": 5,
+        "frozen": false,
+        "locked": false,
+        "linetype": "CONTINUOUS"
+      },
+      {
+        "name": "WALL",
+        "color": 7,
+        "frozen": false,
+        "locked": false,
+        "linetype": "CONTINUOUS"
+      },
+      {
+        "name": "wall",
+        "color": 7,
+        "frozen": false,
+        "locked": false,
+        "linetype": "CONTINUOUS"
+      },
+      {
+        "name": "has space",
+        "color": 7,
+        "frozen": false,
+        "locked": false,
+        "linetype": "CONTINUOUS"
+      }
+    ],
+    "textStyles": [
+      {
+        "name": "Standard",
+        "font": "gbcbig.shx",
+        "height": 0.0
+      }
+    ],
+    "counts": {
+      "model": 2,
+      "paper": 0,
+      "blocks": 2,
+      "layouts": 1,
+      "documents": 1
+    }
+  },
+  "warnings": [],
+  "undoToken": null,
+  "elapsedMs": 1,
+  "app": {
+    "progId": "fixture",
+    "product": "offline fixture",
+    "mappedBy": "fixture",
+    "version": "0",
+    "hwnd": 0,
+    "found": true,
+    "launched": false,
+    "pid": 0,
+    "name": "fixture",
+    "fullName": "fixture"
+  }
+}

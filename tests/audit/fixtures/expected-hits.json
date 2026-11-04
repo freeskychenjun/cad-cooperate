@@ -1,0 +1,35 @@
+{
+  "problem-rich": {
+    "min_hits": {
+      "units_missing": 1,
+      "layer_off_but_used": 1,
+      "duplicate_entity": 3,
+      "zero_length_line": 1,
+      "unclosed_polyline": 1,
+      "linetype_missing": 1,
+      "linetype_scale": 1,
+      "dim_scale_invalid": 1,
+      "text_empty": 1,
+      "text_overlap": 1,
+      "outside_extents": 1,
+      "text_height_outlier": 2,
+      "layer_empty": 3,
+      "layer_naming": 2
+    },
+    "must_skip": [
+      "dim_no_measurement"
+    ],
+    "blockers_min": 1
+  },
+  "clean": {
+    "max_hits": 0,
+    "blockers_max": 0
+  },
+  "strict": {
+    "min_hits": {
+      "layer_naming": 2,
+      "layer_unknown": 1,
+      "text_style_missing": 1
+    }
+  }
+}

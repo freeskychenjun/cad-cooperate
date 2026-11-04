@@ -1,0 +1,348 @@
+{
+  "wallMs": 1,
+  "ok": true,
+  "cmd": "read",
+  "doc": {
+    "path": "",
+    "fullName": "",
+    "name": "clean.dxf",
+    "saved": true,
+    "readOnly": false,
+    "active": true,
+    "count": 0
+  },
+  "result": {
+    "entities": [
+      {
+        "handle": "100",
+        "type": "AcDbPolyline",
+        "kind": "LWPOLYLINE",
+        "layer": "BODY",
+        "space": "model",
+        "closed": true,
+        "vertices": [
+          [
+            0,
+            0
+          ],
+          [
+            100,
+            0
+          ],
+          [
+            100,
+            50
+          ],
+          [
+            0,
+            50
+          ]
+        ],
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            100,
+            0
+          ],
+          [
+            100,
+            50
+          ],
+          [
+            0,
+            50
+          ]
+        ],
+        "bbox": {
+          "min": [
+            0,
+            0
+          ],
+          "max": [
+            100,
+            50
+          ]
+        }
+      },
+      {
+        "handle": "101",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "BODY",
+        "space": "model",
+        "start": [
+          0,
+          25
+        ],
+        "end": [
+          100,
+          25
+        ],
+        "points": [
+          [
+            0,
+            25
+          ],
+          [
+            100,
+            25
+          ]
+        ],
+        "linetype": "ByLayer",
+        "bbox": {
+          "min": [
+            0,
+            25
+          ],
+          "max": [
+            100,
+            25
+          ]
+        }
+      },
+      {
+        "handle": "200",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L1",
+        "insertion": [
+          4.0,
+          30.0
+        ],
+        "pos": [
+          4.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "201",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L2",
+        "insertion": [
+          12.0,
+          30.0
+        ],
+        "pos": [
+          12.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "202",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L3",
+        "insertion": [
+          20.0,
+          30.0
+        ],
+        "pos": [
+          20.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "203",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L4",
+        "insertion": [
+          28.0,
+          30.0
+        ],
+        "pos": [
+          28.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "204",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L5",
+        "insertion": [
+          36.0,
+          30.0
+        ],
+        "pos": [
+          36.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "205",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L6",
+        "insertion": [
+          44.0,
+          30.0
+        ],
+        "pos": [
+          44.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "206",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L7",
+        "insertion": [
+          52.0,
+          30.0
+        ],
+        "pos": [
+          52.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "207",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L8",
+        "insertion": [
+          60.0,
+          30.0
+        ],
+        "pos": [
+          60.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "208",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L9",
+        "insertion": [
+          68.0,
+          30.0
+        ],
+        "pos": [
+          68.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "209",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L10",
+        "insertion": [
+          76.0,
+          30.0
+        ],
+        "pos": [
+          76.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "20A",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L11",
+        "insertion": [
+          84.0,
+          30.0
+        ],
+        "pos": [
+          84.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      },
+      {
+        "handle": "20B",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "ANNO",
+        "space": "model",
+        "text": "L12",
+        "insertion": [
+          92.0,
+          30.0
+        ],
+        "pos": [
+          92.0,
+          30.0
+        ],
+        "height": 2.5,
+        "style": "Standard"
+      }
+    ],
+    "counts": {
+      "model": 14,
+      "paper": 0,
+      "returned": 14
+    },
+    "readPath": "fixture",
+    "scope": "model",
+    "truncated": false,
+    "matchedBy": "new"
+  },
+  "warnings": [],
+  "undoToken": null,
+  "elapsedMs": 1,
+  "app": {
+    "progId": "fixture",
+    "product": "offline fixture",
+    "mappedBy": "fixture",
+    "version": "0",
+    "hwnd": 0,
+    "found": true,
+    "launched": false,
+    "pid": 0,
+    "name": "fixture",
+    "fullName": "fixture"
+  }
+}

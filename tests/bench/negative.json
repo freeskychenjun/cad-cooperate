@@ -1,0 +1,400 @@
+{
+  "schema": "zwcad-bench-tasks/1",
+  "name": "M3-E2 negative acceptance (expected-failure semantics)",
+  "note": "N1/N2/N3 are acceptance evidence, not scored benchmark tasks. Run with -TasksFile tests\\bench\\negative.json.",
+  "defaults": {
+    "repeat": 1,
+    "timeoutSec": 300,
+    "maxCommands": 8
+  },
+  "assets": {
+    "sectionXlsx": "tests/fixtures/section-30.xlsx",
+    "sectionExpected": "tests/fixtures/section-30.expected.json"
+  },
+  "categories": {
+    "negative": "E2 负例：坏锚点 / 回读失败回滚 / 撤销回基线"
+  },
+  "tasks": [
+    {
+      "id": "N1-bad-anchor",
+      "category": "negative",
+      "goal": "两条 update 的批次里混一个不存在的 handle：整批必须一条都不改，并报 ANCHOR_MISSING。",
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      },
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "read_before",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "update-text",
+            "--query",
+            "{stepfile:read_before}",
+            "--set-text",
+            "不该生效",
+            "--out",
+            "{rundir}/n1-entity.json"
+          ]
+        },
+        {
+          "name": "corrupt1",
+          "kind": "py",
+          "script": "tests/bench/checkers/corrupt_request.py",
+          "args": [
+            "--in",
+            "{rundir}/n1-entity.json",
+            "--out",
+            "{rundir}/n1-bad.json",
+            "--mode",
+            "bad-handle-index",
+            "--index",
+            "1"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/n1-bad.json"
+          ],
+          "expectExit": 2
+        },
+        {
+          "name": "read_after",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 6
+    },
+    {
+      "id": "N2-rollback",
+      "category": "negative",
+      "goal": "set 一个非法 height(-5)：回读校验失败必须整体回滚（VERIFY_FAILED + rolledBack），图上文字保持原样。",
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      },
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "read_before",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "query1",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Layer",
+            "ANNO",
+            "-Type",
+            "text",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "update-height",
+            "--query",
+            "{stepfile:query1}",
+            "--set-height",
+            "-5",
+            "--out",
+            "{rundir}/n2-entity.json"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/n2-entity.json"
+          ],
+          "expectExit": 3
+        },
+        {
+          "name": "read_after",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 6
+    },
+    {
+      "id": "N3-undo-restores",
+      "category": "negative",
+      "goal": "3 条文字 update 成功后 undo -Token，文档指纹必须恢复到改前（逐 handle 比对文字/字高/图层）。",
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      },
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "read_before",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "query1",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Type",
+            "text",
+            "-Text",
+            "设计水位",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "update-text",
+            "--query",
+            "{stepfile:query1}",
+            "--set-text",
+            "临时改",
+            "--out",
+            "{rundir}/n3-entity.json"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/n3-entity.json"
+          ]
+        },
+        {
+          "name": "undo1",
+          "kind": "cad",
+          "cmd": "undo",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Token",
+            "{ref:entity1.undoToken}"
+          ]
+        },
+        {
+          "name": "read_after",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 7
+    },
+    {
+      "id": "N4-diff",
+      "category": "negative",
+      "goal": "写前 snapshot、改 3 条文字、diff -Since last：必须精确列出 changed=3（handle + 字段 before/after），added/removed 为空。",
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      },
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "read_before",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "snapshot1",
+          "kind": "cad",
+          "cmd": "snapshot",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "query1",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Type",
+            "text",
+            "-Text",
+            "设计水位",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "update-text",
+            "--query",
+            "{stepfile:query1}",
+            "--set-text",
+            "临时改",
+            "--out",
+            "{rundir}/n4-entity.json"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/n4-entity.json"
+          ]
+        },
+        {
+          "name": "diff1",
+          "kind": "cad",
+          "cmd": "diff",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Since",
+            "last"
+          ]
+        },
+        {
+          "name": "read_after",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 8
+    }
+  ]
+}

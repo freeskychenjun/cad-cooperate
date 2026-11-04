@@ -1,0 +1,7 @@
+{
+  "prefix": "〔AI 接管中〕",
+  "balloonTitle": "AI 已接管你的图纸",
+  "open": "打开 CAD 窗口",
+  "copy": "复制接管信息",
+  "end": "结束接管（移除图标）"
+}

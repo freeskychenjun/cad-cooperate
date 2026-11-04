@@ -1,0 +1,124 @@
+{
+  "wallMs": 1,
+  "ok": true,
+  "cmd": "info",
+  "doc": {
+    "path": "",
+    "fullName": "",
+    "name": "problem-rich.dxf",
+    "saved": true,
+    "readOnly": false,
+    "active": true,
+    "count": 0
+  },
+  "result": {
+    "units": {
+      "insunits": 0,
+      "dimscale": 0.0,
+      "ltscale": 0.0,
+      "textsize": 2.5,
+      "measurement": 1,
+      "annoallvisible": null
+    },
+    "extents": {
+      "min": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max": [
+        100.0,
+        60.0,
+        0.0
+      ]
+    },
+    "layers": [
+      {
+        "name": "0",
+        "color": 7,
+        "frozen": false,
+        "locked": false,
+        "linetype": "CONTINUOUS"
+      },
+      {
+        "name": "Defpoints",
+        "color": 7,
+        "frozen": false,
+        "locked": false,
+        "linetype": "CONTINUOUS"
+      },
+      {
+        "name": "BODY",
+        "color": 7,
+        "frozen": false,
+        "locked": false,
+        "linetype": "Continuous"
+      },
+      {
+        "name": "ANNO",
+        "color": 3,
+        "frozen": false,
+        "locked": false,
+        "linetype": "Continuous"
+      },
+      {
+        "name": "FROZEN-L",
+        "color": 1,
+        "frozen": true,
+        "locked": false,
+        "linetype": "Continuous"
+      },
+      {
+        "name": "EMPTY-1",
+        "color": 5,
+        "frozen": false,
+        "locked": false,
+        "linetype": "Continuous"
+      },
+      {
+        "name": " bad name",
+        "color": 2,
+        "frozen": false,
+        "locked": false,
+        "linetype": "Continuous"
+      },
+      {
+        "name": "LONG_LAYER_NAME_ABCDEFGHIJKLMNOP",
+        "color": 6,
+        "frozen": false,
+        "locked": false,
+        "linetype": "Continuous"
+      }
+    ],
+    "textStyles": [
+      {
+        "name": "Standard",
+        "font": "txt",
+        "height": 0
+      }
+    ],
+    "counts": {
+      "model": 45,
+      "paper": 0,
+      "blocks": 4,
+      "layouts": 1,
+      "documents": 1
+    },
+    "matchedBy": "new"
+  },
+  "warnings": [],
+  "undoToken": null,
+  "elapsedMs": 1,
+  "app": {
+    "progId": "fixture",
+    "product": "offline fixture",
+    "mappedBy": "fixture",
+    "version": "0",
+    "hwnd": 0,
+    "found": true,
+    "launched": false,
+    "pid": 0,
+    "name": "fixture",
+    "fullName": "fixture"
+  }
+}

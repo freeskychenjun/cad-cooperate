@@ -1,0 +1,1294 @@
+{
+  "schema": "zwcad-bench-tasks/1",
+  "name": "M3-E4 CAD task benchmark",
+  "note": "任务级基准（不是命令级）：每条 = 一句用户会说的话 + agent 的执行序列 + 判定口径。runner 见 scripts/bench/run_bench.ps1，判定见 tests/bench/checkers/check.py。",
+  "defaults": {
+    "repeat": 3,
+    "timeoutSec": 300,
+    "maxCommands": 6
+  },
+  "assets": {
+    "bigMap": "<你的大图.dwg>",
+    "sectionXlsx": "tests/fixtures/section-30.xlsx",
+    "cleanDxf": "tests/audit/fixtures/clean.dxf",
+    "problemDxf": "tests/audit/fixtures/problem-rich.dxf",
+    "sectionExpected": "tests/fixtures/section-30.expected.json",
+    "hydroStation": "<站码>"
+  },
+  "categories": {
+    "read": "读/查：看图纸回答问题（最常用的 agent 负载，决定 token 成本）",
+    "edit": "改图：对既有实体做批量修改（平台写原语的试金石）",
+    "section": "断面：从数据出图 + 回读核对（当前唯一的写路径，代表真实业务）",
+    "check": "检核：audit 体检与回读断言（质量的守门人）",
+    "stability": "异常/稳定性：错误是否可预期、可分类、不崩"
+  },
+  "tasks": [
+    {
+      "id": "Q1-layer-stats",
+      "category": "read",
+      "goal": "这张断面底图里 RIVER 图层上有多少实体？各是什么类型？再把 RIVER 图层所有线的总长度算给我（m）。",
+      "why": "最典型的“看一眼图纸回答问题”；考察 read 一次返回多少字节、是否需要二次取数",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{fixture:design-water.dxf}",
+            "-ReadOnly"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{fixture:design-water.dxf}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 2,
+      "undoCheck": false
+    },
+    {
+      "id": "Q2-text-search",
+      "category": "read",
+      "goal": "把图里所有写着「设计水位」的文字找出来，给我句柄和文字内容。",
+      "why": "按内容检索（query 原语的雏形）：agent 只能“全读再自己筛”，token 与耗时都被放大",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{fixture:design-water.dxf}",
+            "-ReadOnly"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{fixture:design-water.dxf}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 2,
+      "undoCheck": false
+    },
+    {
+      "id": "Q3-open-polylines",
+      "category": "read",
+      "goal": "图里有哪些多段线没有闭合？列出句柄，并说明哪一条看起来是“画完忘了闭合”的。",
+      "why": "几何判读类问题；需要顶点坐标才能算首末点缺口 → 逼出 geom 级读取代价",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{fixture:design-water.dxf}",
+            "-ReadOnly"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{fixture:design-water.dxf}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 2,
+      "undoCheck": false
+    },
+    {
+      "id": "Q4-big-read",
+      "category": "read",
+      "goal": "打开这张真实水系分布图，告诉我一共多少实体、每个图层各多少，哪几个图层是空的。",
+      "why": "大图读取 = 当前最贵的读操作（624 实体基线 209~224 s），E1 分级读的主要收益点；为控制基线时长单次运行",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{asset:bigMap}",
+            "-ReadOnly"
+          ],
+          "timeoutSec": 300
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{asset:bigMap}",
+            "-Max",
+            "20000"
+          ],
+          "timeoutSec": 900
+        }
+      ],
+      "maxCommands": 2,
+      "repeat": 1,
+      "repeatNote": "单次读 ≥200 s；基线只跑 1 次控制时长，E1 后可放开到 3 次",
+      "undoCheck": false
+    },
+    {
+      "id": "W1-edit-text",
+      "category": "edit",
+      "goal": "把图上 3 处「设计水位」的文字改成「设计水位（复核）」，数值不变。",
+      "why": "E2 后首次可做：query 定位 + entity 批量 update（set.text，带 expect 锚点）；checker 断言 read 回读的文字真的变了",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "query1",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Type",
+            "text",
+            "-Text",
+            "设计水位",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "update-text",
+            "--query",
+            "{stepfile:query1}",
+            "--set-text",
+            "设计水位（复核）",
+            "--out",
+            "{rundir}/w1-entity.json"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/w1-entity.json"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 5,
+      "undoCheck": true,
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      }
+    },
+    {
+      "id": "W2-change-layer",
+      "category": "edit",
+      "goal": "把 RIVER 图层上的所有实体一次性移到 RIVER-2 图层。",
+      "why": "query -Layer 定位 + entity update（set.layer）；checker 断言旧层为空、新层数量相符",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "query1",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Layer",
+            "RIVER",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "update-layer",
+            "--query",
+            "{stepfile:query1}",
+            "--set-layer",
+            "RIVER-2",
+            "--out",
+            "{rundir}/w2-entity.json"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/w2-entity.json"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 5,
+      "undoCheck": true,
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      }
+    },
+    {
+      "id": "W3-unify-text-height",
+      "category": "edit",
+      "goal": "把注释层所有文字统一成字高 2.5，其它不变。",
+      "why": "query -Layer/-Type 定位 + entity update（set.height）；checker 断言同层字高全部为 2.5",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "query1",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Layer",
+            "ANNO",
+            "-Type",
+            "text",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "update-height",
+            "--query",
+            "{stepfile:query1}",
+            "--set-height",
+            "2.5",
+            "--out",
+            "{rundir}/w3-entity.json"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/w3-entity.json"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 5,
+      "undoCheck": true,
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      }
+    },
+    {
+      "id": "W4-move-to-origin",
+      "category": "edit",
+      "goal": "这张画好的断面图整体向右平移 50 mm（左下角要落在 50,0），不要重画错位。",
+      "why": "没有 move 原语时的真实 workaround = undo + 带 -Origin 重画；这条量化“缺原语”的代价（命令数 × 地板价）",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{scratch}"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "prep1",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{repo}/tests/fixtures/section-30.xlsx",
+            "--water",
+            "42.30=设计水位",
+            "--out",
+            "{rundir}/w4-origin0.model.json"
+          ]
+        },
+        {
+          "name": "sec1",
+          "kind": "cad",
+          "cmd": "section",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Data",
+            "{rundir}/w4-origin0.model.json"
+          ],
+          "timeoutSec": 240
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "undo1",
+          "kind": "cad",
+          "cmd": "undo",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Token",
+            "{ref:sec1.result.undoToken}"
+          ]
+        },
+        {
+          "name": "prep2",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{repo}/tests/fixtures/section-30.xlsx",
+            "--water",
+            "42.30=设计水位",
+            "--origin",
+            "50,0",
+            "--out",
+            "{rundir}/w4-origin50.model.json"
+          ]
+        },
+        {
+          "name": "sec2",
+          "kind": "cad",
+          "cmd": "section",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Data",
+            "{rundir}/w4-origin50.model.json"
+          ],
+          "timeoutSec": 240
+        },
+        {
+          "name": "read2",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 8,
+      "undoCheck": true
+    },
+    {
+      "id": "W5-delete-zero-lines",
+      "category": "edit",
+      "goal": "把图上所有零长度线删掉（打印出来看不见但会污染图纸的那种）。",
+      "why": "query -Type line 拿 bbox 判零长 → entity 批量 delete；checker 断言回读里零长线为 0",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "query1",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Type",
+            "line",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "delete-zero-length",
+            "--query",
+            "{stepfile:query1}",
+            "--out",
+            "{rundir}/w5-entity.json"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/w5-entity.json"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 5,
+      "undoCheck": true,
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      }
+    },
+    {
+      "id": "W6-xdata-mark",
+      "category": "edit",
+      "goal": "给 2 个文字实体打上自定义标记 ZWC=BENCH，按标记把它们筛出来确认，然后按标记删掉。",
+      "why": "打标（entity update xdata）→ query -XData 筛出 → entity delete 的完整闭环；handle 稳定，所以一条本地 gen 步骤就能同时生成打标和删除两份请求",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{workdoc}"
+          ]
+        },
+        {
+          "name": "query1",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Layer",
+            "ANNO",
+            "-Type",
+            "text",
+            "-Limit",
+            "2",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "gen1",
+          "kind": "py",
+          "script": "tests/bench/checkers/gen_entity_request.py",
+          "args": [
+            "--mode",
+            "mark-xdata",
+            "--query",
+            "{stepfile:query1}",
+            "--app",
+            "AI_MARK",
+            "--value",
+            "bench",
+            "--out",
+            "{rundir}/w6-mark.json",
+            "--also-out",
+            "{rundir}/w6-delete.json"
+          ]
+        },
+        {
+          "name": "entity1",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/w6-mark.json"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "query2",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-XData",
+            "AI_MARK:bench",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "entity2",
+          "kind": "cad",
+          "cmd": "entity",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Items",
+            "{rundir}/w6-delete.json"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "query3",
+          "kind": "cad",
+          "cmd": "query",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-XData",
+            "AI_MARK:bench",
+            "-Mode",
+            "summary"
+          ]
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{workdoc}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 8,
+      "undoCheck": true,
+      "setup": {
+        "copyFixture": "design-water.dxf"
+      }
+    },
+    {
+      "id": "S1-single-section",
+      "category": "section",
+      "goal": "用这张 30 点实测大断面出一张断面图，含设计水位 42.30，出完自己确认画对了。",
+      "why": "当前产品的主路径；写侧本来就快，作为“写+校验”基准",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{scratch}"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "prep1",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{asset:sectionXlsx}",
+            "--water",
+            "42.30=设计水位",
+            "--out",
+            "{rundir}/s1.model.json"
+          ]
+        },
+        {
+          "name": "sec1",
+          "kind": "cad",
+          "cmd": "section",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Data",
+            "{rundir}/s1.model.json"
+          ],
+          "timeoutSec": 240
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "verify1",
+          "kind": "py",
+          "script": "tests/verify_section.py",
+          "args": [
+            "--model",
+            "{stepfile:read1}",
+            "--expected",
+            "{asset:sectionExpected}"
+          ]
+        }
+      ],
+      "maxCommands": 5,
+      "undoCheck": true
+    },
+    {
+      "id": "S2-overlay-4series",
+      "category": "section",
+      "goal": "把示例站最近 4 次实测断面套绘在一张图上，标注别挤，出完核对一下每條线的点数。",
+      "why": "真实水文报告刚需（多年对比）；数据侧要查库、写侧要多序列+图例+自动标注密度",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{scratch}"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "prep1",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--from-db",
+            "{asset:hydroStation}",
+            "--last",
+            "4",
+            "--paper",
+            "A1",
+            "--out",
+            "{rundir}/s2-overlay4.model.json"
+          ]
+        },
+        {
+          "name": "sec1",
+          "kind": "cad",
+          "cmd": "section",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Data",
+            "{rundir}/s2-overlay4.model.json"
+          ],
+          "timeoutSec": 300
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 4,
+      "undoCheck": true
+    },
+    {
+      "id": "S3-water-edit-composite",
+      "category": "section",
+      "goal": "把断面图上的设计水位从 42.30 改成 43.00 重出一张；中间的旧图撤掉，最后顺手体检一下这张新图。",
+      "why": "10 条命令的复合任务（出图→回读→体检→撤销→改参数→再出图→再体检）：最能体现 daemon 后的整体收益",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{scratch}"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "prep1",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{asset:sectionXlsx}",
+            "--water",
+            "42.30=设计水位",
+            "--out",
+            "{rundir}/s3-w4230.model.json"
+          ]
+        },
+        {
+          "name": "sec1",
+          "kind": "cad",
+          "cmd": "section",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Data",
+            "{rundir}/s3-w4230.model.json"
+          ],
+          "timeoutSec": 240
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "audit1",
+          "kind": "py",
+          "script": "scripts/audit/audit.py",
+          "args": [
+            "--read",
+            "{stepfile:read1}",
+            "--json",
+            "{rundir}/s3-audit1.json"
+          ]
+        },
+        {
+          "name": "undo1",
+          "kind": "cad",
+          "cmd": "undo",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Token",
+            "{ref:sec1.result.undoToken}"
+          ]
+        },
+        {
+          "name": "prep2",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{asset:sectionXlsx}",
+            "--water",
+            "43.00=设计水位",
+            "--out",
+            "{rundir}/s3-w4300.model.json"
+          ]
+        },
+        {
+          "name": "sec2",
+          "kind": "cad",
+          "cmd": "section",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Data",
+            "{rundir}/s3-w4300.model.json"
+          ],
+          "timeoutSec": 240
+        },
+        {
+          "name": "read2",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "audit2",
+          "kind": "py",
+          "script": "scripts/audit/audit.py",
+          "args": [
+            "--read",
+            "{stepfile:read2}",
+            "--json",
+            "{rundir}/s3-audit2.json"
+          ]
+        }
+      ],
+      "maxCommands": 10,
+      "undoCheck": true
+    },
+    {
+      "id": "S4-from-db-station",
+      "category": "section",
+      "goal": "换用数据库里示例站 2025-09-18 那次施测的断面出一张图，出完核对点数。",
+      "why": "数据源主路径（hydro_data.db → 出图）；考察数据侧查询 + 出图链路",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{scratch}"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "prep1",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--from-db",
+            "{asset:hydroStation}",
+            "--date",
+            "2025-09-18",
+            "--paper",
+            "A1",
+            "--out",
+            "{rundir}/s4.model.json"
+          ]
+        },
+        {
+          "name": "sec1",
+          "kind": "cad",
+          "cmd": "section",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Data",
+            "{rundir}/s4.model.json"
+          ],
+          "timeoutSec": 300
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        }
+      ],
+      "maxCommands": 4,
+      "undoCheck": true
+    },
+    {
+      "id": "C1-audit-clean",
+      "category": "check",
+      "goal": "给这张干净断面图做一次“图纸体检”，报告里应该 0 个问题（不该误报）。",
+      "why": "质量守门人：误报会让 agent 的白工变多；要求 audit 在干净图上零命中",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{asset:cleanDxf}",
+            "-ReadOnly"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{asset:cleanDxf}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "info1",
+          "kind": "cad",
+          "cmd": "info",
+          "args": [
+            "-Doc",
+            "{asset:cleanDxf}"
+          ]
+        },
+        {
+          "name": "audit1",
+          "kind": "py",
+          "script": "scripts/audit/audit.py",
+          "args": [
+            "--info",
+            "{stepfile:info1}",
+            "--read",
+            "{stepfile:read1}",
+            "--json",
+            "{rundir}/audit-clean.json",
+            "--md",
+            "{rundir}/audit-clean.md",
+            "--exit-code"
+          ],
+          "expectExit": 0
+        }
+      ],
+      "maxCommands": 4,
+      "undoCheck": false
+    },
+    {
+      "id": "C2-audit-problem",
+      "category": "check",
+      "goal": "这张图纸问题很多，体检一遍，把阻断项（blocker）挑出来告诉我。",
+      "why": "体检的“有命中”分支；考察规则命中数、报告可用性与退出码门禁",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{asset:problemDxf}",
+            "-ReadOnly"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{asset:problemDxf}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "info1",
+          "kind": "cad",
+          "cmd": "info",
+          "args": [
+            "-Doc",
+            "{asset:problemDxf}"
+          ]
+        },
+        {
+          "name": "audit1",
+          "kind": "py",
+          "script": "scripts/audit/audit.py",
+          "args": [
+            "--info",
+            "{stepfile:info1}",
+            "--read",
+            "{stepfile:read1}",
+            "--json",
+            "{rundir}/audit-problem.json",
+            "--md",
+            "{rundir}/audit-problem.md",
+            "--exit-code"
+          ],
+          "expectExit": 3
+        }
+      ],
+      "maxCommands": 4,
+      "undoCheck": false
+    },
+    {
+      "id": "C3-draw-readback",
+      "category": "check",
+      "goal": "出图后不要只看“成功”，用 read 回读逐项核对实体数量和关键坐标，确认没有画错。",
+      "why": "“写后自证”是可靠协作的核心；考察 read 回读 + 独立核对器的链路成本",
+      "steps": [
+        {
+          "name": "open1",
+          "kind": "cad",
+          "cmd": "open",
+          "args": [
+            "-Doc",
+            "{scratch}"
+          ],
+          "timeoutSec": 180
+        },
+        {
+          "name": "prep1",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{asset:sectionXlsx}",
+            "--water",
+            "42.30=设计水位",
+            "--out",
+            "{rundir}/c3.model.json"
+          ]
+        },
+        {
+          "name": "precheck1",
+          "kind": "py",
+          "script": "tests/verify_section.py",
+          "args": [
+            "--model",
+            "{rundir}/c3.model.json",
+            "--expected",
+            "{asset:sectionExpected}"
+          ]
+        },
+        {
+          "name": "sec1",
+          "kind": "cad",
+          "cmd": "section",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Data",
+            "{rundir}/c3.model.json"
+          ],
+          "timeoutSec": 240
+        },
+        {
+          "name": "read1",
+          "kind": "cad",
+          "cmd": "read",
+          "args": [
+            "-Doc",
+            "{scratch}",
+            "-Mode",
+            "geom",
+            "-Max",
+            "20000"
+          ]
+        },
+        {
+          "name": "verify1",
+          "kind": "py",
+          "script": "tests/verify_section.py",
+          "args": [
+            "--model",
+            "{stepfile:read1}",
+            "--expected",
+            "{asset:sectionExpected}"
+          ]
+        }
+      ],
+      "maxCommands": 6,
+      "undoCheck": true
+    },
+    {
+      "id": "X1-no-instance",
+      "category": "stability",
+      "goal": "（CAD 没开的情况下）先确认一下现在能不能连上 CAD，连不上要明确告诉我原因，不要卡住。",
+      "why": "最常见的“环境没准备好”：错误必须可分类（NO_INSTANCE）、快速返回、不崩",
+      "phase": "pre-launch",
+      "requiresNoCad": true,
+      "steps": [
+        {
+          "name": "status1",
+          "kind": "cad",
+          "cmd": "status",
+          "args": [],
+          "expectExit": 2
+        }
+      ],
+      "maxCommands": 1,
+      "undoCheck": false
+    },
+    {
+      "id": "X2-product-ambiguity",
+      "category": "stability",
+      "goal": "机器上装了多个 CAD 产品：不给 -ProgId 时，系统要么正确认到唯一在跑的那个，要么明确拒绝让我指定，不能猜错产品。",
+      "why": "产品歧义是“写错图”的头号风险；task-8 已实现按进程探测 + MULTI_PRODUCT，本任务做回归度量",
+      "omitProduct": true,
+      "steps": [
+        {
+          "name": "status1",
+          "kind": "cad",
+          "cmd": "status",
+          "args": [],
+          "expectExit": 0
+        }
+      ],
+      "maxCommands": 1,
+      "undoCheck": false
+    },
+    {
+      "id": "X3-bad-data-gate",
+      "category": "stability",
+      "goal": "脏数据喂进来时（点数不足 / 起点距非单调 / 空值），要当场拒绝并告诉我原因，不要画出半张图。",
+      "why": "数据前置闸门（BAD_DATA、退出码 2、不产出文件）；今天对应的是 prepare 层拦截（SENDCMD_TOO_LONG 仅在 helper 内部路径，公开命令面不可达）",
+      "phase": "no-cad",
+      "steps": [
+        {
+          "name": "bad1",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{repo}/tests/fixtures/bad-2points.xlsx",
+            "--out",
+            "{rundir}/bad-2points.model.json"
+          ],
+          "expectExit": 2
+        },
+        {
+          "name": "bad2",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{repo}/tests/fixtures/bad-nonmono.xlsx",
+            "--out",
+            "{rundir}/bad-nonmono.model.json"
+          ],
+          "expectExit": 2
+        },
+        {
+          "name": "bad3",
+          "kind": "py",
+          "script": "scripts/section/prepare.py",
+          "args": [
+            "--data",
+            "{repo}/tests/fixtures/bad-empty.xlsx",
+            "--out",
+            "{rundir}/bad-empty.model.json"
+          ],
+          "expectExit": 2
+        }
+      ],
+      "maxCommands": 3,
+      "undoCheck": false
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "schema": "zwcad-bench-expected/1",
+  "fixture": "design-water.dxf",
+  "totals": {
+    "entities": 20,
+    "layers": 5
+  },
+  "byLayer": {
+    "RIVER": 4,
+    "LINES": 6,
+    "ZERO": 2,
+    "GROUND": 1,
+    "ANNO": 7
+  },
+  "byKind": {
+    "LWPOLYLINE": 8,
+    "LINE": 8,
+    "TEXT": 7
+  },
+  "river": {
+    "count": 4,
+    "totalLength": 136.239668,
+    "items": [
+      {
+        "name": "p-open-1",
+        "closed": false,
+        "vertices": 4,
+        "length": 30.247915,
+        "gap": 30.016662,
+        "gapRatio": 0.992355
+      },
+      {
+        "name": "p-open-2",
+        "closed": false,
+        "vertices": 3,
+        "length": 30.041627,
+        "gap": 30.004166,
+        "gapRatio": 0.998753
+      },
+      {
+        "name": "p-almost-closed",
+        "closed": false,
+        "vertices": 5,
+        "length": 39.950126,
+        "gap": 0.070711,
+        "gapRatio": 0.00177
+      },
+      {
+        "name": "p-closed",
+        "closed": true,
+        "vertices": 4,
+        "length": 36.0,
+        "gap": 8.0,
+        "gapRatio": 0.285714
+      }
+    ],
+    "closed": [
+      "p-closed"
+    ],
+    "open": [
+      "p-open-1",
+      "p-open-2",
+      "p-almost-closed"
+    ]
+  },
+  "unclosedPolylines": {
+    "count": 3,
+    "almostClosedCount": 1,
+    "openCount": 2,
+    "minGapRatio": 0.00177,
+    "maxGapRatio": 0.998753
+  },
+  "designWaterTexts": {
+    "count": 3,
+    "texts": [
+      "设计水位 42.30 m",
+      "设计水位 41.85 m",
+      "设计水位 40.20 m"
+    ]
+  },
+  "bigRead": {
+    "fixture": "real-map",
+    "modelCount": 624,
+    "layerCount": 9,
+    "byLayer": {
+      "分水界": 2,
+      "公路": 26,
+      "河流": 312,
+      "水库": 79,
+      "县界": 12,
+      "图层1": 191,
+      "0": 2
+    },
+    "byKind": {
+      "LINE": 321,
+      "MTEXT": 128,
+      "CIRCLE": 100,
+      "LWPOLYLINE": 59,
+      "ACDBHATCH": 16
+    },
+    "emptyLayers": [
+      "电站",
+      "补充"
+    ]
+  },
+  "designWater.dxf.sha256": "f82688773ac617a8d7ca6ac85509339e53e969ddb7f7e2bf2b8eeac094ebc04c"
+}

@@ -1,0 +1,1393 @@
+{
+  "ok": true,
+  "schema": "zwcad-section-expected/1",
+  "fixture": "tests/fixtures/section-30.xlsx",
+  "note": "由 tests/make_expected.py 独立按 DESIGN-M1 4.2/4.3 算出，勿从 prepare.py 输出复制",
+  "points": [
+    [
+      0.0,
+      44.2
+    ],
+    [
+      10.0,
+      44.0
+    ],
+    [
+      20.0,
+      43.7
+    ],
+    [
+      30.0,
+      43.35
+    ],
+    [
+      40.0,
+      43.0
+    ],
+    [
+      50.0,
+      42.6
+    ],
+    [
+      60.0,
+      42.2
+    ],
+    [
+      70.0,
+      41.8
+    ],
+    [
+      80.0,
+      41.3
+    ],
+    [
+      90.0,
+      40.8
+    ],
+    [
+      100.0,
+      40.3
+    ],
+    [
+      110.0,
+      39.8
+    ],
+    [
+      120.0,
+      39.3
+    ],
+    [
+      130.0,
+      38.85
+    ],
+    [
+      140.0,
+      38.55
+    ],
+    [
+      150.0,
+      38.7
+    ],
+    [
+      160.0,
+      38.95
+    ],
+    [
+      170.0,
+      39.3
+    ],
+    [
+      180.0,
+      39.7
+    ],
+    [
+      190.0,
+      40.1
+    ],
+    [
+      200.0,
+      40.6
+    ],
+    [
+      210.0,
+      41.1
+    ],
+    [
+      220.0,
+      41.6
+    ],
+    [
+      230.0,
+      42.1
+    ],
+    [
+      240.0,
+      42.5
+    ],
+    [
+      250.0,
+      42.9
+    ],
+    [
+      260.0,
+      43.3
+    ],
+    [
+      270.0,
+      43.7
+    ],
+    [
+      280.0,
+      44.0
+    ],
+    [
+      290.0,
+      44.3
+    ]
+  ],
+  "pointCount": 30,
+  "params": {
+    "hScale": 1000.0,
+    "hScaleRequested": 500.0,
+    "vScale": 50.0,
+    "paper": "A3",
+    "origin": [
+      0.0,
+      0.0
+    ],
+    "labelEvery": 1,
+    "noAxis": false,
+    "noPointNo": false,
+    "layerPrefix": "AI-SEC",
+    "textHeight": 2.0,
+    "waterTextHeight": 2.5
+  },
+  "scale": {
+    "horizontal": 1000.0,
+    "vertical": 50.0
+  },
+  "waterLevels": [
+    {
+      "value": 42.3,
+      "label": "设计水位",
+      "text": "设计水位 42.30 m",
+      "y": 85.0,
+      "x0": -5.0,
+      "x1": 295.0
+    }
+  ],
+  "paper": "A3",
+  "paperSize": {
+    "name": "A3",
+    "widthMm": 420.0,
+    "heightMm": 297.0,
+    "usableWidthMm": 400.0,
+    "usableHeightMm": 277.0,
+    "marginMm": 20.0
+  },
+  "layerPrefix": "AI-SEC",
+  "layers": {
+    "ground": "AI-SEC-GROUND",
+    "water": "AI-SEC-WATER",
+    "anno": "AI-SEC-ANNO",
+    "axis": "AI-SEC-AXIS",
+    "text": "AI-SEC-TEXT"
+  },
+  "labels": {
+    "elevHeightMm": 2.0,
+    "pointNoHeightMm": 2.0,
+    "waterHeightMm": 2.5,
+    "labelEvery": 1,
+    "showPointNo": true,
+    "showAxis": true,
+    "elevDecimals": 2
+  },
+  "style": {
+    "textStyle": "AI-SEC-TEXT",
+    "groundLineWeight": 0.3,
+    "waterDash": "DASHED",
+    "waterExtendLeftMm": 5.0,
+    "waterExtendRightMm": 5.0,
+    "waterTextDyMm": 2.0,
+    "elevTextDyMm": 2.0,
+    "pointNoDyMm": 3.0,
+    "axisLeftHeightMm": 10.0,
+    "thalwegCircleRadiusMm": 0.6,
+    "thalwegTextDyMm": 7.0
+  },
+  "bbox": {
+    "x0": 0.0,
+    "y0": 10.0,
+    "x1": 290.0,
+    "y1": 125.0
+  },
+  "computed": {
+    "widthMm": 290.0,
+    "heightMm": 115.0,
+    "bbox": {
+      "x0": 0.0,
+      "y0": 10.0,
+      "x1": 290.0,
+      "y1": 125.0
+    },
+    "elevBase": 38.05,
+    "elevMin": 38.55,
+    "elevMax": 44.3,
+    "offsetMin": 0.0,
+    "offsetMax": 290.0,
+    "spanM": 290.0,
+    "autoScaled": true,
+    "autoScaledFrom": 500.0,
+    "autoScaledTo": 1000.0,
+    "orderReversed": false,
+    "thalwegIndex": 15,
+    "thalwegElev": 38.55,
+    "fitWidth": true,
+    "fitHeight": true
+  },
+  "expected": {
+    "total": 67,
+    "byType": {
+      "LWPOLYLINE": 1,
+      "LINE": 3,
+      "TEXT": 62,
+      "CIRCLE": 1
+    },
+    "byKind": {
+      "POLYLINE": 1,
+      "LINE": 3,
+      "TEXT": 62,
+      "CIRCLE": 1
+    },
+    "byLayer": {
+      "AI-SEC-GROUND": 1,
+      "AI-SEC-WATER": 1,
+      "AI-SEC-ANNO": 63,
+      "AI-SEC-AXIS": 2
+    },
+    "textCount": 62,
+    "breakdown": {
+      "ground": 1,
+      "waterLine": 1,
+      "waterText": 1,
+      "elevText": 30,
+      "pointNo": 30,
+      "axisLine": 2,
+      "thalwegCircle": 1,
+      "thalwegText": 1
+    }
+  },
+  "entities": [
+    {
+      "role": "ground",
+      "kind": "POLYLINE",
+      "type": "LWPOLYLINE",
+      "layer": "AI-SEC-GROUND",
+      "closed": false,
+      "color": "BYLAYER",
+      "lineWeight": 0.3,
+      "points": [
+        [
+          0.0,
+          123.0
+        ],
+        [
+          10.0,
+          119.0
+        ],
+        [
+          20.0,
+          113.0
+        ],
+        [
+          30.0,
+          106.0
+        ],
+        [
+          40.0,
+          99.0
+        ],
+        [
+          50.0,
+          91.0
+        ],
+        [
+          60.0,
+          83.0
+        ],
+        [
+          70.0,
+          75.0
+        ],
+        [
+          80.0,
+          65.0
+        ],
+        [
+          90.0,
+          55.0
+        ],
+        [
+          100.0,
+          45.0
+        ],
+        [
+          110.0,
+          35.0
+        ],
+        [
+          120.0,
+          25.0
+        ],
+        [
+          130.0,
+          16.0
+        ],
+        [
+          140.0,
+          10.0
+        ],
+        [
+          150.0,
+          13.0
+        ],
+        [
+          160.0,
+          18.0
+        ],
+        [
+          170.0,
+          25.0
+        ],
+        [
+          180.0,
+          33.0
+        ],
+        [
+          190.0,
+          41.0
+        ],
+        [
+          200.0,
+          51.0
+        ],
+        [
+          210.0,
+          61.0
+        ],
+        [
+          220.0,
+          71.0
+        ],
+        [
+          230.0,
+          81.0
+        ],
+        [
+          240.0,
+          89.0
+        ],
+        [
+          250.0,
+          97.0
+        ],
+        [
+          260.0,
+          105.0
+        ],
+        [
+          270.0,
+          113.0
+        ],
+        [
+          280.0,
+          119.0
+        ],
+        [
+          290.0,
+          125.0
+        ]
+      ]
+    },
+    {
+      "role": "water-line:1",
+      "kind": "LINE",
+      "type": "LINE",
+      "layer": "AI-SEC-WATER",
+      "dash": "DASHED",
+      "points": [
+        [
+          -5.0,
+          85.0
+        ],
+        [
+          295.0,
+          85.0
+        ]
+      ]
+    },
+    {
+      "role": "water-text:1",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "设计水位 42.30 m",
+      "pos": [
+        295.0,
+        87.0
+      ],
+      "height": 2.5,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:1",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "44.20",
+      "pos": [
+        0.0,
+        125.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:2",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "44.00",
+      "pos": [
+        10.0,
+        121.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:3",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "43.70",
+      "pos": [
+        20.0,
+        115.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:4",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "43.35",
+      "pos": [
+        30.0,
+        108.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:5",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "43.00",
+      "pos": [
+        40.0,
+        101.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:6",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "42.60",
+      "pos": [
+        50.0,
+        93.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:7",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "42.20",
+      "pos": [
+        60.0,
+        85.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:8",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "41.80",
+      "pos": [
+        70.0,
+        77.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:9",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "41.30",
+      "pos": [
+        80.0,
+        67.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:10",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "40.80",
+      "pos": [
+        90.0,
+        57.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:11",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "40.30",
+      "pos": [
+        100.0,
+        47.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:12",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "39.80",
+      "pos": [
+        110.0,
+        37.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:13",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "39.30",
+      "pos": [
+        120.0,
+        27.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:14",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "38.85",
+      "pos": [
+        130.0,
+        18.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:15",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "38.55",
+      "pos": [
+        140.0,
+        12.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:16",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "38.70",
+      "pos": [
+        150.0,
+        15.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:17",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "38.95",
+      "pos": [
+        160.0,
+        20.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:18",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "39.30",
+      "pos": [
+        170.0,
+        27.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:19",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "39.70",
+      "pos": [
+        180.0,
+        35.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:20",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "40.10",
+      "pos": [
+        190.0,
+        43.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:21",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "40.60",
+      "pos": [
+        200.0,
+        53.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:22",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "41.10",
+      "pos": [
+        210.0,
+        63.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:23",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "41.60",
+      "pos": [
+        220.0,
+        73.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:24",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "42.10",
+      "pos": [
+        230.0,
+        83.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:25",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "42.50",
+      "pos": [
+        240.0,
+        91.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:26",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "42.90",
+      "pos": [
+        250.0,
+        99.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:27",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "43.30",
+      "pos": [
+        260.0,
+        107.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:28",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "43.70",
+      "pos": [
+        270.0,
+        115.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:29",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "44.00",
+      "pos": [
+        280.0,
+        121.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "elev-text:30",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "44.30",
+      "pos": [
+        290.0,
+        127.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:1",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "1",
+      "pos": [
+        0.0,
+        120.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:2",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "2",
+      "pos": [
+        10.0,
+        116.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:3",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "3",
+      "pos": [
+        20.0,
+        110.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:4",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "4",
+      "pos": [
+        30.0,
+        103.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:5",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "5",
+      "pos": [
+        40.0,
+        96.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:6",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "6",
+      "pos": [
+        50.0,
+        88.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:7",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "7",
+      "pos": [
+        60.0,
+        80.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:8",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "8",
+      "pos": [
+        70.0,
+        72.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:9",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "9",
+      "pos": [
+        80.0,
+        62.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:10",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "10",
+      "pos": [
+        90.0,
+        52.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:11",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "11",
+      "pos": [
+        100.0,
+        42.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:12",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "12",
+      "pos": [
+        110.0,
+        32.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:13",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "13",
+      "pos": [
+        120.0,
+        22.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:14",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "14",
+      "pos": [
+        130.0,
+        13.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:15",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "15",
+      "pos": [
+        140.0,
+        7.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:16",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "16",
+      "pos": [
+        150.0,
+        10.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:17",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "17",
+      "pos": [
+        160.0,
+        15.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:18",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "18",
+      "pos": [
+        170.0,
+        22.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:19",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "19",
+      "pos": [
+        180.0,
+        30.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:20",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "20",
+      "pos": [
+        190.0,
+        38.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:21",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "21",
+      "pos": [
+        200.0,
+        48.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:22",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "22",
+      "pos": [
+        210.0,
+        58.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:23",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "23",
+      "pos": [
+        220.0,
+        68.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:24",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "24",
+      "pos": [
+        230.0,
+        78.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:25",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "25",
+      "pos": [
+        240.0,
+        86.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:26",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "26",
+      "pos": [
+        250.0,
+        94.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:27",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "27",
+      "pos": [
+        260.0,
+        102.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:28",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "28",
+      "pos": [
+        270.0,
+        110.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:29",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "29",
+      "pos": [
+        280.0,
+        116.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "point-no:30",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "30",
+      "pos": [
+        290.0,
+        122.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    },
+    {
+      "role": "axis-base",
+      "kind": "LINE",
+      "type": "LINE",
+      "layer": "AI-SEC-AXIS",
+      "dash": null,
+      "points": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          290.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "role": "axis-left",
+      "kind": "LINE",
+      "type": "LINE",
+      "layer": "AI-SEC-AXIS",
+      "dash": null,
+      "points": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          10.0
+        ]
+      ]
+    },
+    {
+      "role": "thalweg-circle",
+      "kind": "CIRCLE",
+      "type": "CIRCLE",
+      "layer": "AI-SEC-ANNO",
+      "center": [
+        140.0,
+        10.0
+      ],
+      "radius": 0.6
+    },
+    {
+      "role": "thalweg-text",
+      "kind": "TEXT",
+      "type": "TEXT",
+      "layer": "AI-SEC-ANNO",
+      "text": "河底 38.55 m",
+      "pos": [
+        140.0,
+        3.0
+      ],
+      "height": 2.0,
+      "style": "AI-SEC-TEXT",
+      "rotation": 0.0,
+      "align": "left"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "AUTO_SCALED",
+      "message": "断面超宽，hScale 自动升档 500 -> 1000",
+      "from": "500",
+      "to": "1000"
+    }
+  ]
+}

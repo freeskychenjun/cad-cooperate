@@ -1,0 +1,96 @@
+{
+  "wallMs": 1,
+  "ok": true,
+  "cmd": "read",
+  "doc": {
+    "path": "",
+    "fullName": "",
+    "name": "strict.dxf",
+    "saved": true,
+    "readOnly": false,
+    "active": true,
+    "count": 0
+  },
+  "result": {
+    "entities": [
+      {
+        "handle": "300",
+        "type": "AcDbLine",
+        "kind": "LINE",
+        "layer": "水系",
+        "space": "model",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          10,
+          0
+        ],
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            10,
+            0
+          ]
+        ],
+        "linetype": "ByLayer",
+        "bbox": {
+          "min": [
+            0,
+            0
+          ],
+          "max": [
+            10,
+            0
+          ]
+        }
+      },
+      {
+        "handle": "301",
+        "type": "AcDbText",
+        "kind": "TEXT",
+        "layer": "GHOST-LAYER",
+        "space": "model",
+        "text": "hello",
+        "insertion": [
+          1,
+          1
+        ],
+        "pos": [
+          1,
+          1
+        ],
+        "height": 2.5,
+        "style": "MISSING-STYLE"
+      }
+    ],
+    "counts": {
+      "model": 2,
+      "paper": 0,
+      "returned": 2
+    },
+    "readPath": "fixture",
+    "scope": "model",
+    "truncated": false,
+    "matchedBy": "new"
+  },
+  "warnings": [],
+  "undoToken": null,
+  "elapsedMs": 1,
+  "app": {
+    "progId": "fixture",
+    "product": "offline fixture",
+    "mappedBy": "fixture",
+    "version": "0",
+    "hwnd": 0,
+    "found": true,
+    "launched": false,
+    "pid": 0,
+    "name": "fixture",
+    "fullName": "fixture"
+  }
+}
