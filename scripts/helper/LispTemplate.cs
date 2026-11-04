@@ -16,9 +16,19 @@
 //   P2|handle|x|y|z
 //   ELEV|handle|assoc38     (contour polylines carry their height only here)
 //   H|handle|assoc40        (TEXT/MTEXT height)
+//   R|handle|assoc40        (CIRCLE/ARC radius)
 //   CL|handle|assoc70       (polyline flags; bit 1 = closed)
 //   __DONE__|<n>
 // '|' inside text is escaped as '\|' and CR/LF become spaces; the reader maps '\|' back to '|'.
+//
+// Injection safety (M3-E6 P1-4.1, after the real incident where a dying script left the user's
+// CMDECHO at 0):
+//   * the script saves the previous *error* handler and installs one that closes the dump file
+//     handles, restores CMDECHO and re-installs the old handler - so a mid-way error inside CAD can
+//     no longer leave the command line silent; the normal path restores *error* too;
+//   * a __START__ sentinel is written into a separate .start file before any heavy work, so the
+//     helper can tell "the injected command never ran" from "it ran and is stuck";
+//   * only CMDECHO may be written through setvar (the read-only safety gate below enforces it).
 
 using System;
 using System.IO;
@@ -69,7 +79,10 @@ namespace ZwcHelper
         /// <summary>Read-only safety gate for every generated script (M3-E6 hard constraint after the
         /// SelectionSet.Delete incident): only whitelisted read-only AutoLISP functions are allowed,
         /// `setvar` may only touch CMDECHO, and the selection-set / modify family is rejected outright
-        /// (command/entdel/entmod/entmake/erase/SelectionSets/Delete/vla-/vlax-/...).</summary>
+        /// (command/entdel/entmod/entmake/erase/SelectionSets/Delete/vla-/vlax-/...).
+        /// `defun` is allowed only for the generated *error* handler, and its parameter list is skipped
+        /// (the symbols in there are variable names, not function calls; *error* itself is a symbol,
+        /// not a call, so it is never tokenized as a function).</summary>
         internal static string SafetyError(string src)
         {
             string[] forbidden = new string[] {
@@ -83,16 +96,24 @@ namespace ZwcHelper
                 "assoc", "nth", "length", "reverse", "cons", "list", "strcat", "rtos", "itoa",
                 "strlen", "substr", "chr", "princ", "getvar", "setvar", "ssget", "ssname",
                 "sslength", "entget", "open", "close", "write-line", "+", "-", "1+", "1-",
-                "=", "/=", "<", "<=", ">", ">=", "quote", "null"
+                "=", "/=", "<", "<=", ">", ">=", "quote", "null", "defun"
             };
             if (src == null) return "empty script";
             StringBuilder token = new StringBuilder();
             int line = 1;
             bool inString = false, inComment = false;
+            bool skipDefunParams = false;
+            int skipDepth = 0;
             for (int i = 0; i < src.Length; i++)
             {
                 char c = src[i];
                 if (c == '\n') { line++; inComment = false; token.Length = 0; continue; }
+                if (skipDefunParams)
+                {
+                    if (c == '(') skipDepth++;
+                    else if (c == ')') { skipDepth--; if (skipDepth == 0) skipDefunParams = false; }
+                    continue;
+                }
                 if (inComment) continue;
                 if (inString)
                 {
@@ -122,9 +143,10 @@ namespace ZwcHelper
                         if (!ok)
                         {
                             char first = sym[0];
-                            if (!(char.IsDigit(first) || first == '.' || first == '-' || first == '+')) 
+                            if (!(char.IsDigit(first) || first == '.' || first == '-' || first == '+'))
                                 return "unknown symbol '" + sym + "' outside the read-only whitelist at line " + line;
                         }
+                        if (sym == "defun") { skipDefunParams = true; skipDepth = 0; }
                     }
                     continue;
                 }
@@ -161,13 +183,38 @@ namespace ZwcHelper
             return path.Replace("\\", "/").Replace("\"", "");
         }
 
-        /// <summary>Build a dump script. geom = false writes the E5 four-field records only;
-        /// geom = true also writes points / vertices / elevation / height / flags.</summary>
+        /// <summary>Backward-compatible overload (used by the lispgen debug command): the __START__
+        /// sentinel goes next to the dump file.</summary>
         internal static string BuildDump(bool geom, string txtPath, string donePath, string ssFilter)
+        {
+            return BuildDump(geom, txtPath, donePath, (txtPath == null ? null : txtPath + ".start"), ssFilter);
+        }
+
+        /// <summary>Build a dump script. geom = false writes the E5 four-field records only;
+        /// geom = true also writes points / vertices / elevation / height / radius / flags.
+        /// startPath (may be null) is the two-phase sentinel file written before any heavy work.</summary>
+        internal static string BuildDump(bool geom, string txtPath, string donePath, string startPath, string ssFilter)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("(progn ");
+            // --- P1-4.1: save CMDECHO + the previous *error* handler, then install one that restores
+            // both. *error* is a symbol assignment, not a call; the safety gate skips the parameter list.
             sb.Append("(setq _zwc_echo (getvar \"CMDECHO\")) ");
+            sb.Append("(setq _zwc_olderr *error*) ");
+            sb.Append("(defun *error* (msg) ");
+            sb.Append("(if _zwc_f (close _zwc_f)) ");
+            sb.Append("(if _zwc_fs (close _zwc_fs)) ");
+            sb.Append("(if _zwc_echo (setvar \"CMDECHO\" _zwc_echo)) ");
+            sb.Append("(setq *error* _zwc_olderr) ");
+            sb.Append("(princ)) ");
+            // --- two-phase sentinel: __START__ lands in its own .start file before the dump begins
+            if (!string.IsNullOrEmpty(startPath))
+            {
+                sb.Append("(setq _zwc_fs (open \"").Append(PathForLisp(startPath)).Append("\" \"w\")) ");
+                sb.Append("(write-line \"__START__\" _zwc_fs) ");
+                sb.Append("(close _zwc_fs) ");
+                sb.Append("(setq _zwc_fs nil) ");
+            }
             sb.Append("(setvar \"CMDECHO\" 0) ");
             sb.Append("(setq _zwc_f (open \"").Append(PathForLisp(txtPath)).Append("\" \"w\")) ");
             sb.Append("(setq _zwc_ss (ssget \"X\"").Append(string.IsNullOrEmpty(ssFilter) ? "" : (" " + ssFilter)).Append(")) ");
@@ -241,10 +288,13 @@ namespace ZwcHelper
             sb.Append("(setq _zwc_cnt (1+ _zwc_cnt)) ");
             sb.Append("(setq _zwc_i (1+ _zwc_i))) ");
             sb.Append("(close _zwc_f) ");
+            sb.Append("(setq _zwc_f nil) ");
             sb.Append("(setq _zwc_fs (open \"").Append(PathForLisp(donePath)).Append("\" \"w\")) ");
             sb.Append("(write-line (strcat \"__DONE__|\" (itoa _zwc_cnt)) _zwc_fs) ");
             sb.Append("(close _zwc_fs) ");
+            sb.Append("(setq _zwc_fs nil) ");
             sb.Append("(setvar \"CMDECHO\" _zwc_echo) ");
+            sb.Append("(setq *error* _zwc_olderr) ");
             sb.Append("(princ))");
             return sb.ToString();
         }

@@ -54,6 +54,23 @@ handle | type | layer | text
 - 实测：304 条断面、6,647 个高程点 + 2,803 个等高线交点 = 9,450 个剖面点；同图重跑 10 s
 - 注意：9 条断面高程点 <10 个（局部缺测点），精度依赖等高线
 
+### 4.1 效果校验图（两条高程来源的对照）
+
+同一条断面用两种高程来源各算一遍，叠在一起看差异，是这套脚本唯一有效的"肉眼验收"手段：
+
+- **等高线求交**（`build_sections_from_dmx.py`，蓝线 `contour profile`）—— 断面线与 `DGX` 层等高线求交补点，剖面连续但会把等高线的阶梯感带进来；
+- **高程点块 Z**（`build_sections_gcd.py`，红点 `spot height`）—— 直接取 `ZDH` 层 POINT 的 Z，点位真实但疏密不均、局部缺测。
+
+![断面 16+475：等高线求交剖面（蓝）与高程点（红）对照](section-16_475.png)
+![断面 16+475：仅高程点块 Z 的剖面与逐点高程](section-16_475-gcd.png)
+![断面 1+324：等高线求交剖面与高程点对照](section-1_324.png)
+![断面 8+950：等高线求交剖面与高程点对照](section-8_950.png)
+
+> 读图要点：蓝线在岸坡段明显比红点"低/高半格"是等高线求交的固有偏差（等高距 1 m 内插），
+> 河槽平坦段两者一致（16+475 的 22.0 m 平台）；红点在中段缺测时蓝线只能靠等高线撑住，这正是
+> "高程点 <10 个的 9 条断面精度依赖等高线"的直观来源。图由 `tmp\sections\analyze*.py` 系列
+> 脚本用 matplotlib 生成（仅离线分析用，不属仓库运行时依赖）。
+
 ## 五、实现（M3-E6）
 
 | 组件 | 内容 |
@@ -79,6 +96,32 @@ handle | type | layer | text
 | `(ssget "X" '((0 . "LINE,LWPOLYLINE")))` 手动注入 | **2,995 条记录 / 334 ms**，E/P2 行坐标正确（例：`E|1079A6|LINE|JMD||420218.215874|3124393.412191|0` + `V|…` + `P2|…`），`CMDECHO` 恢复 1 |
 | `(ssget "X" '((0 . "LINE")))` | **1,500 条 / 237 ms**，E/V/P2 各 1,500 行 |
 | `(ssget "X" '((0 . "CIRCLE")))` | 0 条（该图无圆）→ 哨兵 `__DONE__|0`，脚本正常结束 |
-| 全量 36,558 `read -Mode geom` | **未完成**：生成器早期版本有缺陷（2D 点 Z 为 nil、vl-string-translate 不可用）导致 LISP 报错、两次注入超时（helper 之一回退 one-shot 后 180 s 超时）；修复后仅用上述小筛选验证语法/逻辑，**全量 dump 待 lead 给窗口、允许在用户实例上再跑一次**。 |
+| 全量 36,558 `read -Mode geom` | **未完成**：生成器早期版本有缺陷（2D 点 Z 为 nil、vl-string-translate 不可用）导致 LISP 报错、两次注入超时（helper 之一回退 one-shot 后 180 s 超时）；修复后仅用上述小筛选验证语法/逻辑。→ **2026-11-05 已复测，见 §六**。 |
 
 > 注：全量 dump 期间用户图纸 `CMDECHO` 一度被我方脚本设为 0（脚本未走到恢复行），随后已 `(setvar "CMDECHO" 1)` 恢复；未做任何改图操作。
+
+## 六、2026-11-05 复测与修复（解析正确性 + 注入治理）
+
+> 图纸换成用户当天打开的 `东总干渠16+500~24+700地形图.dwg`（41,413 实体 / 2 个文档），改动前基线 `tmp\baseline2\*` 与改动后逐字段 A/B，全部显式 `-Doc`、只读。真机窗口由 lead 统一调度（一个 agent 独占，避免并发注入互踩 CMDECHO/命令态）。
+
+### 6.1 两个静默错数据的缺陷已修
+
+| 缺陷 | 根因 | 修法 | 验证 |
+|---|---|---|---|
+| 含 `\|` 的文字把几何字段打歪 | `LispTemplate` 把文字里的 `\|` 转义成 `\\\|`；`LispFile.SplitRecord` 认这个转义，但 `LispGeom.Scan` 用**裸 `Split('|')`** ⇒ 行内字段整体右移，`x/y/z/nverts` 落到文本片段上被 `Num()` 解析成 `0.0`（**坐标静默变 0、顶点错挂**） | 抽出 `scripts\helper\LispWire.cs`（BCL-only，零依赖）：`SplitRecord/UnescapeField/TryNum/ParseGeometry/ParseFlat` 成为**唯一解析实现**，两个 Scan 只留「管道 + `LispRecord`→`JMap` 映射」 | 离线 `tests\lispwire` 99 条断言（含 `E\|1A\|TEXT\|0\|A\\\|B\|1.5\|2.5\|0\|0` ⇒ 9 段 / Text=`A|B` / X=1.5）；真机 A/B 500/500 实体整表逐字段相等 |
+| CIRCLE/ARC 的 `radius` 丢失 | 模板写 `R|handle|radius`，但 `LispFile.IsAuxRecord` 把它当忽略项、`LispGeom` 无对应分支 ⇒ 同一张图走 LISP 与走 COM 字段不一致 | `LispWire` 解析 `R` 记录写入 `Radius`，映射到 `radius`（与 COM 路径对齐）；`LispFile` 仍忽略但改由 `LispWire.IsAuxKind` 统一判定 | 离线断言 `R|h|2.5` ⇒ `radius=2.5`；样本图前 500 实体无 CIRCLE/ARC，**真机侧本轮无法观测**（已记入能力边界） |
+
+### 6.2 注入治理（P1-4.1，对应 M3-E6 §5.2 那次真实 CMDECHO 事故）
+
+- **`*error*` 处理器**：脚本开头保存旧 `*error*`，安装「关文件 + 还原 CMDECHO + 还原旧 `*error*`」的处理器；正常收尾也还原。`SafetyError` 白名单为此新增 `defun`，但**跳过形参表**、`forbidden` 表与只读语义不变（`defun` 体内出现 `command` 仍被拒，有离线负例）。
+- **两阶段哨兵**：脚本**先写 `__START__`**（独立 `.start` 文件）再做重活；超时后区分「注入未执行」（无 `__START__` ⇒ 新错误码 `LISP_NOT_STARTED`，提示查 CAD 忙/模态框/命令态）与「执行中卡死」（`LISP_FILE_TIMEOUT`，`error.detail` 带 `phase=started|not-started`）。
+- **超时不再删正在写的文件**：失败/超时把 `.lsp/.start/.txt/.done` 改名 `*.orphan` 留证（CAD 可能还在写），每次扫描开头清理 **>24 h** 的 `*.orphan` 与遗留 `scan-*/geom-*`（失败静默）。
+- 真机证据（2026-11-05）：`CMDECHO` 全量 read 前后均 **1**；成功路径 `%TEMP%\zwcad-cooperate` 中 `geom-*/scan-*` 计数 **0**；`FileSystemWatcher` 抓到 `geom-f7a56e0a3ce4.start 01:12:05.953 → .done 01:12:07.403`（另一次 01:14:20.308 → 01:14:21.741），即 `__START__` 先于 `__DONE__`；预置 mtime=25h 的 `geom-*.txt` 与 `.orphan` 均被清、mtime=now 的 `.orphan` 保留（24 h 宽限）。超时分支因 **Read 失败会 `LISP_FILE_FALLBACK` 回退 COM 全扫（41k≈10 min）**，按代价权衡改为**纯函数离线单测**（`LispOrphans`/`LispSentinelPhase` 21 条断言），不做端到端触发。
+
+### 6.3 已知限制（本轮实测确认，协议未变）
+
+**单次 `read -Mode geom` 的响应体过大时无法返回**：全量 41,413 实体时，LISP 通道本身**只有 ≈1.45 s**（dump 文件 4,801,512 B，与改动前基线**逐字节相同**）、扫描完全成功并自清理，但「41k 实体 → JSON 响应」这一步产生不出应答：
+- 经 `ZwcClient`：客户端 180 s 超时被杀，**stdout 0 字节**；
+- 绕开 client/管道直连 one-shot helper：进程 237,512 ms 后退出，**未写出 response 文件**，stdout/stderr 均空。
+- 该失败形态在改动前就存在（`tmp\evidence-e6\geom-36558.json`，2026-11-04，同形 `TIMEOUT`），与本次改动无关。
+- **可用做法**：`-Limit` 分页（实测最大成功档 `-Limit 500` = 152,422 B JSON，其背后的 dump 仍是全量 41,413 实体）；或直接消费 `%TEMP%` 里的 dump 文件（`build_sections_*.py` 走的就是这条）。

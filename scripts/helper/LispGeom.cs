@@ -9,10 +9,24 @@
 //   P2|handle|x|y|z
 //   ELEV|handle|assoc38      (contour polylines carry their height only here)
 //   H|handle|assoc40         (TEXT/MTEXT height)
+//   R|handle|assoc40         (CIRCLE/ARC radius)
 //   CL|handle|assoc70        (polyline closed flag)
 //   __DONE__|<n>
 //
-// Script generation and validation live in LispTemplate (ASCII/no-BOM + parenthesis balance).
+// Script generation and validation live in LispTemplate (ASCII/no-BOM + parenthesis balance); the
+// wire parsing lives in LispWire (one implementation shared with LispFile, escape-aware, so a '|'
+// inside a TEXT/MTEXT can no longer shift the geometry fields). This file is only the pipeline plus
+// the LispRecord -> JMap mapping, and the mapping keeps the pre-refactor field names/order (the only
+// addition is "radius" for CIRCLE/ARC, which the COM path already returned).
+//
+// Injection safety (M3-E6 P1-4.1):
+//   * the generated script writes a __START__ sentinel first and installs an AutoLISP *error* handler
+//     that restores CMDECHO and the previous *error*, so a script that dies inside CAD can no longer
+//     leave the user's command line silent;
+//   * a timeout distinguishes "never started" (no __START__ -> LISP_NOT_STARTED) from "running but
+//     stuck" (__START__ seen, no __DONE__ -> LISP_FILE_TIMEOUT with a phase detail);
+//   * an unfinished injection renames its temp files to *.orphan instead of deleting them (CAD may
+//     still be writing them) and every scan sweeps leftovers older than 24 h.
 
 using System;
 using System.Collections.Generic;
@@ -30,12 +44,15 @@ namespace ZwcHelper
         {
             meta = new JMap();
             string dir = State.Dir();
+            LispOrphans.CleanStale(dir, TimeSpan.FromHours(24));
             string guid = Guid.NewGuid().ToString("N").Substring(0, 12);
             string lspPath = Path.Combine(dir, "geom-" + guid + ".lsp");
             string txtPath = Path.Combine(dir, "geom-" + guid + ".txt");
             string donePath = Path.Combine(dir, "geom-" + guid + ".done");
+            string startPath = Path.Combine(dir, "geom-" + guid + ".start");
             Stopwatch sw = Stopwatch.StartNew();
             int echoBefore = 1;
+            bool completed = false;
             try
             {
                 // guard: never inject into a busy / errored command state
@@ -65,7 +82,7 @@ namespace ZwcHelper
                 }
                 string ssFilter = has ? "(list " + flt.ToString() + ")" : null;
 
-                string src = LispTemplate.BuildDump(true, txtPath, donePath, ssFilter);
+                string src = LispTemplate.BuildDump(true, txtPath, donePath, startPath, ssFilter);
                 echoBefore = Commands.CmdEchoOf(doc);
                 LispTemplate.WriteScript(lspPath, src);   // ASCII/no-BOM + balance check (throws LISP_TEMPLATE_*)
 
@@ -75,10 +92,12 @@ namespace ZwcHelper
                 long injectMs = sw.ElapsedMilliseconds;
 
                 bool done = false;
+                bool startSeen = false;
                 int sentinelCount = -1;
                 long deadline = Math.Max(1000, timeoutMs);
                 while (sw.ElapsedMilliseconds < deadline)
                 {
+                    if (!startSeen && File.Exists(startPath)) startSeen = true;
                     if (File.Exists(donePath))
                     {
                         try
@@ -96,7 +115,24 @@ namespace ZwcHelper
                     }
                     Thread.Sleep(25);
                 }
-                if (!done) throw new ZwcError("LISP_FILE_TIMEOUT", "LISP geometry dump did not finish within " + timeoutMs + " ms", "retry with a larger -TimeoutSec or fall back to COM", null);
+                if (!done)
+                {
+                    // Two-phase sentinel: no __START__ means the injected command never ran (busy CAD,
+                    // modal dialog, LISP disabled); __START__ without __DONE__ means it is still running.
+                    if (!startSeen) startSeen = File.Exists(startPath);
+                    string phase = LispSentinelPhase.Classify(done, startSeen);
+                    string detail = "phase=" + phase + "; startSeen=" + (startSeen ? "true" : "false")
+                        + "; elapsedMs=" + sw.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture);
+                    if (phase == LispSentinelPhase.NotStarted)
+                        throw new ZwcError(LispSentinelPhase.ErrorCodeFor(phase),
+                            "the LISP geometry dump did not start within " + timeoutMs + " ms (no __START__ sentinel)",
+                            "CAD is probably busy or a modal dialog is open; run doctor, clear the command line, then retry",
+                            detail);
+                    throw new ZwcError(LispSentinelPhase.ErrorCodeFor(phase),
+                        "LISP geometry dump did not finish within " + timeoutMs + " ms",
+                        "retry with a larger -TimeoutSec; the script is still running inside CAD - its temp files were kept as *.orphan in %TEMP%\\zwcad-cooperate",
+                        detail);
+                }
                 long sentinelMs = sw.ElapsedMilliseconds;
 
                 byte[] raw = File.ReadAllBytes(txtPath);
@@ -107,64 +143,62 @@ namespace ZwcHelper
                 List<object> entities = new List<object>();
                 Dictionary<string, JMap> byHandle = new Dictionary<string, JMap>(StringComparer.OrdinalIgnoreCase);
                 List<string> order = new List<string>();
-                int records = 0;
-                string[] lines = text.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (string line in lines)
+                int records;
+                List<LispRecord> parsed = LispWire.ParseGeometry(text, out records);
+                for (int ri = 0; ri < parsed.Count; ri++)
                 {
-                    if (line.Length == 0 || line.IndexOf("__DONE__", StringComparison.Ordinal) >= 0) continue;
-                    string[] p = line.Split('|');
-                    if (p.Length < 2) continue;
-                    string kind = p[0];
-                    string h = p[1];
-                    if (kind == "E")
+                    LispRecord rec = parsed[ri];
+                    JMap m = new JMap();
+                    string type = LispFile.NormalizeType(rec.Type);
+                    m.Add("handle", rec.Handle);
+                    m.Add("type", type);
+                    m.Add("kind", Commands.KindOf(type));
+                    m.Add("layer", rec.Layer);
+                    m.Add("space", "model");
+                    m.Add("text", rec.Text);
+                    m.Add("x", rec.X);
+                    m.Add("y", rec.Y);
+                    m.Add("z", rec.Z);
+                    m.Add("point", new List<object> { rec.X, rec.Y, rec.Z });
+                    m.Add("nverts", rec.Nverts);
+                    // Replay the side-records in dump order so the JSON key order stays what it was.
+                    if (rec.AuxOrder != null)
                     {
-                        if (p.Length < 9) continue;
-                        JMap m = new JMap();
-                        m.Add("handle", h);
-                        m.Add("type", LispFile.NormalizeType(p[2]));
-                        m.Add("kind", Commands.KindOf(LispFile.NormalizeType(p[2])));
-                        m.Add("layer", p[3]);
-                        m.Add("space", "model");
-                        string txt2 = Unescape(p[4]);
-                        m.Add("text", txt2);
-                        double x = Num(p[5]), y = Num(p[6]), z = Num(p[7]);
-                        int nv = 0; int.TryParse(p[8], NumberStyles.Integer, CultureInfo.InvariantCulture, out nv);
-                        m.Add("x", x); m.Add("y", y); m.Add("z", z);
-                        m.Add("point", new List<object> { x, y, z });
-                        m.Add("nverts", nv);
-                        entities.Add(m);
-                        if (!byHandle.ContainsKey(h)) { byHandle[h] = m; order.Add(h); }
-                        records++;
-                    }
-                    else
-                    {
-                        JMap m;
-                        if (!byHandle.TryGetValue(h, out m)) continue;
-                        if (kind == "V" && p.Length >= 6)
+                        for (int ai = 0; ai < rec.AuxOrder.Count; ai++)
                         {
-                            List<object> verts = m.List("vertices");
-                            if (verts == null) { verts = new List<object>(); m.Add("vertices", verts); }
-                            verts.Add(new List<object> { Num(p[3]), Num(p[4]), Num(p[5]) });
-                        }
-                        else if (kind == "P2" && p.Length >= 5)
-                        {
-                            m.Add("p2", new List<object> { Num(p[2]), Num(p[3]), Num(p[4]) });
-                        }
-                        else if (kind == "ELEV" && p.Length >= 3)
-                        {
-                            m.Add("elevation", Num(p[2]));
-                        }
-                        else if (kind == "H" && p.Length >= 3)
-                        {
-                            m.Add("height", Num(p[2]));
-                        }
-                        else if (kind == "CL" && p.Length >= 3)
-                        {
-                            int flags = (int)Num(p[2]);
-                            bool closed = (flags & 1) == 1;
-                            m.Add("closed", closed);
+                            string aux = rec.AuxOrder[ai];
+                            if (aux == "V")
+                            {
+                                List<object> verts = new List<object>();
+                                if (rec.Vertices != null)
+                                    for (int vi = 0; vi < rec.Vertices.Count; vi++)
+                                        verts.Add(new List<object> { rec.Vertices[vi][0], rec.Vertices[vi][1], rec.Vertices[vi][2] });
+                                m.Add("vertices", verts);
+                            }
+                            else if (aux == "P2" && rec.P2 != null)
+                            {
+                                m.Add("p2", new List<object> { rec.P2[0], rec.P2[1], rec.P2[2] });
+                            }
+                            else if (aux == "ELEV" && rec.Elevation.HasValue)
+                            {
+                                m.Add("elevation", rec.Elevation.Value);
+                            }
+                            else if (aux == "H" && rec.Height.HasValue)
+                            {
+                                m.Add("height", rec.Height.Value);
+                            }
+                            else if (aux == "R" && rec.Radius.HasValue)
+                            {
+                                m.Add("radius", rec.Radius.Value);
+                            }
+                            else if (aux == "CL" && rec.Flags.HasValue)
+                            {
+                                m.Add("closed", (rec.Flags.Value & 1) == 1);
+                            }
                         }
                     }
+                    entities.Add(m);
+                    if (!byHandle.ContainsKey(rec.Handle)) { byHandle[rec.Handle] = m; order.Add(rec.Handle); }
                 }
 
                 // shape the geometry fields the COM path would return, so downstream code is path-agnostic
@@ -211,28 +245,25 @@ namespace ZwcHelper
                 meta.Add("fileBytes", raw.Length);
                 meta.Add("decodedAs", "GBK/936");
                 meta.Add("mode", "geom");
+                completed = true;
                 return result;
             }
             finally
             {
                 try { Commands.RestoreCmdEcho(doc, echoBefore); } catch (Exception) { }
-                try { if (File.Exists(lspPath)) File.Delete(lspPath); } catch (Exception) { }
-                try { if (File.Exists(txtPath)) File.Delete(txtPath); } catch (Exception) { }
-                try { if (File.Exists(donePath)) File.Delete(donePath); } catch (Exception) { }
+                if (completed)
+                {
+                    LispOrphans.DeleteQuiet(lspPath);
+                    LispOrphans.DeleteQuiet(txtPath);
+                    LispOrphans.DeleteQuiet(donePath);
+                    LispOrphans.DeleteQuiet(startPath);
+                }
+                else
+                {
+                    // Never delete what CAD may still be writing: keep the evidence as *.orphan.
+                    LispOrphans.Preserve(dir, lspPath, txtPath, donePath, startPath);
+                }
             }
-        }
-
-        private static string Unescape(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return "";
-            return s.Replace("\\|", "|");
-        }
-
-        private static double Num(string s)
-        {
-            double d;
-            if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out d)) return d;
-            return 0.0;
         }
     }
 }

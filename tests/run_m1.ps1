@@ -1,4 +1,4 @@
-﻿<#
+<#
 run_m1.ps1 - M1 section-figure end-to-end runner (pure ASCII, PowerShell 5.1).
 
 Chain:
@@ -16,7 +16,7 @@ attaches to an already-open drawing; there is no -Launch here on purpose.
 Usage:
   powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -DryRunOnly
   powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -NoCad
-  powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -Doc "<你的图纸>.dwg"
+  powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -Doc "<your-drawing>.dwg"
 
 Exit code: 0 when no FAIL (min PASS set: model + baseline verification + bad cases).
 #>
@@ -204,6 +204,25 @@ if (-not (Test-Path $CheckDxfPy)) {
     } else {
         Write-Item "FAIL" "dxf.roundtrip" ("exit=" + $r5.Code)
         Write-Output $r5.Text
+    }
+}
+
+# ---- step 2c: C# LISP wire parser + template generator (offline, csc) -------
+# The reading fast path (LISP dump rows -> entities) is C# and out of python's reach, so it
+# carries its own csc-driven test entry. No CAD is touched: it compiles the pure parser next
+# to a test main and asserts the wire format ('|' escaping, R| radius, V/P2/ELEV/H/CL rows).
+$LispTest = Join-Path $PSScriptRoot "selftest_lisp.ps1"
+if (-not (Test-Path -LiteralPath $LispTest)) {
+    Write-Item "SKIP" "lisp.wire" "tests\selftest_lisp.ps1 not found"
+} else {
+    $psLocal = Join-Path $PSHOME "powershell.exe"
+    $rl = Invoke-Native $psLocal @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $LispTest)
+    $passL = @($rl.Text -split "`n" | Where-Object { $_.StartsWith("PASS") }).Count
+    if ($rl.Code -eq 0) {
+        Write-Item "PASS" "lisp.wire" ("offline csc tests, PASS lines=" + $passL)
+    } else {
+        Write-Item "FAIL" "lisp.wire" ("exit=" + $rl.Code + " tail=" + (($rl.Text -split "`n" | Select-Object -Last 4) -join " | "))
+        Write-Output $rl.Text
     }
 }
 
