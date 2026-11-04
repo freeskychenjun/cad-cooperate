@@ -4,6 +4,7 @@
 > 本文记录**实际采纳了什么、没采纳什么、为什么**，以及每项的验证证据。
 > 基线：`v0.9.0`（`88b1a06`）+ 工作树未提交的 M3-E6 改动。M3-E6 工作树已先单独落库为
 > `e70209f`（避免优化改动把未跟踪文件与已跟踪改动混在一起），本轮优化在其上分提交。
+> **第二轮（同日，按本文 §七 的建议开工）已完成 5.3 / 4.4 / 4.2 / 5.1（第一批）/ 5.5，见 §八。**
 
 ## 一、结论摘要
 
@@ -15,15 +16,15 @@
 | 3.4 `.gitignore` 缺 `/output/`、`*.dwl`（P0） | **采纳** | 补 `/output/`、`*.dwl`、`*.dwl2`；4 张悬空 png 改为在 `docs/M3-E6-geometry-dump.md §4.1` 引用（高程来源对照图） | `git status --ignored`：`output/`、`tests/bench/fixtures/design-water.dwl` 均被忽略；`git ls-files` 无命中 |
 | 3.5 prepare 吞错 / audit 非原子写（P0） | **采纳** | `prepare.py` 新增 `warn()/warn_exc()` 走 **stderr**（6 处静默吞错留痕、同码去重），`write_json_atomic` 去掉 `except BaseException`；`audit.py` `--json/--md` 改同款原子写（不可写 → stderr + exit 2） | `stdout` 单段 JSON 协议不变（41 PASS 回归）；缺 `stations`/`daily_water_level` 表用例可区分「表坏」与「无记录」；`KeyboardInterrupt/SystemExit` 穿透且无残留临时文件 |
 | 4.1 LISP 孤儿脚本 / CMDECHO 事故（P1） | **采纳** | `*error*` 处理器（还原 CMDECHO + 旧处理器）；脚本先写 `__START__` 两阶段哨兵；失败/超时**改名 `*.orphan` 留证**不删、扫描前清 >24 h 遗留；新增错误码 `LISP_NOT_STARTED`、`LISP_FILE_TIMEOUT.detail.phase` | 真机 CMDECHO 前后均 **1**；`FileSystemWatcher` 抓到 `.start`(01:12:05.953) → `.done`(01:12:07.403)；成功路径 pipeline 残留 **0**；25 h orphan 被清、fresh orphan 保留；超时分支 21 条离线断言（端到端不做，理由见 §六） |
-| 4.2 合并 LispFile/LispGeom 重复（P1） | **部分采纳** | **解析层**合并为 `LispWire`（消除两份切分/解码回调），并顺带修 3.1/3.2；**注入管道**（守卫→注入→哨兵→清理）本轮**未**抽 `LispScan.cs` | 两文件合计 −约 500 行、解析零重复；注入管道仍有约 120 行同构（见 §六 理由） |
+| 4.2 合并 LispFile/LispGeom 重复（P1） | **已做（第二轮）** | 解析层 `LispWire`（第一轮）+ **注入管道 `LispScan.cs`**（第二轮，五步单一实现）；`LispFile` 240→133、`LispGeom` 269→161 行 | 见 §八.2；真机 A/B `-Limit 20/500`、read、query 与基线 0 字段差异 |
 | 4.3 bin/cache 无淘汰（P1） | **采纳** | `PruneCache`（保留 10 个非空 + 当前 sha + **运行中目录**，空目录 5 min 宽限，`deleted[]/skippedRunning[]/failedDirs[]`）；`serve -Action prune`；client 拉起新 daemon 后一次性自动淘汰；编译失败回滚空目录与 `build-<pid>.exe` | **141 → 9** 目录、空目录 **33 → 0**、释放 **12.00 MB**、`failed=0`；受控实验证明运行中目录被保护；二次 `removed=0`（幂等）；现 10 目录 / 0 空 / 1.76 MB |
-| 4.4 Python 性能热点（P1） | **部分采纳** | `drop_suspect` 改字典/集合索引（O(p×o×s) → O(p)），**model JSON 逐字节等价** | N=2000/8000/20000：**1.6× / 4.6× / 13.6×**（7.669 s → 0.563 s），4 组模型 JSON `identical` |
+| 4.4 Python 性能热点（P1） | **已做（两轮）** | 第一轮 `drop_suspect` 字典/集合索引（**1.6×/4.6×/13.6×**，逐字节等价）；第二轮**断面关联改网格分桶**：候选对 918 万→16.8 万、关联段 1.43→0.14 s（**×10.2**）、端到端 gcd −16% / dmx −26%，golden 逐单元格 0 差异 | 见 §八.1；`tests\selftest_sections.py` 82 断言 |
 | 4.5 query `-Layer` 下推（P1） | **不采纳** | 计划自身结论即"不建议为纯性能做"；本轮无"只 dump 单层"需求 | — |
-| 5.1 拆 `ZwcHelper.cs` 巨石（P2） | **未做** | 见 §六：纯搬移 4.3k 行 × 每类回归，风险/收益在本轮窗口内不划算 | — |
+| 5.1 拆 `ZwcHelper.cs` 巨石（P2） | **已做第一批（第二轮）** | `Json`（262 行）+ `PipeIo`（51 行）整体搬出，`ZwcHelper.cs` 4,371→4,100 行（diff = 0 insertions / 271 deletions，类体逐字节相等）；新增 `JsonTests` **132 断言**纳入 CI | 见 §八.3 |
 | 5.2 哈希配方三（四）处（P2） | **采纳** | `zwc.ps1` 三处合并为 `Get-HelperSha12`；client 新增 `hash` 子命令；`serve -Action status` 输出 `helperSha/clientSha/recipeMatch`，不一致 → `HASH_RECIPE_MISMATCH` | `recipeMatch:true`；新实现 40 次中位 **0.69 ms vs 2.15 ms**、sha 完全一致 |
-| 5.3 合并 build_sections 双脚本（P2） | **未做（只做安全侧）** | 未抽 `section_lib.py` 单实现；但补了输入校验（坏 JSON/缺键 → `NO_INPUT/BAD_INPUT` + exit 2）、openpyxl 延迟导入（`NO_OPENPYXL`）、TEMP/输出名/桩号参数化（默认值不变） | 端到端合成数据 21 项断言 PASS；见 §六 理由 |
+| 5.3 合并 build_sections 双脚本（P2） | **已做（第二轮）** | `section_lib.py`（1,138 行）单一实现 + 两个薄入口（376→42、414→47 行）；重复度 168 行→9 行；golden 逐单元格 0 差异（34,024 + 69,987 cell） | 见 §八.1 |
 | 5.4 编辑残留与死代码（P2） | **采纳（含扩展）** | `bindFailures` 重复行、`instanceError` 重复行、`ShowCmd` 重复 `return`；ZwcClient 退出码改结构化（不再全文搜子串）；daemon 的 ping/daemon-stop 改 `Json.Parse` 判顶层 `cmd`；`qa_yssd --block` 由死参数改为**真正生效**（默认行为不变）；硬编码 TEMP 回退改 `tempfile.gettempdir()` | 退出码 19 个假响应用例（含「`ok:true` + 文本含 BAD_DATA → **0**」，旧实现错判 3）；真机 `query -Text ping` 修复前返回 `cmd:"ping"`、修复后 `cmd:"query"` |
-| 5.5 prepare.py 模块化（P2） | **未做** | 见 §六：2–3 人日且需逐字节协议保持，本轮窗口不足 | — |
+| 5.5 prepare.py 模块化（P2） | **已做（第二轮）** | 2,090 行 → **368 行薄壳** + `prep_io`/`prep_yssd`/`prep_db`/`prep_model` 四模块；v1/v2 坐标映射/TOO_TALL/layer-prefix/字高字面量共 **54 行重复 → 24 行调用点 + 48 行单实现**；golden **21/21 全等**（stdout 字节/退出码/stderr/落盘 sha256） | 见 §八.4 |
 | 6.1 依赖声明（P3） | **采纳** | 新增 `requirements.txt`（`xlrd>=2.0`/`openpyxl>=3.0`/`ezdxf>=1.0`，可选 matplotlib）；build 脚本延迟导入 + 明确错误码 | CI 用它装依赖；缺库时报 `NO_OPENPYXL` + exit 2（原裸 traceback） |
 | 6.2 最小 CI（P3） | **采纳** | `.github/workflows/offline-ci.yml`：windows-latest + Python 3.9，跑 5 个离线入口（含 csc 编译的 `selftest_lisp.ps1`），**不跑任何在线 CAD 测试** | 五个入口本机全绿（见 §五）；CI 本身尚未在 GitHub 实跑（需首次 push，见 §七） |
 | 6.3 文档一致性（P3） | **采纳** | `tmp/real/SCHEMA-v2.md` 脱敏后入库为 `docs/section-model-v2.md`（站码/站名/本机库路径/截图名替换）；`tests/README` 悬空指针改指向该文件并说明 `tmp/` 不入库；4 张 png 变为被引用；`tests/audit/README` 的"快照未随仓库分发"一节本已自洽，未动 | fresh clone 不再有悬空引用；公开仓库不新增真实站点/本机路径 |
@@ -69,6 +70,8 @@
 
 ## 六、未采纳 / 降级项与理由
 
+> **第二轮更新**：下列第 1–3 项（5.1、5.5、5.3、4.2）已在同日第二轮补齐（见 §八）；本节保留为**当时的取舍理由**，用于解释"为什么当时先不做、后来怎么做的"。
+
 1. **5.1 拆 `ZwcHelper.cs`、5.5 `prepare.py` 模块化**：纯行为保持的大规模搬移（各 2–3 人日），必须逐类/逐函数跑在线+离线回归；本轮窗口内做不完，硬做只会把"未验证的大 diff"塞进历史。建议单独开一个批次，前提是先用 6.2 的 CI 把离线网兜住。
 2. **5.3 合并 build_sections 双脚本**：计划估计 1–1.5 人日且需重跑真实数据；本轮只做了**风险侧**（输入校验、延迟导入、参数化），去重留给下一次（4.4 的空间索引优化也应等这次合并后再做，避免改两遍）。
 3. **4.2 的注入管道合并**：解析层已合并（收益最大且可离线测）；注入管道（守卫→注入→哨兵→清理，约 120 行同构）与 4.1 改的是同一片代码，本轮先保证 4.1 的正确性并做真机验证，管道抽象留待下一轮（届时 4.1 的修复只需改一处）。
@@ -81,5 +84,46 @@
 1. **真机 `radius` 未观测**：本轮样本图前 500 实体不含 CIRCLE/ARC。建议下次在一张有圆/弧的图上跑 `read -Mode geom -Limit 50` 确认（离线断言与模板已覆盖生成/消费两端）。
 2. **全量 geom 响应体上限（既有边界，未改协议）**：41k 实体全量 `read -Mode geom` 时，LISP 扫描只需 ≈1.5 s 且 dump 与基线逐字节相同（4.8 MB），但"41k 实体 → JSON 响应"产生不出应答（client 180 s 超时、stdout 0 字节；直连 one-shot helper 也不写 response）。已写入 `SKILL.md` 能力边界与 `docs/M3-E6-geometry-dump.md §6.3`；**可用做法**是 `-Limit` 分页或直接消费 `%TEMP%` 的 dump 文件。若要做"一次拿全量"，需要改协议（分块/流式/落盘引用），属独立课题。
 3. **CI 未在 GitHub 实跑**：`offline-ci.yml` 的 5 个入口在本机已全绿，但 Actions 需要首次 push 后确认（特别是 windows runner 上 `csc.exe` 可用性与 Python 3.9 依赖安装）。首次 push 后请看一眼 `offline-ci` 工作流。
-4. **下一轮可做**（按建议顺序）：5.3 合并 build_sections → 4.4 空间索引 → 4.2 注入管道抽象 → 5.1/5.5 模块化；每步在 CI 绿的基础上做。
+4. **下一轮可做**（按建议顺序；**前四项已于第二轮完成，见 §八**）：~~5.3 合并 build_sections~~ → ~~4.4 空间索引~~ → ~~4.2 注入管道抽象~~ → ~~5.1 第一批（Json/PipeIo）~~ → 剩余：5.1 **第二批**（Com/Cad/State/Daemon/PipeIo 之外的类逐类搬移，每搬一类跑一次离线回归）、4.4 的「gcd 宽表逐 cell 写 → append」、5.5 的 `--compare-source` 端到端 golden（需真实 `.xls` 源表）、`DEFAULT_DB_PATH` 延迟求值。
 5. **本机现场**：`bin\cache` 已从 140 目录/13.39 MB 收敛到 10 目录/1.76 MB；`%TEMP%\zwcad-cooperate` 里的 `g3.*`、`gtest*`、`contours.json`、`sections-src.json` 等是 **2026-11-04 M3-E6 试验遗留**，非本轮产物，可随时手工删除（不在仓库内）。
+
+## 八、第二轮执行（2026-11-05，按 §七 建议开工）
+
+> 四个写作用域互不重叠的重构并行完成；每项都以"离线全绿 + 等价性证明"收口，提交见本文件末尾。
+
+### 8.1 5.3 + 4.4 数据侧：`section_lib.py` 单一实现 + 网格分桶空间索引
+- **合并**：`build_sections_gcd.py` 376 → **42 行**、`build_sections_from_dmx.py` 414 → **47 行**；新增 `scripts/section/section_lib.py` **1,138 行**（常量、几何工具、输入校验/错误码、网格索引、标签 1:1 关联、方向判定、去重/`MIN_PTS`、Excel 五表、预览 PNG、CLI/stdout 契约、可选计时）。两条路线的差异收敛为 `VARIANTS` 声明式数据。重复代码实测：旧两脚本 168 行逐行重复（50–54%），新两入口仅 **9 行**共享。
+- **等价性**：真实数据 golden —— gcd 4 sheet / **34,024 cell**、dmx 5 sheet / **69,987 cell**，**差异 0**（各掩码 1 个「生成时间」）；另 stdout 逐行相同、stderr 空、`--help` 逐字符相同、PNG/CSV **sha256 逐字节相同**、xlsx 内部 zip 条目全同。
+- **空间索引**：候选对 **9,182,928 → 168,353（1.8%）**；关联段 **1.43 s → 0.14 s（×10.2）**；端到端真实数据 gcd **1.84→1.55 s (−16%)**、dmx **2.58→1.92 s (−26%)**（剩余为 openpyxl 保存与 matplotlib 三图，未变）。桶尺寸自适应（断面线 240 m 网格 31×36；等高线 66.4 m 网格 111×129），并与暴力解**逐结果相等**（最近线段含 t、等距取低序号、0.5 m 成员集合、2,845 个交点、标签 304/304、点 2,897、块分配 2,896/未分配 42 全一致）。
+- **测试**：新增 `tests/selftest_sections.py`（**82 断言**，纯离线合成夹具，覆盖几何/网格等价/两入口逐格断言/`NO_INPUT`/`BAD_INPUT`×4/`NO_OPENPYXL`×2/缺 matplotlib 仍 exit 0），已接入 CI。
+- **唯一内部修复**（真实数据观测不到，由合成夹具捕获）：dmx「说明」表 `合计` 行原用 `len(secs)`，改为 `len(rows)`。
+- **未做**：4.4 里「gcd 宽表逐 cell 写 → append」（改写法会动产物字节，留待单独一批）。
+
+### 8.2 4.2 LISP 注入管道抽象：`LispScan.cs`
+- 新增 `scripts/helper/LispScan.cs`（304 行）：CMDACTIVE/LASTPROMPT 守卫 → ssget 过滤串 → 生成/写盘/`SendCommand` → 两阶段哨兵 → GBK 读回 → finally CMDECHO 还原 + 成功删档/失败 `*.orphan`，**五步唯一实现**；纯函数可离线测。
+- `LispFile.cs` 240→**133 行**、`LispGeom.cs` 269→**161 行**：只剩 request + `LispWire.Parse*` + `LispRecord→JMap` 映射。**签名、`result`/`meta` 字段集合与顺序、10 处错误码/文案/hint/detail 逐字不变**，`ZwcHelper.cs`/`EditsQuery.cs` 调用点零改动。
+- **真机 A/B**（显式 `-Doc`、只读）：`-Mode geom -Limit 20/500`、`read -Limit 20`、`query -Limit 10` 与 `tmp\baseline2` **0 字段差异**（`diff_ab.py` problems=0）；`%TEMP%` 残留 0、无 orphan、**CMDECHO=1 / CMDACTIVE=0**。
+- 新增 `tests/lispwire/LispScanTests.cs`（**119 断言**，含 COM 桩端到端：成功删档+GBK 读回、started 超时→`LISP_FILE_TIMEOUT`+`.orphan`、not-started→`LISP_NOT_STARTED`、BUSY/PROMPT_POLLUTED 文案渲染断言）。
+
+### 8.3 5.1 第一批：`Json.cs` / `PipeIo.cs` 可离线测
+- `ZwcHelper.cs` **4,371 → 4,100 行**；`git diff --numstat` = **0 insertions / 271 deletions**；两个类体逐字节相等（独立字符串感知 walker 复核：Json 9,552 字符、PipeIo 1,087 字符 IDENTICAL）。协议（4 字节小端长度 + UTF-8 JSON）、数字格式、错误文案全不变。
+- 新增 `tests/jsonself/JsonTests.cs`（**132 断言**）+ `JMapStub.cs`（仅测试用最小桩，不进 `scripts\helper`）：转义/数字边界/嵌套/键序/中文往返/50 层嵌套/15 个非法输入/`Write→Parse→Write` 字节相等。**收益：JSON 层从此能在无 CAD 的 CI 上回归。**
+- 编码约定（查证结论）：request 写侧统一 UTF-8 无 BOM；读侧接受 UTF-8（含/不含 BOM）甚至带 BOM 的 UTF-16LE/BE，但 **GBK/ANSI 不报错、静默变 U+FFFD 乱码** ⇒ 调用方不得用 ANSI 写 request。已写入 `docs/M3-E1-perf.md §10.5`。
+
+### 8.4 5.5 `prepare.py` 模块化
+- **2,090 行 → 368 行薄壳** + 四模块：`prep_io`(343) / `prep_yssd`(458) / `prep_db`(535) / `prep_model`(538)；`prepare.py` 仍是 CLI 入口且 `import prepare` 仍可用（`qa_yssd.py` 一行未改）。
+- **重复映射合并**：v1 `build_model` 与 v2 `build_db_model` 的坐标映射/bbox（17+11 行）、`TOO_TALL`（7+5）、`--layer-prefix`（3+3）、字高字面量（4+2+2）共 **54 行重复 → 24 行调用点 + 48 行单实现**（`CoordMapper`/`measure_bbox`/`resolve_layer_prefix`/`append_too_tall_warning`）。
+- **等价性**：golden **21/21 全等**（stdout 原始字节、退出码、stderr、落盘 sha256；覆盖 two-col/yssd block1-2/`--drop-suspect`/`--no-axis --label-every`/`TOO_WIDE` 失败例/from-db 单+多序列 v2/反转夹具/`.xls`→xlrd/`--list-dates`/`--summary`/4 个负例），另 `28/28` 补充差分全等；机械证明「只搬不改」：69 个顶层节点逐字节相同，仅 `build_model`/`build_db_model` 按显式替换表改动。
+- 迁移中 golden 抓到并修掉 1 个回归（v1 水位线 y 依赖的 `ky` 在合并后丢失 → NameError）——**这正是先抓 golden 的价值**。
+- **未做**：`--compare-source`（DB vs 源 `.xls`）端到端 golden（仓库内无匹配真实源表，函数逐字搬移已由 verify_split 证明）；`DEFAULT_DB_PATH` 仍导入期求值（按"先别改语义"）。
+
+### 8.5 第二轮验证矩阵（合并提交前）
+
+| 项 | 结果 |
+|---|---|
+| helper 编译（12 个 `.cs`） | **0 error**（3 条历史 warning 不变） |
+| `tests\selftest.py` / `test_audit.py` / `selftest_checkers.py` | 41 PASS / 89·0·3 / SELFTEST PASS（与第一轮一致） |
+| `tests\selftest_sections.py`（新） | **82 PASS / 0 FAIL** |
+| `tests\selftest_lisp.ps1`（现 4 套） | **410 PASS / 0 FAIL**（LispWire 106 + LispTemplate 53 + Json 132 + LispScan 119） |
+| `tests\run_m1.ps1 -DryRunOnly -NoCad` | **PASS 10 / FAIL 0 / SKIP 2**（`lisp.wire` 步 PASS lines 291→410） |
+| 四个 golden 对比 | 数据侧 34,024+69,987 cell 0 差异；prepare 21/21 全等；LISP 真机 0 字段差异 |

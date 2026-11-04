@@ -7,7 +7,7 @@
 
 | 文件 | 作用 |
 |---|---|
-| `scripts\section\prepare.py` | xlsx/xls → `section.model.json`（DESIGN §4.1 输入、§4.2 映射、§4.3 实体清单 + `computed`；`--profile yssd` 见 §9） |
+| `scripts\section\prepare.py` | xlsx/xls → `section.model.json`（DESIGN §4.1 输入、§4.2 映射、§4.3 实体清单 + `computed`；`--profile yssd` 见 §9）。**CLI 薄壳**，实现在同目录 `prep_io`（IO/解析/告警/原子写）/ `prep_yssd`（实测大断面）/ `prep_db`（hydro_data.db + schema v2）/ `prep_model`（单一坐标映射与校验） |
 | `scripts\section\qa_yssd.py` | 实测大断面成果表 QA：块清单、可疑点逐条、两次施测对比 → `.qa.json` + `.qa.md`（`--block N` 选定块真正生效，默认第 1 块；跨块对比仍覆盖全部块） |
 | `tests\verify_model_self.py` | 模型**自洽**核对（任意 profile，独立重算 §4.2/§4.3 后比对 entities/computed/dataQuality） |
 | `tests\make_fixtures.py` | 生成 `tests\fixtures\*.xlsx`（可重复再生） |
@@ -16,6 +16,7 @@
 | `tests\check_dxf.py` | ezdxf 真实 DXF 内核往返复核（第三份实现，需 `tools\py-libs` 在 `PYTHONPATH`） |
 | `tests\run_m1.ps1` | 端到端 runner（纯 ASCII + UTF-8 BOM + CRLF）；`-DryRunOnly` / `-NoCad` 无 CAD 全绿 |
 | `tests\selftest.py` | 计算侧全量自测（41 项：基准/负例/反序/bad 用例/升档/变体/回读 schema） |
+| `tests\selftest_sections.py` | 断面提取两条路线自测（**82 项**，纯离线合成夹具，写 `tmp\selftest-sections\`，不需要 `%TEMP%` 真实数据）：`section_lib` 几何/网格索引与暴力解等价、两个薄入口逐格断言、坏输入/缺库负例 |
 | `tests\fixtures\section-30.xlsx` | 30 点合成断面（起点距 0..290 步长 10 m，高程 38.55..44.30 m，深泓第 15 点/140 m），表头行「起点距/高程」，D1/D2 附设计水位 42.30（供人读，程序从参数取） |
 | `tests\fixtures\section-30.expected.json` | 验收基准（实体清单 + `expected.total` + `bbox` + `computed`） |
 | `tests\fixtures\section-30-reversed.xlsx` | 同行序完全反向，验自动反转 + `ORDER_REVERSED` |
@@ -118,7 +119,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -NoCad     
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 [-Doc <dwg>]  # 真画（需调用方已开图纸）
 ```
 
-步骤：`prepare.py` → `verify` → `check_dxf`（ezdxf 往返）→ `verify --tamper` → 3 个 bad 用例 → `zwc.ps1 section -DryRun`（并与基准交叉核对 `result.expected`）→ 真画（`-DryRunOnly/-NoCad` 时跳过）→ `zwc.ps1 read` → `verify`。
+步骤：`prepare.py` → `verify` → `check_dxf`（ezdxf 往返）→ **`lisp.wire`（C# 离线 4 套，调 `tests\selftest_lisp.ps1`）** → `verify --tamper` → 3 个 bad 用例 → `zwc.ps1 section -DryRun`（并与基准交叉核对 `result.expected`）→ 真画（`-DryRunOnly/-NoCad` 时跳过）→ `zwc.ps1 read` → `verify`。
 
 - **绝不启动 CAD**：不传 `-Launch`，只 attach 已开实例。真画/回读在无 CAD 或 CAD 未开图时判 `SKIP` 而非 FAIL（`NO_INSTANCE`/`NO_CAD`/`NO_DOC` 等错误码）。
 - `--water` 由 runner 从 `expected.json` 运行时拼出（保证 `.ps1` 纯 ASCII）。
@@ -137,12 +138,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 [-Doc <dwg>
 ```
 缺几何字段时 verify 会降级（只做能做的项并标 SKIP，不误报 FAIL）。
 
-## 7. 自测与当前结果（2026-11-04）
+## 7. 自测与当前结果（2026-11-05 更新）
 
 ```
-python tests\selftest.py        # 41 项 PASS
-powershell -File tests\run_m1.ps1 -DryRunOnly    # PASS 9 / FAIL 0 / SKIP 2（CAD 步按设计跳过）
+python tests\selftest.py                        # 41 项 PASS
+python tests\selftest_sections.py               # 82 项 PASS（断面提取两条路线）
+python tests\audit\test_audit.py                # PASS 89 / FAIL 0 / SKIP 3
+python tests\bench\selftest_checkers.py         # SELFTEST PASS
+powershell -File tests\selftest_lisp.ps1        # C# 4 套：106 + 53 + 132 + 119 = 410 PASS
+powershell -File tests\run_m1.ps1 -DryRunOnly -Python <python全路径>   # PASS 10 / FAIL 0 / SKIP 2（CAD 步按设计跳过）
 ```
+
+以上全部已接进 `.github\workflows\offline-ci.yml`（push/PR，windows + Python 3.9，零 CAD）。
 
 - 30 点 fixture → **67 实体**：`LWPOLYLINE 1 / LINE 3 / TEXT 62 / CIRCLE 1`；`AI-SEC-GROUND 1 / WATER 1 / ANNO 63 / AXIS 2`。
 - `bbox={x0:0,y0:10,x1:290,y1:125}`、`widthMm=290`、`heightMm=115`、`elevBase=38.05`、`scale=1000/50`、`autoScaled=true`。

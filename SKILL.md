@@ -88,7 +88,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 
 ## 配套数据侧（Python，可独立跑）
 
-- `scripts\section\prepare.py`：把数据做成 `section` 的模型 JSON。
+- `scripts\section\prepare.py`：把数据做成 `section` 的模型 JSON（**CLI 薄壳**，实现在同目录 `prep_io` / `prep_yssd` / `prep_db` / `prep_model` 四个模块；CLI/字段契约不变）。
   - `--from-db <站码> [--date/--years/--last N]`：直连 `hydro_data.db` 的 `cross_section`（162 站 / 5575 次施测 / 1965–2025）。
   - `--data <xlsx>`（两列起点距/高程）或 `--profile yssd`（"实测大断面成果表"多列块格式，支持 `.xls`，带数据质量闸门）。
 - `scripts\audit\audit.py` + `run.ps1`：只读图纸体检（17 条规则，见 `reference/audit-rules.md`），吃 `info`/`read` 的 JSON，出 MD/JSON 报告，`-ExitCode` 可当门禁。
@@ -141,7 +141,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 >
 > **取几何数据（顶点/坐标/等高线高程）时的实测对比**（36,558 实体地形图）：LISP `ssget`+`entget` 写文件 **0.36 s**，COM 逐实体 **310 s**（800×）。教训：先判断"要的是不是几何"，要几何就一次性 LISP dump 全部（含 `assoc 10/11/38`），不要分实体 COM 读。
 >
-> **断面提取参考**：`scripts\section\build_sections_from_dmx.py` —— 从几何 JSON 生成「桩号 × 起点距 × 高程」Excel（含等高线求交补点、左岸起算、宽表/长表/仅高程点），同图重跑 10 s；`--tmp-dir/--outdir/--name`（及 gcd 的 `--preview-chainage/--check-chainage`）可换路径/输出名，**默认值与历史行为完全一致**；坏输入给 `NO_INPUT/BAD_INPUT/NO_OPENPYXL` + exit 2（不再裸 traceback）。
+> **断面提取参考**：`scripts\section\build_sections_from_dmx.py`（等高线求交）/ `build_sections_gcd.py`（GCD 块 Z）—— **两个薄入口共用 `scripts\section\section_lib.py` 单一实现**（几何工具、标签 1:1 关联、去重/`MIN_PTS`、Excel 五表、预览 PNG、CLI/错误码），从几何 JSON 生成「桩号 × 起点距 × 高程」Excel（含等高线求交补点、左岸起算、宽表/长表/仅高程点），同图重跑约 1.5–2 s（关联段已由双重循环改**网格分桶**：候选对 918 万→16.8 万、关联快 10×）；`--tmp-dir/--outdir/--name`（及 gcd 的 `--preview-chainage/--check-chainage`）可换路径/输出名，**默认值与历史行为完全一致**；坏输入给 `NO_INPUT/BAD_INPUT/NO_OPENPYXL` + exit 2（不再裸 traceback）。
 
 ## 故障排查（按错误码）
 
@@ -201,8 +201,8 @@ README.md                简介与安装
 reference\               深入文档：写原语契约 / 稳定性语义 / 体检规则 / 产品选择 / 性能
 scripts\zwc.ps1|.cmd     入口（兼容 + 管理命令）
 scripts\client\          原生客户端源码（编译成 bin\ZwcClient.exe）
-scripts\helper\          helper 源码（csc 按源码哈希编译缓存）
-scripts\section\         数据侧：xlsx/xls/hydro_data.db → section model
+scripts\helper\          helper 源码（csc 按源码哈希编译缓存）；LISP 快路径：`LispTemplate`（模板+三重校验）/`LispScan`（注入管道单一实现）/`LispWire`（文本线解析）/`LispFile`·`LispGeom`（薄入口）；`Json`/`PipeIo` 为可离线测的纯逻辑单元
+scripts\section\         数据侧：prepare.py（薄壳）+ prep_io/prep_yssd/prep_db/prep_model；build_sections_{from_dmx,gcd}.py（薄入口）+ section_lib.py 单一实现
 scripts\audit\           只读图纸体检
 requirements.txt         数据侧依赖（Python 3.9+；离线兜底库 tools\py-libs 不入库）
 tests\                   离线回归：数据侧自测 / 体检规则 / LISP 解析（csc）/ 端到端 dry-run

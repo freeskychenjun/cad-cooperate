@@ -57,6 +57,9 @@ jobs:
       - name: bench checker negative cases
         run: python tests/bench/selftest_checkers.py
 
+      - name: section builder (shared library + both entries, offline)
+        run: python tests/selftest_sections.py
+
       - name: end-to-end dry run (no CAD touched)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/run_m1.ps1 -DryRunOnly
 

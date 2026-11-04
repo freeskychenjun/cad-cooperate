@@ -166,7 +166,7 @@ python scripts\section\prepare.py --from-db <站码> --last 4 --out %TEMP%\m.jso
 
 `section` 会按图幅/比例尺建层（`AI-SEC-*`）、画地面线、水位虚线、点号与高程标注、深泓标记、可选比例尺；多序列时每序列独立图层+颜色+图例，标注密度按"点位间距 / 字高"自动降级（`labelPolicy`）。画完**回读校验**，不符整体回滚。
 
-**数据侧输出约定**（`prepare.py` / `audit.py` / `build_sections_*.py`）：stdout 恒为**单段 ASCII 安全 JSON**（中文走 `\u` 转义，PS 5.1 可直接 `ConvertFrom-Json`）；**非致命内部失败写 stderr** 一行 `[prepare] warn <CODE>: ...`（如 `DB_STATION_INFO_FAILED` / `DB_WATER_LEVEL_FAILED` / `WORKBOOK_CLOSE_FAILED` / `TMP_CLEANUP_FAILED` / `CONFLICT_FLAG_INVALID`，同一告警只打一次）——「DB 表坏了」与「确实没记录」因此可区分。退出码：`0` 成功、`2` 坏输入/用法（含 `NO_INPUT`/`BAD_INPUT`/`NO_OPENPYXL`/报告路径不可写）；`audit.py -ExitCode` 命中 blocker 时为 `3`。
+**数据侧输出约定**：`prepare.py` / `audit.py` 的 stdout 恒为**单段 ASCII 安全 JSON**（中文走 `\u` 转义，PS 5.1 可直接 `ConvertFrom-Json`）；**非致命内部失败写 stderr** 一行 `[prepare] warn <CODE>: ...`（如 `DB_STATION_INFO_FAILED` / `DB_WATER_LEVEL_FAILED` / `WORKBOOK_CLOSE_FAILED` / `TMP_CLEANUP_FAILED` / `CONFLICT_FLAG_INVALID`，同一告警只打一次）——「DB 表坏了」与「确实没记录」因此可区分。退出码：`0` 成功、`2` 坏输入/用法（含 `NO_INPUT`/`BAD_INPUT`/`NO_OPENPYXL`/报告路径不可写）；`audit.py -ExitCode` 命中 blocker 时为 `3`。`build_sections_*.py` 是**面向人的逐行文本**（进度 + 汇总），出错时 stderr 一行 `error <CODE>: <msg>` + exit 2。
 
 ### 2. 批量改文字 / 换图层（锚点 + 回读 + 回滚）
 
@@ -296,11 +296,13 @@ publish.ps1               打包部署（staging + 原子切换 + 干跑 + 安�
 scripts\
   zwc.ps1 / zwc.cmd       入口（兼容包装 + 管理命令 + 首次编译 bootstrap）
   client\ZwcClient.cs     原生客户端（→ bin\ZwcClient.exe，命名管道）
-  helper\ZwcHelper.cs     COM 晚绑定主体（4,300+ 行单文件，C#5，按源码哈希编译缓存）
-  helper\{Edits,EditsQuery,SectionOverlay,Stability}.cs
-  helper\{LispTemplate,LispWire,LispFile,LispGeom}.cs   LISP 快路径：模板生成/三重校验、dump 行解析、E5 canvas、E6 几何 dump
-  section\prepare.py      数据侧：xlsx/xls/数据库 → section 模型 JSON（零 COM）
+  helper\ZwcHelper.cs     COM 晚绑定主体（4,100 行单文件，C#5，按源码哈希编译缓存）
+  helper\{Edits,EditsQuery,SectionOverlay,Stability}.cs   写原语 / 查询 / 断面绘制 / 稳定性
+  helper\{LispTemplate,LispScan,LispWire,LispFile,LispGeom}.cs   LISP 快路径：模板+三重校验、注入管道单一实现、文本线解析、E5 canvas / E6 几何 dump 薄入口
+  helper\{Json,PipeIo}.cs  可离线测的纯逻辑单元（自研 JSON writer/parser、命名管道 framing）
+  section\prepare.py      数据侧 CLI 薄壳（实现在 prep_io / prep_yssd / prep_db / prep_model）
   section\qa_yssd.py      实测大断面成果表 QA（块清单/可疑点/两次施测对比）
+  section\section_lib.py  断面提取两条路线的单一实现（from_dmx 等高线求交 / gcd 块 Z 共用）
   audit\                  只读图纸体检（17 条规则 + runner + 报告）
   tray\                   WinForms 托盘徽标（纯 ASCII 源码 + ui.json 中文文案）
   probe\                  COM 能力探针（立项期的实测脚本，保留作证据）
@@ -320,7 +322,8 @@ research\                 立项前的可行性研究（COM 探针、API 面、�
 python tests\selftest.py                     # 41 项：prepare/verify/夹具/负例/schema 往返
 python tests\audit\test_audit.py             # 体检规则引擎 + 报告渲染
 python tests\bench\selftest_checkers.py      # 基准检查器负例（必须拒错）
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\selftest_lisp.ps1                      # C# LISP 行解析 + 模板生成（csc 编译后离线断言）
+python tests\selftest_sections.py            # 断面提取两条路线（section_lib + 两个薄入口，82 断言）
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\selftest_lisp.ps1                      # C# 离线 4 套（LispWire 106 / LispTemplate 53 / Json 132 / LispScan 119）
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -DryRunOnly -NoCad -Python <你的python路径>
 
 # 20 条任务级基准（自起独占实例，采成功率/命令数/墙钟，收尾归零进程）
