@@ -8,8 +8,14 @@
 #   1. compile tests\lispwire\LispWireTests.cs + scripts\helper\LispWire.cs             -> tmp\lispwire\
 #   2. compile tests\lispwire\LispTemplateTests.cs + tests\lispwire\ZwcErrorStub.cs
 #      + scripts\helper\LispTemplate.cs + scripts\helper\LispWire.cs                    -> tmp\lispwire\
-#   3. run both exes, forward their PASS/FAIL lines, exit 1 when a suite fails to compile or reports
-#      at least one FAIL.
+#   3. compile tests\jsonself\JsonTests.cs + tests\jsonself\JMapStub.cs
+#      + scripts\helper\Json.cs                                                         -> tmp\lispwire\
+#   4. compile tests\lispwire\LispScanTests.cs + tests\lispwire\LispScanStubs.cs
+#      + tests\lispwire\ZwcErrorStub.cs + scripts\helper\{LispScan,LispWire,LispTemplate}.cs
+#      (the injection pipeline: ssget filter, temp paths, load command, sentinel count, GBK
+#       decode, phase classification, cleanup decision - all pure functions, no CAD)      -> tmp\lispwire\
+#   5. run all suites, forward their PASS/FAIL lines, exit 1 when a suite fails to compile or
+#      reports at least one FAIL.
 #
 # Usage:  powershell -NoProfile -ExecutionPolicy Bypass -File tests\selftest_lisp.ps1
 #         exit code 0 = every suite passed, 1 = compile failure or a FAIL line.
@@ -29,6 +35,7 @@ if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Path }
 $root = Split-Path -Parent $here
 $helperDir = Join-Path $root 'scripts\helper'
 $lispTests = Join-Path $here 'lispwire'
+$jsonTests = Join-Path $here 'jsonself'
 $outDir = Join-Path $root 'tmp\lispwire'
 
 $csc = Get-CscPath
@@ -75,6 +82,27 @@ $suites = @(
             (Join-Path $lispTests 'ZwcErrorStub.cs'),
             (Join-Path $helperDir 'LispTemplate.cs'),
             (Join-Path $helperDir 'LispWire.cs')
+        )
+    },
+    [ordered]@{
+        Name    = 'JsonTests'
+        Exe     = (Join-Path $outDir 'JsonTests.exe')
+        Sources = @(
+            (Join-Path $jsonTests 'JsonTests.cs'),
+            (Join-Path $jsonTests 'JMapStub.cs'),
+            (Join-Path $helperDir 'Json.cs')
+        )
+    },
+    [ordered]@{
+        Name    = 'LispScanTests'
+        Exe     = (Join-Path $outDir 'LispScanTests.exe')
+        Sources = @(
+            (Join-Path $lispTests 'LispScanTests.cs'),
+            (Join-Path $lispTests 'LispScanStubs.cs'),
+            (Join-Path $lispTests 'ZwcErrorStub.cs'),
+            (Join-Path $helperDir 'LispScan.cs'),
+            (Join-Path $helperDir 'LispWire.cs'),
+            (Join-Path $helperDir 'LispTemplate.cs')
         )
     }
 )
