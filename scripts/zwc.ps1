@@ -305,12 +305,12 @@ if ($Command -eq 'serve') {
 $BoolSwitches = @(
     'launch', 'readonly', 'nohint', 'dryrun', 'nocad', 'noaxis', 'nopointno', 'noautoscale',
     'axis', 'handles', 'fast', 'clear', 'quit', 'new', 'deep', 'keep', 'help', 'slow', 'keeponfail',
-    'nolegend', 'scalebar', 'pointno', 'continue', 'plan', 'paper', 'deep', 'reveal', 'sweephidden', 'noreveal', 'tray'
+    'nolegend', 'scalebar', 'pointno', 'continue', 'plan', 'paper', 'deep', 'reveal', 'sweephidden', 'noreveal', 'tray', 'geom', 'forcelispfile'
 )
 $ValueSwitches = @(
     'app', 'progid', 'doc', 'data', 'sheet', 'cols', 'paper', 'origin', 'waterlevels', 'text',
     'token', 'scope', 'layerprefix', 'out', 'hscale', 'vscale', 'labelevery', 'count', 'max',
-    'comthreshold', 'timeoutsec', 'layer', 'type', 'text', 'bbox', 'xdata', 'items', 'since', 'tol', 'locktimeout', 'busytimeout'
+    'comthreshold', 'timeoutsec', 'layer', 'type', 'text', 'bbox', 'xdata', 'items', 'since', 'tol', 'locktimeout', 'busytimeout', 'filter'
 )
 $opts = @{}
 for ($i = 0; $i -lt $Rest.Count; $i++) {

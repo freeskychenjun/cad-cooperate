@@ -104,11 +104,17 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 8. 多文档时**必须给 `-Doc`**（写命令缺省会 `DOC_AMBIGUOUS`；只有 `-DryRun` 允许 ActiveDocument 兜底）。
 9. 夹具/示例 DXF 版本 ≤ 最老目标产品（AutoCAD 2007 只能开 R2007/AC1021）。
 10. 并发多 agent 同图：靠文档级锁串行（`Local\zwc-doc-<sha16>`）；不要在同一张图上并行发起写命令。
+11. **不要手写 LISP 探针**：LISP 文件必须是 **ASCII、无 BOM**（带 BOM 会报 `Error: 输入的列表有缺陷`），且**括号必须配平**（少一个就只回 `Error: 语法错误`，不指向行号）；写文件注入后要**轮询 `__DONE__` 哨兵**而不是看 `SendCommand` 返回值。取几何数据优先用工具模板，手写时先把文件写成 `(load)` 可加载的最小骨架再逐步加逻辑。
+12. **大图取几何（坐标/顶点/高程属性）不要用 COM 全扫**：36,558 实体逐实体读约 **5 分钟**；ZWCAD 2025 / ACAD2007 上用 LISP `ssget`+`entget` 写 `%TEMP%` 文本只要 **0.4 s**。当前 `read`/`query` 的 lisp-file 快路径只回 `handle/type/layer/text`，**不含坐标**（能力缺口，见下）；需要坐标时先确认图纸规模，别直接全量扫。
+13. **开工前先问清关键约定**（图层语义 / 高程在哪 / 起点方向 / 编号规则），一次问清通常省掉一半时间；不要用"全图扫 + 反推"去猜用户意图——反推的结果经常需要返工。
+14. **绝对不要调用 `SelectionSet.Delete()`**：ZWCAD 2025 的 COM 把它实现成**删除选择集里的实体**（不是删选择集对象）。2026-11-04 实测：一句 `$ss.Delete()` 删掉了 3,850 个实体（304 断面线 + 2,938 高程块 + 608 文字），靠 `UNDO` 两步才救回。要按层筛选：LISP 用 `(ssget "X" (list (cons 8 layer)))`；COM 用 `Select(...)` 但**只读不删**（选择集留在会话里无副作用，不随图纸保存）。
+15. **对用户正在编辑的图纸只读**：任何 `SendCommand`/LISP 注入都可能改变命令状态、污染撤销栈甚至改图；需要注入类测试时，一律在**自己 launch 的空图/夹具图**上做，用户图只做 `read/query/info/status`。
 
 ## 能力边界（已知限制，别承诺做不到的事）
 
 | 限制 | 说明 |
 |---|---|
+| **大图几何快路径** | lisp-file 快路径当前只回 `handle/type/layer/text`（36 k 实体 0.4–0.9 s）；**取坐标/顶点/等高线 Elevation 仍需 COM 逐实体（36 k ≈ 5 min）**。待补：几何 dump 快路径（坐标+顶点+`Elevation`）与 LISP 模板自动生成/括号校验。 |
 | XData 读侧 | ZWCAD 的 `GetXData` 是 by-ref VARIANT，.NET 晚绑定取不回 ⇒ 写入真实（`SetXData` + 注册 App），但**读侧依赖同机 `%TEMP%` 镜像**；跨机器/跨会话读不到，需重新打标。 |
 | 中望 2025 | **没有 LISP 变量桥**（`Get/SetLispVariable`、`EvaluateLispExpression` 都 `DISP_E_UNKNOWNNAME`）⇒ 读侧只能 COM，比 Classic 慢 3–5 倍。 |
 | Classic 16 | 所有实体都不实现 `GetBoundingBox` ⇒ `read -Mode summary` 的 bbox 覆盖约 97%，其余记 `BBOX_UNAVAILABLE_FOR_TYPE`。 |
@@ -130,6 +136,10 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | 任务级（20 条真实任务基准） | 读/查 0.6–0.8 s、改图 2–12 s、断面 8–28 s |
 
 > 大图快路径：ZWCAD 2025 / AutoCAD 2007 **没有 LISP 变量桥**时，`read`/`query` 在实体数 >2000 会自动改走「LISP 写 `%TEMP%` 文本 + `__DONE__` 哨兵 + GBK 读回」（`readPath:"lisp-file"`），失败回退 COM 并 `LISP_FILE_FALLBACK`。
+>
+> **取几何数据（顶点/坐标/等高线高程）时的实测对比**（36,558 实体地形图）：LISP `ssget`+`entget` 写文件 **0.36 s**，COM 逐实体 **310 s**（800×）。教训：先判断"要的是不是几何"，要几何就一次性 LISP dump 全部（含 `assoc 10/11/38`），不要分实体 COM 读。
+>
+> **断面提取参考**：`scripts\section\build_sections_from_dmx.py` —— 从几何 JSON 生成「桩号 × 起点距 × 高程」Excel（含等高线求交补点、左岸起算、宽表/长表/仅高程点），同图重跑 10 s。
 
 ## 故障排查（按错误码）
 

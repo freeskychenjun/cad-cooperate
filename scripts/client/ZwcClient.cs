@@ -474,7 +474,7 @@ namespace ZwcClient
         {
             "launch", "readonly", "nohint", "dryrun", "nocad", "noaxis", "nopointno", "noautoscale",
             "axis", "handles", "summary", "fast", "clear", "quit", "new", "deep", "keep", "help",
-            "slow", "keeponfail", "nolegend", "scalebar", "pointno", "strict", "continue", "plan", "noundomark", "reveal", "sweephidden", "noreveal", "tray"
+            "slow", "keeponfail", "nolegend", "scalebar", "pointno", "strict", "continue", "plan", "noundomark", "reveal", "sweephidden", "noreveal", "tray", "geom", "forcelispfile"
         };
 
         private static readonly string[] ValueSwitches = new string[]
@@ -482,7 +482,7 @@ namespace ZwcClient
             "app", "progid", "doc", "data", "sheet", "cols", "paper", "origin", "waterlevels", "text",
             "token", "scope", "space", "mode", "limit", "cursor", "layerprefix", "out", "hscale",
             "vscale", "labelevery", "count", "max", "comthreshold", "timeoutsec", "requestfile",
-            "layer", "type", "bbox", "xdata", "items", "since", "tol", "locktimeout", "busytimeout", "faultinject"
+            "layer", "type", "bbox", "xdata", "items", "since", "tol", "locktimeout", "busytimeout", "faultinject", "filter"
         };
 
         private static readonly string[] NumericSwitches = new string[]

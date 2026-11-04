@@ -2507,13 +2507,15 @@ namespace ZwcHelper
             // ---- M3-E5: on builds without the LISP variable bridge a COM sweep costs ~15 ms per
             // entity (36k entities = minutes). A LISP ssget sweep writing a text file takes ~0.4 s;
             // it is tried automatically for large model-space reads and falls back to COM on error.
-            if (!lispBridge && scope == "model" && (mode == "handles" || mode == "summary")
+            if ((!lispBridge || args.Bool("forceLispFile", false)) && scope == "model" && (mode == "handles" || mode == "summary" || mode == "geom")
                 && total > args.Int("lispThreshold", 2000))
             {
                 try
                 {
                     JMap lispMeta;
-                    JMap lf = LispFile.Scan(doc, ctx, null, null, args.Int("lispTimeoutSec", 60) * 1000, out lispMeta);
+                    JMap lf = (mode == "geom")
+                        ? LispGeom.Scan(doc, ctx, null, null, args.Int("lispTimeoutSec", 60) * 1000, out lispMeta)
+                        : LispFile.Scan(doc, ctx, null, null, args.Int("lispTimeoutSec", 60) * 1000, out lispMeta);
                     List<object> all = lf.List("entities");
                     int allCount = all == null ? 0 : all.Count;
                     total = lf.Int("count", allCount);
@@ -2533,7 +2535,7 @@ namespace ZwcHelper
                         entities.Add(all[i]);
                     }
                     skipped = start;
-                    readPath = "lisp-file";
+                    readPath = (mode == "geom") ? "lisp-file-geom" : "lisp-file";
                     ctx.LispMeta = lispMeta;
                 }
                 catch (ZwcError ze)
@@ -2704,6 +2706,8 @@ namespace ZwcHelper
                     m.Add("vertices", verts);
                     m.Add("points", verts);
                     object closed = Com.TryGet(e, "Closed");
+                    object elev = Com.TryGet(e, "Elevation");
+                    if (elev != null) m.Add("elevation", Com.Dbl(elev));
                     m.Add("closed", closed == null ? null : (object)Com.Bool(closed));
                 }
                 else if (kind == "LINE")
@@ -3812,6 +3816,47 @@ namespace ZwcHelper
             }
             catch (Exception) { }
         }
+        // ------------------------------------------------------------------ lispgen (debug)
+        /// <summary>lispgen: write the generated dump script to a file without touching CAD.
+        /// Used by tests and by the "validate before inject" workflow (ASCII/no-BOM + balance).</summary>
+        public static JMap LispGenCmd(JMap req, JMap args, Ctx ctx)
+        {
+            bool geom = args.Bool("geom", true);
+            string outFile = args.Str("out", null);
+            if (string.IsNullOrEmpty(outFile))
+                outFile = System.IO.Path.Combine(State.Dir(), "lispgen-" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture) + ".lsp");
+            string txt = System.IO.Path.Combine(State.Dir(), "lispgen-out.txt");
+            string done = System.IO.Path.Combine(State.Dir(), "lispgen-out.done");
+            string filter = args.Str("filter", null);
+            string src = LispTemplate.BuildDump(geom, txt, done, string.IsNullOrEmpty(filter) ? null : filter);
+            LispTemplate.WriteScript(outFile, src);
+            JMap r = new JMap();
+            r.Add("path", outFile);
+            r.Add("bytes", src.Length);
+            r.Add("ascii", LispTemplate.IsAscii(src));
+            r.Add("balance", LispTemplate.BalanceError(src));
+            r.Add("filter", filter);
+            return r;
+        }
+        // ------------------------------------------------------------------ cmdEcho guard (M3-E6)
+        /// <summary>Read CMDECHO before an injection so the finally block can restore it even when the
+        /// LISP script dies mid-way (a failed script once left the user's command line silent).</summary>
+        internal static int CmdEchoOf(object doc)
+        {
+            try { return Com.I32(Com.Call(doc, "GetVariable", "CMDECHO")); }
+            catch (Exception) { return 1; }
+        }
+
+        internal static void RestoreCmdEcho(object doc, int oldValue)
+        {
+            try
+            {
+                int now = Com.I32(Com.Call(doc, "GetVariable", "CMDECHO"));
+                if (now == oldValue) return;
+                Com.Call(doc, "SendCommand", "(setvar \"CMDECHO\" " + oldValue + ")\n");
+            }
+            catch (Exception) { }
+        }
         // ------------------------------------------------------------------ show / reveal
         /// <summary>`show`: make the currently attached CAD window visible and bring it forward.</summary>
         public static JMap ShowCmd(JMap req, JMap args, Ctx ctx)
@@ -4206,6 +4251,7 @@ namespace ZwcHelper
                     case "undo": resultOut = Stability.RunWrite(req, argMap, ctx, "undo", delegate { return Commands.UndoCmd(req, argMap, ctx); }); break;
                     case "hint": resultOut = Commands.HintCmd(req, argMap, ctx); break;
                     case "show": resultOut = Commands.ShowCmd(req, argMap, ctx); break;
+                    case "lispgen": resultOut = Commands.LispGenCmd(req, argMap, ctx); break;
                     case "finish": resultOut = Commands.Finish(req, argMap, ctx); break;
                     case "entity": resultOut = Stability.RunWrite(req, argMap, ctx, "entity", delegate { return Edits.EntityCmd(req, argMap, ctx); }); break;
                     case "query": resultOut = Query.QueryCmd(req, argMap, ctx); break;

@@ -22,6 +22,18 @@ __pycache__/
 # machine specific; install with pip instead (see README "数据侧").
 /tools/py-libs/
 
+# ---------------------------------------------------------------- task outputs
+# /output/ holds the deliverables of a real section job (xlsx / csv / preview png of the user's
+# drawings, 1.1 MB regenerable from the source drawings). Engineering data must not enter the
+# repo, and every file in it can be rebuilt by re-running prepare.py / section.
+/output/
+
+# CAD lock files. Every other CAD tool that opens a drawing next to this one creates <name>.dwl
+# and .dwl2 carrying the CURRENT USER NAME and MACHINE NAME (verified: "Administrator /
+# WIN-4KRLTLRR4L5 / 2026-11-04"), i.e. transient machine information, never content.
+*.dwl
+*.dwl2
+
 # ---------------------------------------------------------------- editor / OS noise
 *.swp
 *~

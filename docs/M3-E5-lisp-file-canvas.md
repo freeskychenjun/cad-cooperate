@@ -99,3 +99,9 @@ LISP 的 `write-line` 用**本地 ANSI 码页**写文件；实测该图中文注
 - UI 文案：`scripts/tray/ui.json`（UTF-8：prefix/balloonTitle/open/copy/end）；C# 与 .ps1 源码保持纯 ASCII（csc 按 ANSI 读无 BOM 文件会炸）。
 - 生命周期：tray exe 在 state 文件消失 / CAD pid 退出 / 4 小时后自行退出；`tray.ps1 -Status` 可查（本轮冒烟：status 正常列出 lead 演示中的 state，`-Stop -Doc ux-smoke` 未动他人状态）。
 - Windows 溢出区：图标可能在托盘"^"溢出区，首次 balloon 提示"AI 已接管你的图纸"，用户点"打开 CAD 窗口"可置前（菜单项 open 使用 state.hwnd）。
+## 十、只读安全约束（E6 事故后同步，适用于所有 LISP 注入）
+
+1. **绝不调用 `SelectionSets` / `SelectionSet.Delete()`**：ZWCAD 2025 的 COM 把"删除选择集对象"实现为**删除集合里的实体**（lead 实测误删 3,850 个实体，已 UNDO 恢复）。
+2. 按层/类型筛选只用 LISP `(ssget "X" (list (cons 8 ...) (cons 0 ...)))`；不用 COM 选择集。
+3. LISP 模板只允许只读函数（白名单见 `LispTemplate.SafetyError`），`setvar` 仅 CMDECHO；生成器在注入前做 ASCII/括号/安全三重校验。
+4. 用户正在编辑的图纸 = 只读；**任何注入（含 LISP）先征得同意**，自测用自己的自动化实例或夹具图。
