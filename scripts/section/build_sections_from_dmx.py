@@ -1,13 +1,14 @@
 # Build dense cross-section profiles for the 东总干渠 drawing.
 #
 # Inputs (read-only, extracted from the live CAD session):
-#   %TEMP%\zwcad-cooperate\geom-com.json    section lines (dmx), spot heights (ZDH points), labels (KZD)
-#   %TEMP%\zwcad-cooperate\contours.json    contours (DGX polylines with their elevation property)
+#   <tmp>\zwcad-cooperate\geom-com.json    section lines (dmx), spot heights (ZDH points), labels (KZD)
+#   <tmp>\zwcad-cooperate\contours.json    contours (DGX polylines with their elevation property)
+#   <tmp> 默认 = tempfile.gettempdir()，可用 --tmp-dir 覆盖（离线复现/测试用）
 #
-# Output:
-#   <repo>\output\断面数据-东总干渠.xlsx     5 sheets
-#   <repo>\output\断面数据-东总干渠.csv
-#   <repo>\output\preview-<桩号>.png         3 张代表性断面图
+# Output (默认 <repo>\output，可用 --outdir/--name 覆盖):
+#   <outdir>\<name>.xlsx                     5 sheets（默认 name=断面数据-东总干渠）
+#   <outdir>\<name>.csv
+#   <outdir>\preview-<桩号>.png              3 张代表性断面图
 #
 # Method
 #   * 断面线 = dmx lines (304);  桩号 = KZD text "\d+\+\d+" matched within 8 m (1:1)
@@ -17,21 +18,91 @@
 #   * 起点距 = distance from the LEFT end, left = left-hand side facing downstream
 #                (downstream = increasing chainage); 0 = left bank
 #   * 长表按起点距升序，来源列区分"等高线"与"高程点"
+#
+# 失败约定：输入缺失/坏 JSON/缺键/缺 openpyxl -> stderr 一行 `error <CODE>: <msg>` + 退出码 2
+# （原先是裸 traceback）；成功返回 0。
+import argparse
 import datetime
 import json
 import math
 import os
 import re
 import sys
-
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
+import tempfile
 
 POINT_TOL = 0.50      # spot height considered "on" the section line (m)
 DEDUP_D = 0.05        # duplicate offset threshold (m)
 MIN_PTS = 3
 LABEL_R = 8.0
+
+DEFAULT_NAME = '断面数据-东总干渠'
+
+
+class BuildError(Exception):
+    """带机器可读 code 的失败；main() 统一转成 stderr 一行 + 退出码 2。"""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _load_json(path, what):
+    """读输入 JSON：缺失/坏 JSON/不可读 -> BuildError（明确错误码，不裸 traceback）。"""
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        raise BuildError('NO_INPUT', 'missing input: %s' % path)
+    except json.JSONDecodeError as exc:
+        raise BuildError('BAD_INPUT', '%s 不是合法 JSON（%s）: %s' % (what, path, exc))
+    except OSError as exc:
+        raise BuildError('BAD_INPUT', '读取 %s 失败（%s）: %s' % (what, path, exc))
+
+
+def _need(obj, key, what, where=''):
+    if not isinstance(obj, dict) or key not in obj:
+        raise BuildError('BAD_INPUT', '%s%s 缺键 %r' % (what, where, key))
+    return obj[key]
+
+
+def _validate_geom(g):
+    """geom-com.json：必须有 doc / entities[]，且每个实体至少有图层键 'l'。"""
+    _need(g, 'doc', 'geom-com.json')
+    ents = _need(g, 'entities', 'geom-com.json')
+    if not isinstance(ents, list):
+        raise BuildError('BAD_INPUT', 'geom-com.json: entities 必须是数组')
+    for i, e in enumerate(ents):
+        if not isinstance(e, dict) or 'l' not in e:
+            raise BuildError('BAD_INPUT', 'geom-com.json: entities[%d] 缺键 "l"（图层）' % i)
+    return g
+
+
+def _validate_contours(c):
+    """contours.json：必须有 contours[]，每条等高线有 z / h / v（顶点数组）。"""
+    cs = _need(c, 'contours', 'contours.json')
+    if not isinstance(cs, list):
+        raise BuildError('BAD_INPUT', 'contours.json: contours 必须是数组')
+    for i, ct in enumerate(cs):
+        for key in ('z', 'h', 'v'):
+            _need(ct, key, 'contours.json', '[%d]' % i)
+        if not isinstance(ct['v'], list) or len(ct['v']) < 2:
+            raise BuildError('BAD_INPUT',
+                             'contours.json: contours[%d].v 至少需要 2 个顶点' % i)
+    return c
+
+
+def _openpyxl():
+    """延迟导入 openpyxl：缺库时给 NO_OPENPYXL 明确错误（对齐 prepare.py:243-248）。"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+    except ImportError as exc:
+        raise BuildError('NO_OPENPYXL',
+                         '缺少 openpyxl：%s（pip install -r requirements.txt 或 '
+                         'pip install openpyxl）' % exc)
+    return Workbook, Font, PatternFill, Alignment, get_column_letter
 
 
 def seg_dist_t(px, py, ax, ay, bx, by):
@@ -65,19 +136,32 @@ def chainage_to_m(s):
     return float(m.group(1)) * 1000 + float(m.group(2)) if m else None
 
 
-def main():
-    tmp = os.environ.get('TEMP', r'C:\Users\Administrator\AppData\Local\Temp')
+def build_arg_parser():
+    ap = argparse.ArgumentParser(
+        description='从 CAD 导出的 geom-com.json + contours.json 生成断面数据工作簿')
+    ap.add_argument('--tmp-dir', dest='tmp_dir', default=None,
+                    help='CAD 导出 JSON 的临时根目录（默认 tempfile.gettempdir()，'
+                         '输入读 <tmp-dir>\\zwcad-cooperate\\*.json）')
+    ap.add_argument('--outdir', default=None,
+                    help='输出目录（默认 <repo>\\output）')
+    ap.add_argument('--name', default=None,
+                    help='输出文件基名（默认 %s，生成 <name>.xlsx/.csv）' % DEFAULT_NAME)
+    return ap
+
+
+def _run(argv=None):
+    args = build_arg_parser().parse_args(argv)
+    tmp = args.tmp_dir or tempfile.gettempdir()
     gj = os.path.join(tmp, 'zwcad-cooperate', 'geom-com.json')
     cj = os.path.join(tmp, 'zwcad-cooperate', 'contours.json')
     for f in (gj, cj):
         if not os.path.exists(f):
-            print('missing input:', f)
-            return 2
-    g = json.load(open(gj, encoding='utf-8'))
-    c = json.load(open(cj, encoding='utf-8'))
+            raise BuildError('NO_INPUT', 'missing input: %s' % f)
+    g = _validate_geom(_load_json(gj, 'geom-com.json'))
+    c = _validate_contours(_load_json(cj, 'contours.json'))
     ents = g['entities']
     print('drawing:', g['doc'])
-    print('entities:', len(ents), '| contours:', c['count'])
+    print('entities:', len(ents), '| contours:', c['count'] if 'count' in c else len(c['contours']))
 
     secs = [e for e in ents if e['l'] == 'dmx' and 'p' in e and 'p2' in e]
     spots = [e for e in ents if e.get('o') == 'AcDbPoint' and e['l'] == 'ZDH' and 'p' in e]
@@ -86,6 +170,10 @@ def main():
     elev_labels = [t for t in kzd if re.match(r'^\d+\.\d+$', t['x'])]
     print('sections:', len(secs), '| spot points:', len(spots),
           '| chainage labels:', len(chain_labels), '| elevation labels:', len(elev_labels))
+    if not secs:
+        raise BuildError('BAD_INPUT', 'geom-com.json: 没有图层 dmx 的断面线实体（检查导出/图层名）')
+    if not chain_labels:
+        raise BuildError('BAD_INPUT', 'geom-com.json: 没有 KZD 桩号文字（如 1+324），无法排序断面')
 
     # contour segments with bbox
     segs = []
@@ -112,6 +200,10 @@ def main():
 
     chain_of = associate(chain_labels)
     elev_of = associate(elev_labels)
+    if not chain_of:
+        raise BuildError('BAD_INPUT',
+                         'geom-com.json: 没有桩号文字能匹配到断面线（%.0f m 内），无法定下游方向'
+                         % LABEL_R)
 
     # downstream direction
     mids = [((e['p'][0] + e['p2'][0]) / 2, (e['p'][1] + e['p2'][1]) / 2) for e in secs]
@@ -184,12 +276,14 @@ def main():
         r['idx'] = i
     print('sections built:', len(rows))
 
-    # ---------------- Excel
+    # ---------------- Excel（openpyxl 延迟导入：缺库 -> NO_OPENPYXL 退出码 2）
+    Workbook, Font, PatternFill, Alignment, get_column_letter = _openpyxl()
     repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    outdir = os.path.join(repo, 'output')
+    outdir = args.outdir or os.path.join(repo, 'output')
     os.makedirs(outdir, exist_ok=True)
-    xlsx = os.path.join(outdir, '断面数据-东总干渠.xlsx')
-    csv = os.path.join(outdir, '断面数据-东总干渠.csv')
+    name = args.name or DEFAULT_NAME
+    xlsx = os.path.join(outdir, name + '.xlsx')
+    csv = os.path.join(outdir, name + '.csv')
 
     wb = Workbook()
     bold = Font(bold=True)
@@ -250,7 +344,7 @@ def main():
         ('数据来源', '图纸：' + g['doc'] + '（只读读取，未修改图纸）'),
         ('断面线', '图层 dmx，共 %d 条；长 %.1f~%.1f m，中位 %.1f m' % (len(rows), lens[0], lens[-1], lens[len(lens) // 2])),
         ('断面编号', '图层 KZD 文字桩号（如 1+324），8 m 内最近匹配：%d/%d 条已匹配' % (len(chain_of), len(secs))),
-        ('地形来源①', 'DGX 图层等高线（%d 条折线，等高距 1 m，高程 18~58 m）：与断面线求交，得 %d 个剖面高程点' % (c['count'], nc)),
+        ('地形来源①', 'DGX 图层等高线（%d 条折线，等高距 1 m，高程 18~58 m）：与断面线求交，得 %d 个剖面高程点' % (len(c['contours']), nc)),
         ('地形来源②', 'ZDH 图层高程点（POINT 的 Z 值，仅 Z≠0）：投影到断面线（容差 %.2f m），得 %d 个点' % (POINT_TOL, nsp)),
         ('合并规则', '按起点距排序；同一位置（<%.2f m）重复时优先保留高程点' % DEDUP_D),
         ('起点距', '从断面线"左端"起算：0=左岸，面朝下游（桩号增大方向）的左手侧为左端'),
@@ -305,6 +399,15 @@ def main():
 
     print('sections=%d points=%d contour_hits=%d spot=%d' % (len(rows), ntot, nc, nsp))
     return 0
+
+
+def main(argv=None):
+    """入口：BuildError -> stderr 一行 `error <CODE>: <msg>` + 退出码 2（不裸 traceback）。"""
+    try:
+        return _run(argv)
+    except BuildError as exc:
+        sys.stderr.write('error %s: %s\n' % (exc.code, exc.message))
+        return 2
 
 
 if __name__ == '__main__':

@@ -80,6 +80,9 @@
 退出码：0 成功（写文件）；2 任何失败（stdout 打单段 JSON {"ok":false,...}，**不写输出文件**）。
 stdout 始终为单段 ASCII 安全 JSON（非 ASCII 走 \\u 转义），便于 PS 5.1 的 ConvertFrom-Json 解析；
 落盘文件为 UTF-8(无 BOM) + 中文原文。
+非致命内部失败（DB 表缺失/损坏、工作簿关闭失败、临时文件清理失败、conflict_flag 非法等）走
+**stderr** 一行 `[prepare] warn <CODE>: <ExcType>: <msg>`；同一 (code, message) 只打一次，
+stdout 的 JSON 协议完全不变（stdout/stderr 分离，PS 侧仍可安全 ConvertFrom-Json）。
 """
 
 from __future__ import annotations
@@ -158,23 +161,49 @@ def emit(payload: Dict[str, Any]) -> None:
     sys.stdout.flush()
 
 
+# ----------------------------------------------------------------------------- 告警（stderr）
+# stdout 恒为单段 JSON 协议，所以「不影响结果、但下游必须知道」的信息一律走 stderr。
+# 同一 (code, message) 只打一行，正常路径不刷屏；异常对象本身绝不进 stdout。
+_WARNED: set = set()
+
+
+def warn(code: str, message: str, **details: Any) -> None:
+    """往 stderr 打一行：`[prepare] warn <CODE>: <message> [k=v ...]`。"""
+    key = (code, message)
+    if key in _WARNED:
+        return
+    _WARNED.add(key)
+    tail = "".join(" %s=%s" % (k, v) for k, v in details.items()) if details else ""
+    sys.stderr.write("[prepare] warn %s: %s%s\n" % (code, message, tail))
+    sys.stderr.flush()
+
+
+def warn_exc(code: str, exc: BaseException, **details: Any) -> None:
+    """吞错点统一格式：`<ExcType>: <msg>`（DB 表损坏与「确实无记录」因此可区分）。"""
+    warn(code, "%s: %s" % (type(exc).__name__, exc), **details)
+
+
 def write_json_atomic(path: str, payload: Dict[str, Any]) -> None:
     """先写同目录临时文件再 os.replace：失败时绝不留下半截/残留输出文件。"""
     out_dir = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(out_dir, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".section-model-", suffix=".tmp", dir=out_dir)
+    replaced = False
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(payload, fh, ensure_ascii=False, indent=2)
             fh.write("\n")
         os.replace(tmp, path)
-    except BaseException:
-        try:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        except OSError:
-            pass
-        raise
+        replaced = True
+    finally:
+        # 刻意不用 except BaseException：KeyboardInterrupt/SystemExit 必须照常向上传播
+        # （Ctrl+C 不能被静默），这里只负责清掉半截临时文件。
+        if not replaced:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError as exc:
+                warn_exc("TMP_CLEANUP_FAILED", exc, path=path)
 
 
 # ----------------------------------------------------------------------------- 数值解析
@@ -311,8 +340,9 @@ def _load_rows_openpyxl(path: str,
     finally:
         try:
             wb.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            # 关工作簿失败不影响已读出的行，但必须留痕（否则「读取失败」会被当成「表里没数据」）
+            warn_exc("WORKBOOK_CLOSE_FAILED", exc, path=path)
     return rows, meta
 
 
@@ -887,8 +917,9 @@ def db_station_info(con: Any, code: str) -> Dict[str, Any]:
         if row is not None:
             name = row["station_name"]
             river = row["river_name"]
-    except Exception:
-        pass
+    except Exception as exc:
+        # stations 表缺失/损坏 vs 站码不存在：下游（label/图例）都需要知道，别静默降级
+        warn_exc("DB_STATION_INFO_FAILED", exc, station=str(code))
     label = str(code) + ((" " + str(name)) if name else "")
     return {"code": str(code), "name": name, "river": river, "label": label}
 
@@ -977,6 +1008,7 @@ def db_fetch_series(con: Any, code: str, date: str) -> Dict[str, Any]:
     files, names = set(), set()
     conflicts = 0
     skipped = 0
+    bad_flags = 0
     for r in rows:
         if r["distance"] is None or r["elevation"] is None:
             skipped += 1
@@ -990,7 +1022,10 @@ def db_fetch_series(con: Any, code: str, date: str) -> Dict[str, Any]:
         try:
             conflicts += int(r["conflict_flag"] or 0)
         except (TypeError, ValueError):
-            pass
+            bad_flags += 1
+    if bad_flags:
+        # 逐行打会刷屏：聚合成一行（conflict_flag 非整数按 0 计，如实报告行数）
+        warn("CONFLICT_FLAG_INVALID", "conflict_flag 不是整数，已按 0 计", rows=bad_flags)
     return {"date": str(date), "points": pts, "verts": verts,
             "sourceFiles": sorted(files), "sectionNames": sorted(names),
             "conflictCount": conflicts, "rowCount": len(rows), "skippedRows": skipped}
@@ -1000,7 +1035,9 @@ def db_water_level(con: Any, code: str, date: str) -> Optional[float]:
     try:
         row = con.execute("SELECT value FROM daily_water_level"
                           " WHERE station_code=? AND date=?", (code, date)).fetchone()
-    except Exception:
+    except Exception as exc:
+        # daily_water_level 缺失/损坏 与「该日无记录」必须可区分（前者告警，后者静默返回 None）
+        warn_exc("DB_WATER_LEVEL_FAILED", exc, station=str(code), date=str(date))
         return None
     if row is None or row["value"] is None:
         return None
@@ -1051,8 +1088,8 @@ def build_db_model(args: argparse.Namespace,
     finally:
         try:
             con.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            warn_exc("DB_CLOSE_FAILED", exc, db=os.path.abspath(args.db))
 
     for s in raw:
         if len(s["points"]) < 3:
@@ -1134,10 +1171,15 @@ def build_db_model(args: argparse.Namespace,
     suspects = [dict(o, series=d["id"]) for d in dq_series for o in d["outliers"]]
     dropped = 0
     if args.drop_suspect and suspects:
+        # 先建索引再剔除：旧实现每个点都 next() 找一次本序列离群集 + any() 扫全部离群点，
+        # 复杂度 O(点数 x 离群数 x 序列数)；改成「序列 id -> 离群 vert 集合」后整体 O(点数)。
+        # setdefault 与旧 next(...) 语义一致：同 id 只取第一条（id 理论上不重复，防御性保留）。
+        outliers_by_id: Dict[str, List[Dict[str, Any]]] = {}
+        for d in dq_series:
+            outliers_by_id.setdefault(d["id"], d["outliers"])
         for s, ser in zip(raw, series):
-            keep = [(p, v) for p, v in zip(s["points"], s["verts"])
-                    if not any(o["vert"] == v for o in
-                               next(d["outliers"] for d in dq_series if d["id"] == ser["id"]))]
+            drop_verts = {o["vert"] for o in outliers_by_id.get(ser["id"], [])}
+            keep = [(p, v) for p, v in zip(s["points"], s["verts"]) if v not in drop_verts]
             if len(keep) != len(ser["points"]):
                 dropped += len(ser["points"]) - len(keep)
                 ser["points"] = [p for p, _ in keep]
@@ -1893,8 +1935,8 @@ def _run_db(args: argparse.Namespace, water_levels: List[Tuple[float, str]],
         finally:
             try:
                 con.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                warn_exc("DB_CLOSE_FAILED", exc, db=os.path.abspath(args.db))
         payload = {"ok": True, "cmd": "list-dates",
                    "station": info["code"], "stationName": info["name"],
                    "river": info["river"], "db": os.path.abspath(args.db),

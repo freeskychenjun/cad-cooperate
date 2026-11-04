@@ -1,8 +1,10 @@
 # Build the cross-section workbook from the CORRECT source: GCD blocks whose insertion Z is the
 # ground elevation on the section line (the ZDH layer holds unrelated terrain spot heights).
 #
-# Input : %TEMP%\zwcad-cooperate\sections-src.json  (tmp\extract-sections-src.ps1)
-# Output: <repo>\output\断面数据-东总干渠.xlsx (+ csv, preview png)
+# Input : <tmp>\zwcad-cooperate\sections-src.json  (tmp\extract-sections-src.ps1)
+#         <tmp> 默认 = tempfile.gettempdir()，可用 --tmp-dir 覆盖（离线复现/测试用）
+# Output: <outdir>\<name>.xlsx (+ csv, preview png)（默认 <repo>\output，
+#         name 默认 断面数据-东总干渠-修正版，可用 --outdir/--name 覆盖）
 #
 # Conventions
 #   * 断面线 = layer dmx (304 lines);  桩号 = KZD text "\d+\+\d+" (8 m match)
@@ -10,21 +12,87 @@
 #   * 起点距 = distance from the LEFT end, left = left-hand side facing downstream
 #              (downstream = increasing chainage); 反向起点距 column provided as well
 #   * 渠底注记 = KZD text "\d+\.\d+" (one per section, e.g. 21.84 == the gc257 block Z)
+#
+# 失败约定：输入缺失/坏 JSON/缺键/缺 openpyxl -> stderr 一行 `error <CODE>: <msg>` + 退出码 2
+# （原先是裸 traceback）；成功返回 0。
+import argparse
 import datetime
 import json
 import math
 import os
 import re
 import sys
-
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
+import tempfile
 
 BLOCK_TOL = 0.50     # block-to-line tolerance (m); in practice the blocks sit exactly on the line
 LABEL_R = 8.0
 DEDUP_D = 0.05
 MIN_PTS = 3
+
+DEFAULT_NAME = '断面数据-东总干渠-修正版'
+DEFAULT_CHECK_CHAINAGE = '16+475'
+
+
+class BuildError(Exception):
+    """带机器可读 code 的失败；main() 统一转成 stderr 一行 + 退出码 2。"""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _load_json(path, what):
+    """读输入 JSON：缺失/坏 JSON/不可读 -> BuildError（明确错误码，不裸 traceback）。"""
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        raise BuildError('NO_INPUT', 'missing input: %s' % path)
+    except json.JSONDecodeError as exc:
+        raise BuildError('BAD_INPUT', '%s 不是合法 JSON（%s）: %s' % (what, path, exc))
+    except OSError as exc:
+        raise BuildError('BAD_INPUT', '读取 %s 失败（%s）: %s' % (what, path, exc))
+
+
+def _need(obj, key, what, where=''):
+    if not isinstance(obj, dict) or key not in obj:
+        raise BuildError('BAD_INPUT', '%s%s 缺键 %r' % (what, where, key))
+    return obj[key]
+
+
+def _validate_sections_src(d):
+    """sections-src.json：doc / lines[] / blocks[] / labels[]，逐项校验必需键。"""
+    _need(d, 'doc', 'sections-src.json')
+    lines = _need(d, 'lines', 'sections-src.json')
+    blocks = _need(d, 'blocks', 'sections-src.json')
+    labels = _need(d, 'labels', 'sections-src.json')
+    for name, arr in (('lines', lines), ('blocks', blocks), ('labels', labels)):
+        if not isinstance(arr, list):
+            raise BuildError('BAD_INPUT', 'sections-src.json: %s 必须是数组' % name)
+    for i, e in enumerate(lines):
+        for key in ('h', 'ax', 'ay', 'bx', 'by'):
+            _need(e, key, 'sections-src.json: lines', '[%d]' % i)
+    for i, b in enumerate(blocks):
+        for key in ('x', 'y', 'z', 'h'):
+            _need(b, key, 'sections-src.json: blocks', '[%d]' % i)
+    for i, t in enumerate(labels):
+        for key in ('x', 'y', 'text'):
+            _need(t, key, 'sections-src.json: labels', '[%d]' % i)
+    return d
+
+
+def _openpyxl():
+    """延迟导入 openpyxl：缺库时给 NO_OPENPYXL 明确错误（对齐 prepare.py:243-248）。"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+    except ImportError as exc:
+        raise BuildError('NO_OPENPYXL',
+                         '缺少 openpyxl：%s（pip install -r requirements.txt 或 '
+                         'pip install openpyxl）' % exc)
+    return Workbook, Font, PatternFill, Alignment, get_column_letter
 
 
 def seg_dist_t(px, py, ax, ay, bx, by):
@@ -42,18 +110,39 @@ def chainage_to_m(s):
     return float(m.group(1)) * 1000 + float(m.group(2)) if m else None
 
 
-def main():
-    tmp = os.environ.get('TEMP', r'C:\Users\Administrator\AppData\Local\Temp')
+def build_arg_parser():
+    ap = argparse.ArgumentParser(
+        description='从 CAD 导出的 sections-src.json 生成断面数据工作簿（GCD 块插入点高程）')
+    ap.add_argument('--tmp-dir', dest='tmp_dir', default=None,
+                    help='CAD 导出 JSON 的临时根目录（默认 tempfile.gettempdir()，'
+                         '输入读 <tmp-dir>\\zwcad-cooperate\\sections-src.json）')
+    ap.add_argument('--outdir', default=None, help='输出目录（默认 <repo>\\output）')
+    ap.add_argument('--name', default=None,
+                    help='输出文件基名（默认 %s）' % DEFAULT_NAME)
+    ap.add_argument('--preview-chainage', dest='preview_chainage', default=DEFAULT_CHECK_CHAINAGE,
+                    help='预览图要额外强调的桩号（默认 %s；传空串则只出 首/中/末 三张）'
+                         % DEFAULT_CHECK_CHAINAGE)
+    ap.add_argument('--check-chainage', dest='check_chainage', default=DEFAULT_CHECK_CHAINAGE,
+                    help='末尾逐点自检的桩号（默认 %s；传空串则跳过）' % DEFAULT_CHECK_CHAINAGE)
+    return ap
+
+
+def _run(argv=None):
+    args = build_arg_parser().parse_args(argv)
+    tmp = args.tmp_dir or tempfile.gettempdir()
     src = os.path.join(tmp, 'zwcad-cooperate', 'sections-src.json')
     if not os.path.exists(src):
-        print('missing input:', src)
-        return 2
-    d = json.load(open(src, encoding='utf-8'))
+        raise BuildError('NO_INPUT', 'missing input: %s' % src)
+    d = _validate_sections_src(_load_json(src, 'sections-src.json'))
     lines = d['lines']
     blocks = d['blocks']
     labels = d['labels']
     print('drawing:', d['doc'])
     print('sections:', len(lines), '| elevation blocks:', len(blocks), '| KZD labels:', len(labels))
+    if not lines:
+        raise BuildError('BAD_INPUT', 'sections-src.json: lines 为空（没有断面线实体）')
+    if not blocks:
+        raise BuildError('BAD_INPUT', 'sections-src.json: blocks 为空（没有高程块）')
 
     chain_labels = [t for t in labels if re.match(r'^\d+\+\d+(?:\.\d+)?$', t['text'])]
     elev_labels = [t for t in labels if re.match(r'^\d+\.\d+$', t['text'])]
@@ -75,6 +164,10 @@ def main():
     chain_of = associate(chain_labels)
     elev_of = associate(elev_labels)
     print('sections with chainage:', len(chain_of), '| with elevation note:', len(elev_of))
+    if not chain_of:
+        raise BuildError('BAD_INPUT',
+                         'sections-src.json: 没有桩号文字能匹配到断面线（%.0f m 内），无法定下游方向'
+                         % LABEL_R)
 
     # ---- downstream direction from chainage order
     mids = [((e['ax'] + e['bx']) / 2, (e['ay'] + e['by']) / 2) for e in lines]
@@ -136,11 +229,14 @@ def main():
     usable = [r for r in rows if len(r['pts']) >= MIN_PTS]
     print('sections: %d | usable(>=%d pts): %d' % (len(rows), MIN_PTS, len(usable)))
 
+    # ---------------- Excel（openpyxl 延迟导入：缺库 -> NO_OPENPYXL 退出码 2）
+    Workbook, Font, PatternFill, Alignment, get_column_letter = _openpyxl()
     repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    outdir = os.path.join(repo, 'output')
+    outdir = args.outdir or os.path.join(repo, 'output')
     os.makedirs(outdir, exist_ok=True)
-    xlsx = os.path.join(outdir, '断面数据-东总干渠-修正版.xlsx')
-    csv = os.path.join(outdir, '断面数据-东总干渠-修正版.csv')
+    name = args.name or DEFAULT_NAME
+    xlsx = os.path.join(outdir, name + '.xlsx')
+    csv = os.path.join(outdir, name + '.csv')
 
     wb = Workbook()
     bold = Font(bold=True)
@@ -183,7 +279,6 @@ def main():
     ws3 = wb.create_sheet('断面数据_宽表')
     head(ws3, ['序号'] + [(r['chain'] or ('#' + str(r['idx']))) for r in rows])
     ws3.cell(row=2, column=1, value='起点距(m)').font = bold
-    prev = 1
     maxn = max((len(r['pts']) for r in rows), default=0)
     for k in range(maxn):
         for r in rows:
@@ -205,7 +300,8 @@ def main():
         ('项目', '说明'),
         ('数据来源', '图纸：' + d['doc'] + '（只读读取，未修改图纸）'),
         ('断面线', '图层 dmx，共 %d 条；长 %.1f~%.1f m，中位 %.1f m' % (len(rows), lens[0], lens[-1], lens[len(lens) // 2])),
-        ('断面编号', '图层 KZD 文字桩号（如 16+475），8 m 内最近匹配：%d/%d' % (len(chain_of), len(lines))),
+        ('断面编号', '图层 KZD 文字桩号（如 %s），%.0f m 内最近匹配：%d/%d'
+         % (args.preview_chainage or DEFAULT_CHECK_CHAINAGE, LABEL_R, len(chain_of), len(lines))),
         ('高程点', '图层 GCD 的 gc200 块，共 %d 个（已分配 %d）；高程 = 块插入点 Z（同名属性 height 同值）' % (len(blocks), len(blocks) - unassigned)),
         ('起点距', '从断面线"左端"起算（面朝下游、桩号增大方向的左手侧）；长表另给"反向起点距"便于对照'),
         ('渠底注记', 'KZD 图层每断面一个高程注记（如 21.84），与 KZD 的 gc257 块 Z 值一致，作参考列'),
@@ -227,12 +323,12 @@ def main():
     print('written:', xlsx)
     print('written:', csv)
 
-    # preview: 16+475 + two others
+    # preview: --preview-chainage 指定的断面 + 两个代表性断面
     try:
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
-        picks = [r for r in rows if r['chain'] in ('16+475',)]
+        picks = [r for r in rows if args.preview_chainage and r['chain'] == args.preview_chainage]
         picks += [rows[0], rows[len(rows) // 2]]
         for r in picks:
             if not r['pts']:
@@ -255,14 +351,25 @@ def main():
     except Exception as exc:
         print('plot skipped:', exc)
 
-    # quick self-check of the section the user picked
-    for r in rows:
-        if r['chain'] == '16+475':
-            print('\n16+475 check: handle=%s A=(%.3f,%.3f) B=(%.3f,%.3f) L=%.3f npts=%d' % (
-                r['handle'], r['a'][0], r['a'][1], r['b'][0], r['b'][1], r['len'], len(r['pts'])))
-            for off, z, h, at in r['pts']:
-                print('   起点距 %7.2f m   高程 %7.2f m   (%s)' % (off, z, h))
+    # quick self-check of the section the user picked（--check-chainage，默认 16+475）
+    if args.check_chainage:
+        for r in rows:
+            if r['chain'] == args.check_chainage:
+                print('\n%s check: handle=%s A=(%.3f,%.3f) B=(%.3f,%.3f) L=%.3f npts=%d' % (
+                    args.check_chainage, r['handle'], r['a'][0], r['a'][1], r['b'][0], r['b'][1],
+                    r['len'], len(r['pts'])))
+                for off, z, h, at in r['pts']:
+                    print('   起点距 %7.2f m   高程 %7.2f m   (%s)' % (off, z, h))
     return 0
+
+
+def main(argv=None):
+    """入口：BuildError -> stderr 一行 `error <CODE>: <msg>` + 退出码 2（不裸 traceback）。"""
+    try:
+        return _run(argv)
+    except BuildError as exc:
+        sys.stderr.write('error %s: %s\n' % (exc.code, exc.message))
+        return 2
 
 
 if __name__ == '__main__':

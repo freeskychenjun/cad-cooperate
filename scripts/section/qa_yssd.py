@@ -8,8 +8,11 @@
 
 用法（.xls 需要 xlrd，加 PYTHONPATH=tools\\py-libs）：
   python scripts\\section\\qa_yssd.py --data <xls> --out-json tmp\\real\\x.qa.json ^
-      --out-md tmp\\real\\x.qa.md [--model name=path ...] [--block 1] [--paper A1]
-      [--h-scale 4000] [--v-scale 200]
+      --out-md tmp\\real\\x.qa.md [--sheet 名称] [--block N] [--title "..."]
+      [--model name=path ...]
+
+`--block N`（1-based，默认 1）**真正生效**：决定第 3 章「选定块统计」、第 4.3 节
+「被忽略的行」与结论里用的是哪一块；跨块对比（第 5 章）始终覆盖源表全部施测块。
 """
 
 from __future__ import annotations
@@ -30,16 +33,26 @@ def _pct(a: int, b: int) -> str:
 
 
 def build_report(data_path: str, sheet: Optional[str], block_sel: Optional[int],
-                 models: Sequence[Tuple[str, str]]) -> Dict[str, Any]:
+                 models: Sequence[Tuple[str, str]],
+                 title: Optional[str] = None) -> Dict[str, Any]:
     rows, meta = prepare.load_rows(data_path, sheet)
     header = prepare.find_yssd_header(rows)
     if header is None:
         raise SystemExit("qa: 未识别到实测大断面表头")
     header_idx, groups = header
     blocks = prepare.parse_yssd_blocks(rows, header_idx, groups)
+    if not blocks:
+        raise SystemExit("qa: 源表里没有识别到任何施测块")
+    # --block 真正生效：选定块用于第 3 章「选定块统计」/第 4.3 节「被忽略的行」/结论；
+    # 跨块对比（第 5 章）始终覆盖全部块，不受 --block 影响。
+    sel = 1 if block_sel is None else int(block_sel)
+    if sel < 1 or sel > len(blocks):
+        raise SystemExit("qa: --block %d 超出范围（源表共 %d 块，1-based）"
+                         % (sel, len(blocks)))
 
     report: Dict[str, Any] = {
         "generatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "title": title or "实测大断面成果表 · 解析与数据质量报告",
         "source": {
             "path": os.path.abspath(data_path),
             "sizeBytes": os.path.getsize(data_path),
@@ -53,6 +66,7 @@ def build_report(data_path: str, sheet: Optional[str], block_sel: Optional[int],
             "columns": [{"point": (g[0] + 1) if g[0] is not None else None,
                          "offset": g[1] + 1, "elev": g[2] + 1} for g in groups],
         },
+        "selectedBlock": sel,
         "blocks": [],
         "crossBlock": {},
         "models": [],
@@ -187,7 +201,8 @@ def build_report(data_path: str, sheet: Optional[str], block_sel: Optional[int],
         })
 
     # ---- 结论
-    b1 = report["blocks"][0] if report["blocks"] else {}
+    sel = int(report["selectedBlock"])
+    b1 = report["blocks"][sel - 1] if report["blocks"] else {}
     total_pts = sum(b.get("pointsAfterLabelFilter", 0) for b in report["blocks"])
     total_sus = sum(b.get("suspectCount", 0) for b in report["blocks"])
     report["conclusion"] = [
@@ -197,9 +212,9 @@ def build_report(data_path: str, sheet: Optional[str], block_sel: Optional[int],
                                   "；".join("第%d块 %s（测时水位 %s，%d 编号点）"
                                             % (b["index"], b["date"], b["waterLevel"], b["numbered"])
                                             for b in blocks)),
-        "选定块（默认第 1 块）：%d 点（已过滤左岸/右岸标签行 %d 行），起点距 %.1f..%.1f m，"
+        "选定块（--block %d，默认第 1 块）：%d 点（已过滤左岸/右岸标签行 %d 行），起点距 %.1f..%.1f m，"
         "高程 %.2f..%.2f m，中位数 %.2f m。"
-        % (b1.get("pointsAfterLabelFilter", 0), b1.get("labelRowsDropped", 0),
+        % (sel, b1.get("pointsAfterLabelFilter", 0), b1.get("labelRowsDropped", 0),
            b1.get("offsetMin") or 0, b1.get("offsetMax") or 0,
            b1.get("elevMin") or 0, b1.get("elevMax") or 0, b1.get("medianElev") or 0),
         "数据质量：全部块共 %d 个可疑高程（%d/%d，占 %s）。主因是源表高程单元格被截断成"
@@ -217,7 +232,7 @@ def build_report(data_path: str, sheet: Optional[str], block_sel: Optional[int],
 
 def render_markdown(r: Dict[str, Any]) -> str:
     L: List[str] = []
-    L.append("# 示例站 2025 年实测大断面成果表 · 解析与数据质量报告")
+    L.append("# %s" % (r.get("title") or "实测大断面成果表 · 解析与数据质量报告"))
     L.append("")
     L.append("> 自动生成于 %s；解析器：`scripts/section/prepare.py`（profile=yssd）。"
              "本报告只读源文件，未改动任何原始数据。" % r["generatedAt"])
@@ -246,9 +261,9 @@ def render_markdown(r: Dict[str, Any]) -> str:
                  % (b["index"], b["date"], b["waterLevel"], b["metaRow"], b["entries"],
                     b["numbered"], b["labels"], b["meta"]))
     L.append("")
-    L.append("## 3. 选定块统计（默认第 1 块）")
+    L.append("## 3. 选定块统计（第 %d 块，`--block`）" % int(r.get("selectedBlock", 1)))
     L.append("")
-    b1 = r["blocks"][0]
+    b1 = r["blocks"][int(r.get("selectedBlock", 1)) - 1]
     L.append("| 项 | 值 |")
     L.append("|---|---|")
     L.append("| 有效点（过滤左岸/右岸标签行后） | %d |" % b1["pointsAfterLabelFilter"])
@@ -355,7 +370,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="yssd 数据质量 QA 报告生成器")
     ap.add_argument("--data", required=True, help="实测大断面成果表（.xls/.xlsx）")
     ap.add_argument("--sheet", default=None)
-    ap.add_argument("--block", type=int, default=1)
+    ap.add_argument("--block", type=int, default=1,
+                    help="选定块（1-based，默认 1）：用于第 3 章「选定块统计」/4.3 忽略行/结论；"
+                         "跨块对比始终覆盖全部块")
+    ap.add_argument("--title", default=None,
+                    help="报告标题（默认「实测大断面成果表 · 解析与数据质量报告」）")
     ap.add_argument("--out-json", dest="out_json", default=None)
     ap.add_argument("--out-md", dest="out_md", default=None)
     ap.add_argument("--model", action="append", default=None, metavar="NAME=PATH",
@@ -370,7 +389,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             name, path = os.path.basename(item), item
         models.append((name, path))
 
-    report = build_report(args.data, args.sheet, args.block, models)
+    report = build_report(args.data, args.sheet, args.block, models, title=args.title)
 
     if args.out_json:
         os.makedirs(os.path.dirname(os.path.abspath(args.out_json)), exist_ok=True)

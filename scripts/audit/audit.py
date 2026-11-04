@@ -22,6 +22,10 @@ Design notes
   or ``no_input`` so the report never silently looks greener than it is.
 * Chinese text lives in the .json/.md payload only; stdout is kept ASCII so a
   PowerShell 5.1 console (GBK code page) never mangles it.
+* ``--json`` / ``--md`` are written **atomically** (same-directory temp file +
+  ``os.replace``): a failure never leaves a half-written report behind. An
+  unwritable output path is reported on stderr as ``cannot write report: ...``
+  with exit code 2 (previously a bare traceback with exit 1).
 
 Exit codes: 0 = analysis done (blockers only fail the run with --exit-code),
 3 = blockers found and --exit-code was given, 2 = bad input/usage, 1 = internal.
@@ -36,6 +40,7 @@ import math
 import os
 import re
 import sys
+import tempfile
 import unicodedata
 from collections import Counter, OrderedDict, defaultdict
 
@@ -1606,6 +1611,27 @@ def load_config(spec):
     return deep_merge(cfg, override)
 
 
+def write_text_atomic(path, text):
+    """原子写：先写同目录临时文件再 os.replace，失败绝不留下半截文件（--json/--md 共用）。"""
+    out_dir = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(out_dir, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".audit-report-", suffix=".tmp", dir=out_dir)
+    replaced = False
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        os.replace(tmp, path)
+        replaced = True
+    finally:
+        # 不用 except BaseException：KeyboardInterrupt/SystemExit 照常向上传播，只清临时文件
+        if not replaced:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError:
+                pass
+
+
 def main(argv=None):
     try:
         sys.stdout.reconfigure(errors="replace")  # type: ignore[attr-defined]
@@ -1640,13 +1666,16 @@ def main(argv=None):
     except json.JSONDecodeError as exc:
         sys.stderr.write("bad JSON: %s\n" % exc)
         return 2
-    if args.json_out:
-        with open(args.json_out, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(json.dumps(report, ensure_ascii=False, indent=2))
-            fh.write("\n")
-    if args.md_out:
-        with open(args.md_out, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(render_markdown(report))
+    try:
+        if args.json_out:
+            write_text_atomic(args.json_out,
+                              json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+        if args.md_out:
+            write_text_atomic(args.md_out, render_markdown(report))
+    except OSError as exc:
+        # 输出路径不可写：给明确错误（原先裸 traceback + exit 1），仍属「坏输入/用法」档 -> 2
+        sys.stderr.write("cannot write report: %s\n" % exc)
+        return 2
     print_console(report, quiet=args.quiet)
     if args.exit_code and report["gate"]["blockers"]:
         return 3

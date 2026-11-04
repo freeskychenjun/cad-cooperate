@@ -1,0 +1,24 @@
+# zwcad-cooperate -- Python 数据侧依赖
+#
+# 只有「数据侧」脚本需要这些库（CAD 协作主链路是 PowerShell + C#，零 Python 依赖）：
+#   scripts/section/prepare.py            xlsx/xls -> section.model.json（纯计算，零 COM）
+#   scripts/section/qa_yssd.py            实测大断面 QA 报告（复用 prepare 的解析）
+#   scripts/section/build_sections_*.py   CAD 导出 JSON -> 断面数据工作簿（.xlsx/.csv）
+#   scripts/audit/audit.py                图纸体检（只读，无第三方依赖）
+#   tests/check_dxf.py                    DXF 往返校验（ezdxf）
+#
+# 安装：
+#   python -m pip install -r requirements.txt
+#
+# 离线/内网环境：仓库内 tools\py-libs 已 vendored 一套可用的库（xlrd / numpy / ezdxf 等），
+# 无需 pip 安装，把它加进 PYTHONPATH 即可：
+#   $env:PYTHONPATH = "<repo>\tools\py-libs"
+# 注意：vendored 目录里**没有 openpyxl**，读 .xlsx / 写工作簿仍需 `pip install openpyxl`。
+
+xlrd>=2.0
+openpyxl>=3.0
+ezdxf>=1.0
+
+# 可选（不属于核心契约）：build_sections_from_dmx.py / build_sections_gcd.py 的预览 PNG。
+# 缺 matplotlib 时脚本只打印 "plot skipped"，不失败。
+# matplotlib>=3.5
