@@ -150,3 +150,24 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 **修法**：client 新增 `EnsureHelper()`：缓存缺失时按**与 zwc.ps1 相同的源码哈希规则**自调用 `csc` 编译 `scripts\helper\*.cs` 到 `bin\cache\<sha>\ZwcHelper.exe`（找不到 csc 才回退报错）。两个入口现在都能独立 bootstrap。
 **实测**：删掉当前哈希的 cache 目录后冷跑 client → **3,765 ms** 返回（`transport:"daemon-started"`，`rebuilt=true`），不再 `CLIENT_FAILED`。
 > 提示给基准：全量对比用 live 源码（先跑一次 `zwc.ps1` 预热缓存）最稳；frozen 快照现在是"能自愈"，但哈希必须与快照内源码一致。
+
+## 十、2026-11-05 增补：运行时工程化四件（正确性 + 卫生）
+
+### 10.1 退出码判据：从"全文搜子串"改为"只看顶层字段"
+**旧实现**（`ZwcClient.cs`）：靠在整个响应文本里搜 `"ok":true` 与 `VERIFY_FAILED`/`BAD_DATA`/… 判 0/2/3 ⇒ helper 只要在 `message`/`detail` 里合法提到门禁词（例如报错信息里引用 `BAD_DATA`），客户端就把一次**成功**的命令判成 exit 3。`zwc.ps1` 的 legacy 路径本来是按 `$obj.error.code` 判的，两条路径口径还不一致。
+**新实现**：手写顶层 JSON 扫描（`TopLevelBool` / `TopLevelErrorCode`，不引第三方库）：`ok===true ⇒ 0`；否则取**顶层** `error.code`，∈ 7 个门禁码 ⇒ 3；其余 ⇒ 2。判据可用 `bin\ZwcClient.exe --selftest-exitcode <sample.json>` 单测（stdin 亦可），不开 daemon、不碰 CAD。
+**验证**：`{"ok":true,"result":{"note":"BAD_DATA appeared in text"}}` → **0**（旧实现会错判 3）；`VERIFY_FAILED` → 3；`UNEXPECTED` → 2；`{"ok":false,"result":{"ok":true}}`（嵌套）→ 2；非 JSON → 2。
+
+### 10.2 daemon 按顶层 `cmd` 分派，不再对整包做文本匹配
+**旧实现**：`Daemon.Run` 用 `reqJson.IndexOf("\"daemon-stop\"")` / `IndexOf("\"ping\"")` 匹配**整个请求报文** ⇒ 一个正常请求若在参数字符串里含 `ping`（如 `query -Text ping`）就会被当成 ping，含 `daemon-stop` 甚至会**停掉 daemon**。
+**新实现**：`Json.Parse(reqJson) as JMap` 取顶层 `cmd` 精确比较；解析失败则按原样交给 `Program.HandleRequestText`（绝不因解析失败拒掉合法请求）。两个响应报文**逐字节未改**。
+**验证**（沙箱 daemon，真实 helper 源码 + 改 hash 独立 pipe，全程不碰 CAD）：`{"cmd":"query","args":{"text":"ping"}}` → 正常分派（`BAD_ARGS` 而非 ping 响应）；含 `daemon-stop` 的普通请求不再停 daemon；`{"cmd":"ping"}` / `{"cmd":"daemon-stop"}` 响应逐字节一致。
+
+### 10.3 哈希配方 4 处 → 1 处 + 双侧自检
+**问题**：同一配方（`文件数|最新mtime ticks|排序sizes → SHA256 前 12 位`）在 `ZwcClient.HelperHash`、`zwc.ps1` 的 delegate 热路径、`Get-RepoLayout`、主编译块**四处**各自实现，靠注释约定同步；只改一处 ⇒ client 与 daemon 的 pipe 名/缓存目录分叉（表现为连不上 daemon + 重复编译）。
+**改法**：`zwc.ps1` 三处合并为 `Get-HelperSha12`（12 处调用点复用；比旧内联快 3×：40 次中位 0.69 ms vs 2.15 ms）；client 新增 `hash` 子命令输出 `{helperSha,key}`；`serve -Action status` 同时给出 `helperSha`（ps1 算）、`clientSha`（调 client）、`recipeMatch`，不一致 ⇒ `ok:false` + `HASH_RECIPE_MISMATCH`。
+
+### 10.4 `bin\cache` 编译缓存淘汰（P1-4.3）
+**问题**：源码每改一次永久 +127 KB；`EnsureHelper` 先 `CreateDirectory` 后编译，**编译失败不回滚** ⇒ 实测残留 **33 个空目录**；总量 140 目录 / 107 个 exe / 13.39 MB。
+**改法**：`PruneCache`（client 侧）只动 `bin\cache\<12位hex>` 目录：保留集合 = 最近 **10 个非空**目录 ∪ 当前 sha ∪ **运行中目录**（按 `Get-Process ZwcHelper` 的 `MainModule.FileName` 反推，不是靠"删除失败吞掉"）；空目录 mtime >5 min 才删（避免和并发 csc 抢"刚建还空"的目录）；删除失败进 `failedDirs[]` 不静默。触发点：client 成功拉起新 daemon 后一次、`serve -Action start|status`、手动 `serve -Action prune`；失败编译回滚本次新建的空目录与 `build-<pid>.exe`。
+**实测**：141 → **9** 个目录、空目录 33 → **0**、释放 **12.00 MB**、`failed=0`；运行中目录 `skippedRunning` 正确保护（受控实验：手工起一个旧 hash daemon，prune 后目录存活且 daemon 未受影响）；立即重跑 `removed=0`（幂等）。

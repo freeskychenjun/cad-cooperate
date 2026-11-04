@@ -2068,7 +2068,6 @@ namespace ZwcHelper
                 if (e.Code == "MULTI_PRODUCT")
                 {
                     r.Add("instanceError", "MULTI_PRODUCT");
-                    r.Add("instanceError", "MULTI_PRODUCT");
                     ctx.Warn("MULTI_PRODUCT", "several ZWCAD/AutoCAD builds are running; pass -ProgId or -App to pick one");
                 }
                 throw e;
@@ -4099,7 +4098,6 @@ namespace ZwcHelper
             r.Add("processWaitMs", sw.ElapsedMilliseconds);
             r.Add("forcedKill", forcedKill);
             return r;
-            return r;
         }
     }
 
@@ -4160,7 +4158,6 @@ namespace ZwcHelper
                     Task wait = pipe.WaitForConnectionAsync();
                     if (!wait.Wait(idleMs)) return 0;            // idle -> self destruct
                     bindFailures = 0;
-                    bindFailures = 0;
                 }
                 catch (Exception)
                 {
@@ -4179,23 +4176,43 @@ namespace ZwcHelper
                     {
                         respJson = "{\"ok\":false,\"cmd\":\"\",\"error\":{\"code\":\"BAD_REQUEST\",\"message\":\"empty or truncated pipe message\"}}";
                     }
-                    else if (reqJson.IndexOf("\"daemon-stop\"", StringComparison.Ordinal) >= 0)
-                    {
-                        // no WaitForPipeDrain here: a client that never reads its answer would
-                        // block the daemon forever inside the pipe (measured: the daemon stayed
-                        // alive after "stop" and then refused every later connection)
-                        PipeIo.WriteMessage(pipe, "{\"ok\":true,\"cmd\":\"daemon-stop\",\"result\":{\"stopped\":true},\"elapsedMs\":0}");
-                        try { pipe.Dispose(); } catch (Exception) { }
-                        return 0;
-                    }
-                    else if (reqJson.IndexOf("\"ping\"", StringComparison.Ordinal) >= 0)
-                    {
-                        PipeIo.WriteMessage(pipe, "{\"ok\":true,\"cmd\":\"ping\",\"result\":{\"pid\":" + Process.GetCurrentProcess().Id + "},\"elapsedMs\":0}");
-                        respJson = null;
-                    }
                     else
                     {
-                        respJson = Program.HandleRequestText(reqJson);
+                        // P2-5.4: route the two pipe-level commands by the request's top-level "cmd"
+                        // field, not by searching the raw text. The old IndexOf("\"ping\"") match sent
+                        // ANY request that merely mentioned ping into the ping branch - e.g.
+                        // {"cmd":"query","args":{"text":"ping"}} came back as {"cmd":"ping"} instead
+                        // of a query result (verified against the live daemon before this fix).
+                        // Parsing costs nothing here: this daemon serves a handful of requests per
+                        // minute, not a hot loop. A payload that does not parse falls through
+                        // unchanged so the normal dispatcher answers BAD_ARGS exactly as before -
+                        // a malformed request must never be refused by this branch.
+                        string pipeCmd = null;
+                        try
+                        {
+                            JMap reqMap = Json.Parse(reqJson) as JMap;
+                            if (reqMap != null) pipeCmd = reqMap.Str("cmd", "");
+                        }
+                        catch (Exception) { pipeCmd = null; }
+
+                        if (pipeCmd != null && string.Equals(pipeCmd, "daemon-stop", StringComparison.Ordinal))
+                        {
+                            // no WaitForPipeDrain here: a client that never reads its answer would
+                            // block the daemon forever inside the pipe (measured: the daemon stayed
+                            // alive after "stop" and then refused every later connection)
+                            PipeIo.WriteMessage(pipe, "{\"ok\":true,\"cmd\":\"daemon-stop\",\"result\":{\"stopped\":true},\"elapsedMs\":0}");
+                            try { pipe.Dispose(); } catch (Exception) { }
+                            return 0;
+                        }
+                        else if (pipeCmd != null && string.Equals(pipeCmd, "ping", StringComparison.Ordinal))
+                        {
+                            PipeIo.WriteMessage(pipe, "{\"ok\":true,\"cmd\":\"ping\",\"result\":{\"pid\":" + Process.GetCurrentProcess().Id + "},\"elapsedMs\":0}");
+                            respJson = null;
+                        }
+                        else
+                        {
+                            respJson = Program.HandleRequestText(reqJson);
+                        }
                     }
                     if (respJson != null) PipeIo.WriteMessage(pipe, respJson);
                 }

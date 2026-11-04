@@ -29,6 +29,46 @@ if ($args.Count -ge 1) {
     if ($args.Count -gt 1) { $Rest = @($args | Select-Object -Skip 1) }
 }
 
+# ---------------------------------------------------------------- helper source hash (single recipe)
+# "source file count | newest mtime ticks | sorted sizes" -> SHA256 -> first 12 hex chars.
+# That string decides bin\cache\<sha>\, the daemon pipe name and the client's HelperHash() in
+# scripts\client\ZwcClient.cs. It used to be copy-pasted in FOUR places (the delegate fast path,
+# Get-RepoLayout, the legacy build block below and the C# client) kept in sync by comments only, so
+# editing the recipe on one side silently split wrapper, client and daemon onto different pipes.
+# Every PowerShell call site now goes through Get-HelperSha12, and `serve -Action status` cross-checks
+# the C# side (clientSha vs helperSha -> recipeMatch) instead of trusting a comment.
+# Kept deliberately allocation-light: the delegate fast path below runs on every command.
+function Get-HelperSha12 {
+    param(
+        [string]$HelperDir,
+        [switch]$WithKey
+    )
+    if (-not $HelperDir) {
+        $scriptRoot = $PSScriptRoot
+        if (-not $scriptRoot) { $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
+        $HelperDir = Join-Path $scriptRoot 'helper'
+    }
+    $sources = @(Get-ChildItem -LiteralPath $HelperDir -Filter *.cs -File)
+    $sizes = New-Object 'System.Collections.Generic.List[long]'
+    $newest = [long]0
+    foreach ($s in $sources) {
+        $sizes.Add([long]$s.Length)
+        $t = $s.LastWriteTimeUtc.Ticks
+        if ($t -gt $newest) { $newest = $t }
+    }
+    $sizes.Sort()
+    $key = ([string]$sources.Count) + '|' + ([string]$newest) + '|' + ($sizes -join ',')
+    $shaGen = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $shaGen.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($key))
+        $sha = ([System.BitConverter]::ToString($hashBytes) -replace '-', '').ToLowerInvariant().Substring(0, 12)
+    } finally { $shaGen.Dispose() }
+    if ($WithKey) {
+        return [pscustomobject]@{ sha = $sha; key = $key; sources = $sources; helperDir = $HelperDir }
+    }
+    return $sha
+}
+
 # ---------------------------------------------------------------- M3-E1 fast path
 # Every helper command is handed to bin\ZwcClient.exe: the client starts in ~60-100 ms and speaks
 # the daemon pipe, while `powershell -File` alone already costs ~1.9 s. Keeping the whole legacy
@@ -43,12 +83,7 @@ $delegateIsAdmin = ($Command -eq 'serve' -or $Command -eq '--build-client' -or $
 if ($Command -and -not $delegateIsAdmin -and (Test-Path -LiteralPath $delegateClient)) {
     # only delegate when the helper binary for the CURRENT source hash exists; otherwise fall
     # through to the legacy path below, which compiles it first
-    $dh = @(Get-ChildItem -LiteralPath (Join-Path $delegateRoot 'helper') -Filter *.cs -File)
-    $ds = @($dh | ForEach-Object { $_.Length } | Sort-Object)
-    $dn = ($dh | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum.Ticks
-    $dkey = '' + $dh.Count + '|' + $dn + '|' + ($ds -join ',')
-    $dshaGen = [System.Security.Cryptography.SHA256]::Create()
-    $dsha = ([System.BitConverter]::ToString($dshaGen.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($dkey))) -replace '-', '').ToLowerInvariant().Substring(0, 12)
+    $dsha = Get-HelperSha12 -HelperDir (Join-Path $delegateRoot 'helper')
     $dhelper = Join-Path (Join-Path (Join-Path (Split-Path $delegateRoot -Parent) 'bin\cache') $dsha) 'ZwcHelper.exe'
     if (Test-Path -LiteralPath $dhelper) {
         & $delegateClient @args
@@ -96,8 +131,15 @@ if ($Command -eq '--build-client' -or $Command -eq 'buildclient') {
                 New-Item -ItemType Directory -Force -Path $bin | Out-Null
                 $tmp = $exePath + '.build-' + $PID + '.exe'
                 $log = (& $csc -nologo -optimize+ -target:exe -platform:anycpu -codepage:65001 ('-out:' + $tmp) -r:System.dll -r:System.Core.dll $src 2>&1 | Out-String)
-                if (Test-Path -LiteralPath $tmp) { Move-Item -LiteralPath $tmp -Destination $exePath -Force; Set-Content -LiteralPath $hashPath -Value $key -Encoding ASCII }
-                else { [Console]::Error.Write($log); exit 2 }
+                if (Test-Path -LiteralPath $tmp) {
+                    Move-Item -LiteralPath $tmp -Destination $exePath -Force
+                    Set-Content -LiteralPath $hashPath -Value $key -Encoding ASCII
+                }
+                else {
+                    # same failure-rollback rule as the helper build: no half-built exe left behind
+                    try { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force } } catch { }
+                    [Console]::Error.Write($log); exit 2
+                }
             }
         }
     }
@@ -123,23 +165,19 @@ function Get-RepoLayout {
     $scriptRoot = $PSScriptRoot
     if (-not $scriptRoot) { $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
     $helperDir = Join-Path $scriptRoot 'helper'
-    $sources = @(Get-ChildItem -LiteralPath $helperDir -Filter *.cs -File | Sort-Object Name)
-    $sizes = @($sources | ForEach-Object { $_.Length } | Sort-Object)
-    $newest = ($sources | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum.Ticks
-    $key = '' + $sources.Count + '|' + $newest + '|' + ($sizes -join ',')
-    $shaGen = [System.Security.Cryptography.SHA256]::Create()
-    $sha = ([System.BitConverter]::ToString($shaGen.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($key))) -replace '-', '').ToLowerInvariant().Substring(0, 12)
+    $info = Get-HelperSha12 -HelperDir $helperDir -WithKey
     $repoRoot = Split-Path $scriptRoot -Parent
-    $cacheDir = Join-Path $repoRoot ('bin\cache\' + $sha)
+    $cacheDir = Join-Path $repoRoot ('bin\cache\' + $info.sha)
     return [ordered]@{
         root       = $repoRoot
         scriptRoot = $scriptRoot
         helperDir  = $helperDir
-        sources    = $sources
-        sha        = $sha
+        sources    = $info.sources
+        sha        = $info.sha
+        cacheKey   = $info.key
         cacheDir   = $cacheDir
         exe        = (Join-Path $cacheDir 'ZwcHelper.exe')
-        pipe       = ('zwc-' + $sha)
+        pipe       = ('zwc-' + $info.sha)
         csc        = (Get-CscPath)
     }
 }
@@ -147,13 +185,30 @@ function Get-RepoLayout {
 function Build-HelperExe($layout) {
     if (Test-Path -LiteralPath $layout.exe) { return $layout.exe }
     if (-not $layout.csc) { return $null }
-    New-Item -ItemType Directory -Force -Path $layout.cacheDir | Out-Null
+    # P1-4.3: a failed compile must not leave a half-built build-<pid>.exe or an empty bin\cache\<sha>
+    # behind (33 such empty directories had piled up on this machine). Only what THIS call created is
+    # rolled back: a directory that already existed is left alone.
+    $createdCacheDir = $false
+    if (-not (Test-Path -LiteralPath $layout.cacheDir)) {
+        New-Item -ItemType Directory -Force -Path $layout.cacheDir | Out-Null
+        $createdCacheDir = $true
+    }
     $tmpExe = Join-Path $layout.cacheDir ('build-' + $PID + '.exe')
     $cscArgs = @('-nologo', '-optimize+', '-target:exe', '-platform:anycpu', '-codepage:65001', ('-out:' + $tmpExe), '-r:System.dll', '-r:System.Core.dll', '-r:System.Management.dll')
     foreach ($s in $layout.sources) { $cscArgs += $s.FullName }
-    $log = (& $layout.csc @cscArgs 2>&1 | Out-String)
-    if (-not (Test-Path -LiteralPath $tmpExe)) { throw ('helper compile failed: ' + $log.Trim()) }
-    Move-Item -LiteralPath $tmpExe -Destination $layout.exe -Force
+    $log = ''
+    try { $log = (& $layout.csc @cscArgs 2>&1 | Out-String) } catch { $log = [string]$_.Exception.Message }
+    $installed = $false
+    if (Test-Path -LiteralPath $tmpExe) {
+        try { Move-Item -LiteralPath $tmpExe -Destination $layout.exe -Force; $installed = $true } catch { $log = [string]$_.Exception.Message }
+    }
+    if (-not $installed) {
+        try { if (Test-Path -LiteralPath $tmpExe) { Remove-Item -LiteralPath $tmpExe -Force } } catch { }
+        if ($createdCacheDir -and (Test-Path -LiteralPath $layout.cacheDir)) {
+            try { if (@(Get-ChildItem -LiteralPath $layout.cacheDir -Force).Count -eq 0) { Remove-Item -LiteralPath $layout.cacheDir -Force } } catch { }
+        }
+        throw ('helper compile failed: ' + $log.Trim())
+    }
     return $layout.exe
 }
 
@@ -176,9 +231,18 @@ function Build-ClientExe {
     if (-not $csc) { return $null }
     New-Item -ItemType Directory -Force -Path $binDir | Out-Null
     $tmpExe = $exe + '.build-' + $PID + '.exe'
-    $log = (& $csc -nologo -optimize+ -target:exe -platform:anycpu -codepage:65001 ('-out:' + $tmpExe) -r:System.dll -r:System.Core.dll $src 2>&1 | Out-String)
-    if (-not (Test-Path -LiteralPath $tmpExe)) { throw ('client compile failed: ' + $log.Trim()) }
-    Move-Item -LiteralPath $tmpExe -Destination $exe -Force
+    $log = ''
+    try { $log = (& $csc -nologo -optimize+ -target:exe -platform:anycpu -codepage:65001 ('-out:' + $tmpExe) -r:System.dll -r:System.Core.dll $src 2>&1 | Out-String) } catch { $log = [string]$_.Exception.Message }
+    if (-not (Test-Path -LiteralPath $tmpExe)) {
+        # failure rollback: never leave bin\ZwcClient.exe.build-<pid>.exe behind
+        try { if (Test-Path -LiteralPath $tmpExe) { Remove-Item -LiteralPath $tmpExe -Force } } catch { }
+        throw ('client compile failed: ' + $log.Trim())
+    }
+    try { Move-Item -LiteralPath $tmpExe -Destination $exe -Force }
+    catch {
+        try { if (Test-Path -LiteralPath $tmpExe) { Remove-Item -LiteralPath $tmpExe -Force } } catch { }
+        throw ('client exe is in use, cannot replace it: ' + $_.Exception.Message)
+    }
     Set-Content -LiteralPath $hashFile -Value $key -Encoding ASCII
     # NGen native image cuts client startup (~70 -> ~35 ms); best effort, never fatal.
     try {
@@ -224,6 +288,26 @@ function Send-PipeJson([string]$pipeName, [string]$json, [int]$connectMs, [int]$
     } catch { return $null } finally { if ($p) { try { $p.Dispose() } catch { } } }
 }
 
+# ---------------------------------------------------------------- compile-cache eviction (P1-4.3)
+# The single implementation lives in bin\ZwcClient.exe (--prune-cache): it keeps the N newest
+# bin\cache\<sha12> entries plus the current source hash plus every directory a live ZwcHelper is
+# running from, and removes stale/empty ones. This wrapper only shells out to it, so the eviction
+# rules cannot drift between the two entry points. Pure local work: no CAD attach, no daemon start
+# or stop, and a locked directory is reported (failedDirs) instead of breaking anything.
+function Invoke-CachePrune($layout, [int]$Keep = 10) {
+    $clientExe = $null
+    try { $clientExe = Build-ClientExe } catch { $clientExe = $null }
+    if (-not $clientExe) {
+        $cand = Join-Path (Split-Path $layout.scriptRoot -Parent) 'bin\ZwcClient.exe'
+        if (Test-Path -LiteralPath $cand) { $clientExe = $cand }
+    }
+    if (-not $clientExe) { return $null }
+    $text = $null
+    try { $text = (& $clientExe '--prune-cache' '-Keep' ([string]$Keep) 2>&1 | Out-String) } catch { return $null }
+    if (-not $text) { return $null }
+    try { return ($text | ConvertFrom-Json) } catch { return $null }
+}
+
 # --build-client: bootstrap used by zwc.cmd when bin\ZwcClient.exe is missing
 if ($Command -eq '--build-client' -or $Command -eq 'buildclient') {
     $exe = Build-ClientExe
@@ -246,8 +330,49 @@ if ($Command -eq 'serve') {
                 $running = ($null -ne (Send-PipeJson $layout.pipe '{"cmd":"ping"}' 300 1500))
             }
         }
-        $o = [ordered]@{ ok = $running; cmd = 'serve'; result = [ordered]@{ action = 'start'; running = $running; pipe = $layout.pipe; exe = $exePath } }
+        # one-shot cache eviction on the management path (the client does the same right after it has
+        # started a daemon; doing it per-command would put directory I/O in the sub-600 ms budget)
+        $null = Invoke-CachePrune $layout
+        $o = [ordered]@{ ok = $running; cmd = 'serve'; result = [ordered]@{ action = 'start'; running = $running; pipe = $layout.pipe; exe = $exePath; helperSha = $layout.sha } }
         [Console]::Out.Write(($o | ConvertTo-Json -Depth 6 -Compress)); exit $(if ($running) { 0 } else { 2 })
+    }
+    elseif ($action -eq 'prune') {
+        # Manual cache eviction entry point: reports before/after directory counts, what was deleted,
+        # what was skipped because a live daemon runs from it, freed bytes and failures.
+        $pj = Invoke-CachePrune $layout
+        if ($null -eq $pj -or -not $pj.ok) {
+            $o = [ordered]@{
+                ok    = $false
+                cmd   = 'serve'
+                error = [ordered]@{ code = 'PRUNE_FAILED'; message = 'bin\ZwcClient.exe --prune-cache did not answer'; hint = 'run: powershell -NoProfile -File scripts\zwc.ps1 --build-client' }
+            }
+            [Console]::Out.Write(($o | ConvertTo-Json -Depth 8 -Compress)); exit 2
+        }
+        $r = $pj.result
+        $o = [ordered]@{
+            ok     = $true
+            cmd    = 'serve'
+            result = [ordered]@{
+                action          = 'prune'
+                before          = $r.before
+                after           = $r.after
+                afterSha        = $r.afterSha
+                removed         = $r.removed
+                kept            = $r.kept
+                emptyDirsBefore = $r.emptyDirsBefore
+                emptyRemoved    = $r.emptyRemoved
+                freedBytes      = $r.freedBytes
+                freedMB         = $r.freedMB
+                failed          = $r.failed
+                keep            = $r.keep
+                helperSha       = $r.currentSha
+                deleted         = $r.deleted
+                deletedEmpty    = $r.deletedEmpty
+                skippedRunning  = $r.skippedRunning
+                failedDirs      = $r.failedDirs
+            }
+        }
+        [Console]::Out.Write(($o | ConvertTo-Json -Depth 8 -Compress)); exit 0
     }
     elseif ($action -eq 'recover') {
         # Drop session state, rebuild the daemon, then re-attach through the pipe. Never touches CAD.
@@ -287,11 +412,75 @@ if ($Command -eq 'serve') {
         [Console]::Out.Write(($o | ConvertTo-Json -Depth 6 -Compress)); exit 0
     }
     else {
+        # management path: evict stale compile-cache entries while we are here (cheap, local only)
+        $null = Invoke-CachePrune $layout
         $reply = Send-PipeJson $layout.pipe '{"cmd":"ping"}' 300 1500
         $daemonPid = 0
         if ($reply -and $reply -match '"pid":(\d+)') { $daemonPid = [int]$Matches[1] }
-        $o = [ordered]@{ ok = $true; cmd = 'serve'; result = [ordered]@{ action = 'status'; running = ($null -ne $reply); pid = $daemonPid; pipe = $layout.pipe; exe = $layout.exe; exeExists = (Test-Path -LiteralPath $layout.exe) } }
-        [Console]::Out.Write(($o | ConvertTo-Json -Depth 6 -Compress)); exit 0
+        # two-sided hash-recipe self check (P2-5.2): this script computes helperSha itself, the C#
+        # client computes the same recipe independently. A one-sided edit used to be invisible; now
+        # it turns into an explicit failure instead of wrapper/client/daemon drifting onto different
+        # cache directories and pipe names.
+        $psSha = $layout.sha
+        $clientSha = $null
+        $clientKey = $null
+        $clientError = $null
+        $clientExe = $null
+        try { $clientExe = Build-ClientExe } catch { $clientExe = $null }
+        if (-not $clientExe) {
+            $cand = Join-Path (Split-Path $layout.scriptRoot -Parent) 'bin\ZwcClient.exe'
+            if (Test-Path -LiteralPath $cand) { $clientExe = $cand }
+        }
+        if (-not $clientExe) {
+            $clientError = 'CLIENT_MISSING'
+        } else {
+            $hashText = $null
+            try { $hashText = (& $clientExe 'hash' 2>&1 | Out-String) } catch { $hashText = $null }
+            if (-not $hashText) {
+                $clientError = 'NO_OUTPUT'
+            } else {
+                try {
+                    $hj = $hashText | ConvertFrom-Json
+                    if ($hj -and $hj.ok) {
+                        $clientSha = [string]$hj.helperSha
+                        $clientKey = [string]$hj.key
+                    } elseif ($hj -and $hj.error -and $hj.error.code) {
+                        $clientError = [string]$hj.error.code
+                    } else { $clientError = 'BAD_RESPONSE' }
+                } catch { $clientError = 'BAD_JSON' }
+            }
+        }
+        $recipeMatch = ($null -ne $clientSha -and $clientSha -eq $psSha)
+        $resultObj = [ordered]@{
+            action      = 'status'
+            running     = ($null -ne $reply)
+            pid         = $daemonPid
+            pipe        = $layout.pipe
+            exe         = $layout.exe
+            exeExists   = (Test-Path -LiteralPath $layout.exe)
+            helperSha   = $psSha
+            clientSha   = $clientSha
+            recipeMatch = $recipeMatch
+        }
+        if ($recipeMatch) {
+            $o = [ordered]@{ ok = $true; cmd = 'serve'; result = $resultObj }
+            [Console]::Out.Write(($o | ConvertTo-Json -Depth 6 -Compress)); exit 0
+        }
+        $resultObj['clientError'] = $clientError
+        $resultObj['clientKey'] = $clientKey
+        $resultObj['helperKey'] = $layout.cacheKey
+        $msg = 'the PowerShell wrapper and bin\ZwcClient.exe disagree on the helper source-hash recipe (ps1 helperSha=' + $psSha + ', client helperSha=' + [string]$clientSha + ', clientError=' + [string]$clientError + '); a stale client build counts as a mismatch'
+        $o = [ordered]@{
+            ok     = $false
+            cmd    = 'serve'
+            result = $resultObj
+            error  = [ordered]@{
+                code    = 'HASH_RECIPE_MISMATCH'
+                message = $msg
+                hint    = 'both sides must hash "source file count | newest mtime ticks | sorted sizes" with SHA256 and take the first 12 hex chars; fix scripts\zwc.ps1 Get-HelperSha12 or ZwcClient.HelperHash, then rebuild the client: powershell -NoProfile -File scripts\zwc.ps1 --build-client'
+            }
+        }
+        [Console]::Out.Write(($o | ConvertTo-Json -Depth 8 -Compress)); exit 2
     }
 }
 
@@ -302,15 +491,21 @@ if ($Command -eq 'serve') {
 #
 # The single-list version used to break "-New -App autocad": "app" was not a known switch, so
 # "-App" was swallowed as the VALUE of -New and the whole command silently fell back to zwcad.
+#
+# Each key lives in EXACTLY ONE list (the parser checks $BoolSwitches first, so a key present in both
+# would silently be parsed as a boolean and its value dropped). Notes on the ones that are easy to
+# get wrong: "paper" is a VALUE (-Paper A3 / A1 for the section overlay; the helper's snapshot path
+# also reads a boolean "paper" flag, but it defaults to true and is never passed as a bare switch),
+# "deep" and "text" used to be listed twice - duplicates are gone now.
 $BoolSwitches = @(
     'launch', 'readonly', 'nohint', 'dryrun', 'nocad', 'noaxis', 'nopointno', 'noautoscale',
     'axis', 'handles', 'fast', 'clear', 'quit', 'new', 'deep', 'keep', 'help', 'slow', 'keeponfail',
-    'nolegend', 'scalebar', 'pointno', 'continue', 'plan', 'paper', 'deep', 'reveal', 'sweephidden', 'noreveal', 'tray', 'geom', 'forcelispfile'
+    'nolegend', 'scalebar', 'pointno', 'continue', 'plan', 'reveal', 'sweephidden', 'noreveal', 'tray', 'geom', 'forcelispfile'
 )
 $ValueSwitches = @(
     'app', 'progid', 'doc', 'data', 'sheet', 'cols', 'paper', 'origin', 'waterlevels', 'text',
     'token', 'scope', 'layerprefix', 'out', 'hscale', 'vscale', 'labelevery', 'count', 'max',
-    'comthreshold', 'timeoutsec', 'layer', 'type', 'text', 'bbox', 'xdata', 'items', 'since', 'tol', 'locktimeout', 'busytimeout', 'filter'
+    'comthreshold', 'timeoutsec', 'layer', 'type', 'bbox', 'xdata', 'items', 'since', 'tol', 'locktimeout', 'busytimeout', 'filter'
 )
 $opts = @{}
 for ($i = 0; $i -lt $Rest.Count; $i++) {
@@ -391,14 +586,11 @@ try {
     if (-not (Test-Path -LiteralPath $helperDir)) {
         Write-JsonError 'NO_HELPER' ("helper source folder not found: " + $helperDir) 'the repository is incomplete'
     }
-    $sources = @(Get-ChildItem -LiteralPath $helperDir -Filter *.cs -File | Sort-Object Name)
+    $shaInfo = Get-HelperSha12 -HelperDir $helperDir -WithKey
+    $sources = @($shaInfo.sources)
     if ($sources.Count -eq 0) { Write-JsonError 'NO_HELPER' 'no .cs files next to zwc.ps1' 'the repository is incomplete' }
-
-    $sizes = @($sources | ForEach-Object { $_.Length } | Sort-Object)
-    $newest = ($sources | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum.Ticks
-    $cacheKey = '' + $sources.Count + '|' + $newest + '|' + ($sizes -join ',')
-    $shaGen = [System.Security.Cryptography.SHA256]::Create()
-    $sha = ([System.BitConverter]::ToString($shaGen.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($cacheKey))) -replace '-', '').ToLowerInvariant().Substring(0, 12)
+    $cacheKey = $shaInfo.key
+    $sha = $shaInfo.sha
 
     $repoRoot = Split-Path $scriptRoot -Parent
     $cacheDir = Join-Path $repoRoot ('bin\cache\' + $sha)
@@ -411,18 +603,32 @@ try {
             if (Test-Path -LiteralPath $cand) { $csc = $cand; break }
         }
         if (-not $csc) { Write-JsonError 'NO_COMPILER' 'csc.exe (.NET Framework 4.x) not found' 'enable .NET Framework 4.8 in Windows Features' }
-        New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+        # P1-4.3 rollback: remember whether the cache directory is ours, so a failed compile can
+        # remove it again instead of leaving an empty bin\cache\<sha> behind (33 of them had piled up).
+        $createdCacheDir = $false
+        if (-not (Test-Path -LiteralPath $cacheDir)) {
+            New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+            $createdCacheDir = $true
+        }
         $tmpExe = Join-Path $cacheDir ('build-' + $PID + '.exe')
         $cscArgs = @(
             '-nologo', '-optimize+', '-target:exe', '-platform:anycpu', '-codepage:65001',
             ('-out:' + $tmpExe), '-r:System.dll', '-r:System.Core.dll', '-r:System.Management.dll'
         )
         foreach ($s in $sources) { $cscArgs += $s.FullName }
-        $compileLog = (& $csc @cscArgs 2>&1 | Out-String)
-        if (-not (Test-Path -LiteralPath $tmpExe)) {
+        $compileLog = ''
+        try { $compileLog = (& $csc @cscArgs 2>&1 | Out-String) } catch { $compileLog = [string]$_.Exception.Message }
+        $installed = $false
+        if (Test-Path -LiteralPath $tmpExe) {
+            try { Move-Item -LiteralPath $tmpExe -Destination $exePath -Force; $installed = $true } catch { $compileLog = [string]$_.Exception.Message }
+        }
+        if (-not $installed) {
+            try { if (Test-Path -LiteralPath $tmpExe) { Remove-Item -LiteralPath $tmpExe -Force } } catch { }
+            if ($createdCacheDir -and (Test-Path -LiteralPath $cacheDir)) {
+                try { if (@(Get-ChildItem -LiteralPath $cacheDir -Force).Count -eq 0) { Remove-Item -LiteralPath $cacheDir -Force } } catch { }
+            }
             Write-JsonError 'COMPILE_FAILED' ('csc failed: ' + $compileLog.Trim()) 'check scripts\helper\ZwcHelper.cs'
         }
-        Move-Item -LiteralPath $tmpExe -Destination $exePath -Force
     }
 
     # ---------------------------------------------------------------- run the helper
