@@ -91,6 +91,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 - `scripts\section\prepare.py`：把数据做成 `section` 的模型 JSON（**CLI 薄壳**，实现在同目录 `prep_io` / `prep_yssd` / `prep_db` / `prep_model` 四个模块；CLI/字段契约不变）。
   - `--from-db <站码> [--date/--years/--last N]`：直连 `hydro_data.db` 的 `cross_section`（162 站 / 5575 次施测 / 1965–2025）。
   - `--data <xlsx>`（两列起点距/高程）或 `--profile yssd`（"实测大断面成果表"多列块格式，支持 `.xls`，带数据质量闸门）。
+  - `--compare-source --from-excel <源表>`：DB 与源 `.xls` **逐点比对** → `sourceCompare{dbPoints,compared,same,differingCount,tolerance,byDate[],differing[]}`，告警码 `SOURCE_COMPARE_DIFF` / `SAME` / **`UNMATCHED`**（所选日期源表无对应施测块）；比对口径=**删点前**的 DB 原始序列，与 `--drop-suspect` 互不影响；离线自测 `tests\selftest_compare_source.py`。
 - `scripts\audit\audit.py` + `run.ps1`：只读图纸体检（17 条规则，见 `reference/audit-rules.md`），吃 `info`/`read` 的 JSON，出 MD/JSON 报告，`-ExitCode` 可当门禁。
 
 ## 铁律（违反会伤到用户）

@@ -72,6 +72,9 @@ jobs:
       - name: section builder (shared library + both entries, offline)
         run: python tests/selftest_sections.py
 
+      - name: compare-source (DB vs source table, synthetic fixtures)
+        run: python tests/selftest_compare_source.py
+
       - name: end-to-end dry run (no CAD touched)
         # run_m1.ps1 preflights every path with Test-Path, so a bare "python" is not enough here.
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/run_m1.ps1 -DryRunOnly -NoCad -Python (Get-Command python).Source

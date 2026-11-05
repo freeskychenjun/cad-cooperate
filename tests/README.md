@@ -16,7 +16,8 @@
 | `tests\check_dxf.py` | ezdxf 真实 DXF 内核往返复核（第三份实现，需 `tools\py-libs` 在 `PYTHONPATH`） |
 | `tests\run_m1.ps1` | 端到端 runner（纯 ASCII + UTF-8 BOM + CRLF）；`-DryRunOnly` / `-NoCad` 无 CAD 全绿 |
 | `tests\selftest.py` | 计算侧全量自测（41 项：基准/负例/反序/bad 用例/升档/变体/回读 schema） |
-| `tests\selftest_sections.py` | 断面提取两条路线自测（**82 项**，纯离线合成夹具，写 `tmp\selftest-sections\`，不需要 `%TEMP%` 真实数据）：`section_lib` 几何/网格索引与暴力解等价、两个薄入口逐格断言、坏输入/缺库负例 |
+| `tests\selftest_sections.py` | 断面提取两条路线自测（**85 项**，纯离线合成夹具，写 `tmp\selftest-sections\`，不需要 `%TEMP%` 真实数据）：`section_lib` 几何/网格索引与暴力解等价、两个薄入口逐格断言（含 **宽表整表逐格数值/顺序**）、坏输入/缺库负例 |
+| `tests\selftest_compare_source.py` | `--compare-source`（DB vs 源表逐点比对）自测（**71 项**，纯离线：脚本内合成 sqlite DB〔虚构站码 99000001〕+ 合成 yssd 多列块 xlsx〔含截断高程/偏差/缺批次〕，写 `tmp\selftest-compare-source\`）：`sourceCompare` 全字段、`byDate[]`/`differing[]` 数值、容差边界、`--drop-suspect` 组合口径、负例 BAD_ARGS/BAD_DB/BAD_DATA |
 | `tests\coreself\` | helper 纯逻辑离线套件（csc 编译，零 CAD）：`CoreTests.cs`（JMap/ZwcError/Ctx/Json 往返/State 内存态，**103 断言**）、`ComCmdTests.cs`（COM 反射晚绑定 + 重试策略 + Cmd 括号/提示符守卫，**131 断言**）——由 `tests\selftest_lisp.ps1` 统一跑 |
 | `tests\fixtures\section-30.xlsx` | 30 点合成断面（起点距 0..290 步长 10 m，高程 38.55..44.30 m，深泓第 15 点/140 m），表头行「起点距/高程」，D1/D2 附设计水位 42.30（供人读，程序从参数取） |
 | `tests\fixtures\section-30.expected.json` | 验收基准（实体清单 + `expected.total` + `bbox` + `computed`） |
@@ -143,7 +144,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 [-Doc <dwg>
 
 ```
 python tests\selftest.py                        # 41 项 PASS
-python tests\selftest_sections.py               # 82 项 PASS（断面提取两条路线）
+python tests\selftest_sections.py               # 85 项 PASS（断面提取两条路线）
+python tests\selftest_compare_source.py         # 71 项 PASS（--compare-source，合成 DB + 源表）
 python tests\audit\test_audit.py                # PASS 89 / FAIL 0 / SKIP 3
 python tests\bench\selftest_checkers.py         # SELFTEST PASS
 powershell -File tests\selftest_lisp.ps1        # C# 6 套：106+53+132+119+103+131 = 644 PASS
@@ -256,7 +258,14 @@ python scripts\section\prepare.py --from-db <站码> --years 2025 --compare-sour
 - 水位：DB 无「测时水位」⇒ 取 `daily_water_level` 日均（label `日均水位`，2025-01-19=17.84 vs 源表测时 17.85）；
   `--water` 覆盖 / `--no-water-from-db` 关。
 - `--compare-source` → `sourceCompare{dbPoints,compared,same,differingCount,tolerance,byDate[],differing[]}`
-  + `warnings:SOURCE_COMPARE_DIFF`。
+  + `warnings:SOURCE_COMPARE_DIFF`（有差异）/ `SOURCE_COMPARE_SAME`（全部一致）/
+  **`SOURCE_COMPARE_UNMATCHED`**（所选日期在源表里没有对应施测块、`byDate[].matched=false`；修前这种
+  情形会误报 `SOURCE_COMPARE_SAME`「比对 0 点…两者一致」）。
+- **比对口径**：始终以 **DB 原始序列（删点前）** 为准，`--drop-suspect` 只影响出图模型 ⇒ 该组合下
+  `sourceCompare.dbPoints/compared` 可能大于 `series[].pointCount`（比对=数据审计，模型=成图数据）。
+- **已知限制**：源表表头只记「1月19日」这类**月-日**，DB 日期 `YYYY-MM-DD` 归一到 `M-D` 匹配；同一份源表
+  含跨年同月日、或一次比对选中不同年份的同月日批次时，会命中源表第一个同月日块（其余无法区分），需人工复核
+  （源表信息不足的固有歧义，不做猜测性修复）。离线覆盖：`tests\selftest_compare_source.py`（71 断言）。
 
 ### 10.2 产物与结果
 

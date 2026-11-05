@@ -18,13 +18,13 @@
 | 4.1 LISP 孤儿脚本 / CMDECHO 事故（P1） | **采纳** | `*error*` 处理器（还原 CMDECHO + 旧处理器）；脚本先写 `__START__` 两阶段哨兵；失败/超时**改名 `*.orphan` 留证**不删、扫描前清 >24 h 遗留；新增错误码 `LISP_NOT_STARTED`、`LISP_FILE_TIMEOUT.detail.phase` | 真机 CMDECHO 前后均 **1**；`FileSystemWatcher` 抓到 `.start`(01:12:05.953) → `.done`(01:12:07.403)；成功路径 pipeline 残留 **0**；25 h orphan 被清、fresh orphan 保留；超时分支 21 条离线断言（端到端不做，理由见 §六） |
 | 4.2 合并 LispFile/LispGeom 重复（P1） | **已做（第二轮）** | 解析层 `LispWire`（第一轮）+ **注入管道 `LispScan.cs`**（第二轮，五步单一实现）；`LispFile` 240→133、`LispGeom` 269→161 行 | 见 §八.2；真机 A/B `-Limit 20/500`、read、query 与基线 0 字段差异 |
 | 4.3 bin/cache 无淘汰（P1） | **采纳** | `PruneCache`（保留 10 个非空 + 当前 sha + **运行中目录**，空目录 5 min 宽限，`deleted[]/skippedRunning[]/failedDirs[]`）；`serve -Action prune`；client 拉起新 daemon 后一次性自动淘汰；编译失败回滚空目录与 `build-<pid>.exe` | **141 → 9** 目录、空目录 **33 → 0**、释放 **12.00 MB**、`failed=0`；受控实验证明运行中目录被保护；二次 `removed=0`（幂等）；现 10 目录 / 0 空 / 1.76 MB |
-| 4.4 Python 性能热点（P1） | **已做（两轮）** | 第一轮 `drop_suspect` 字典/集合索引（**1.6×/4.6×/13.6×**，逐字节等价）；第二轮**断面关联改网格分桶**：候选对 918 万→16.8 万、关联段 1.43→0.14 s（**×10.2**）、端到端 gcd −16% / dmx −26%，golden 逐单元格 0 差异 | 见 §八.1；`tests\selftest_sections.py` 82 断言 |
+| 4.4 Python 性能热点（P1） | **已做（两轮 + 尾巴评估）** | 第一轮 `drop_suspect` 字典/集合索引（**1.6×/4.6×/13.6×**，逐字节等价）；第二轮**断面关联改网格分桶**：候选对 918 万→16.8 万、关联段 1.43→0.14 s（**×10.2**）、端到端 gcd −16% / dmx −26%，golden 逐单元格 0 差异。**尾巴「gcd 宽表逐 cell 写 → append」经实测评估为不值得**（宽表段 9.2→7.5 ms、占端到端 0.5%、端到端配对中位 −4.4 ms 属噪声）⇒ 保留原写法，候选 patch 留档 | 见 §八.1 / §8.8；`tests\selftest_sections.py` **85** 断言 |
 | 4.5 query `-Layer` 下推（P1） | **不采纳** | 计划自身结论即"不建议为纯性能做"；本轮无"只 dump 单层"需求 | — |
 | 5.1 拆 `ZwcHelper.cs` 巨石（P2） | **已做第一批（第二轮）** | `Json`（262 行）+ `PipeIo`（51 行）整体搬出，`ZwcHelper.cs` 4,371→4,100 行（diff = 0 insertions / 271 deletions，类体逐字节相等）；新增 `JsonTests` **132 断言**纳入 CI | 见 §八.3 |
 | 5.2 哈希配方三（四）处（P2） | **采纳** | `zwc.ps1` 三处合并为 `Get-HelperSha12`；client 新增 `hash` 子命令；`serve -Action status` 输出 `helperSha/clientSha/recipeMatch`，不一致 → `HASH_RECIPE_MISMATCH` | `recipeMatch:true`；新实现 40 次中位 **0.69 ms vs 2.15 ms**、sha 完全一致 |
 | 5.3 合并 build_sections 双脚本（P2） | **已做（第二轮）** | `section_lib.py`（1,138 行）单一实现 + 两个薄入口（376→42、414→47 行）；重复度 168 行→9 行；golden 逐单元格 0 差异（34,024 + 69,987 cell） | 见 §八.1 |
 | 5.4 编辑残留与死代码（P2） | **采纳（含扩展）** | `bindFailures` 重复行、`instanceError` 重复行、`ShowCmd` 重复 `return`；ZwcClient 退出码改结构化（不再全文搜子串）；daemon 的 ping/daemon-stop 改 `Json.Parse` 判顶层 `cmd`；`qa_yssd --block` 由死参数改为**真正生效**（默认行为不变）；硬编码 TEMP 回退改 `tempfile.gettempdir()` | 退出码 19 个假响应用例（含「`ok:true` + 文本含 BAD_DATA → **0**」，旧实现错判 3）；真机 `query -Text ping` 修复前返回 `cmd:"ping"`、修复后 `cmd:"query"` |
-| 5.5 prepare.py 模块化（P2） | **已做（第二轮）** | 2,090 行 → **368 行薄壳** + `prep_io`/`prep_yssd`/`prep_db`/`prep_model` 四模块；v1/v2 坐标映射/TOO_TALL/layer-prefix/字高字面量共 **54 行重复 → 24 行调用点 + 48 行单实现**；golden **21/21 全等**（stdout 字节/退出码/stderr/落盘 sha256） | 见 §八.4 |
+| 5.5 prepare.py 模块化（P2） | **已做（第二轮 + 尾巴）** | 2,090 行 → **368 行薄壳** + `prep_io`/`prep_yssd`/`prep_db`/`prep_model` 四模块；v1/v2 坐标映射/TOO_TALL/layer-prefix/字高字面量共 **54 行重复 → 24 行调用点 + 48 行单实现**；golden **21/21 全等**（stdout 字节/退出码/stderr/落盘 sha256）。**尾巴 `--compare-source`**：13 形态离线 golden（合成 DB+源表）+ 新测试 71 断言，并修掉两处真问题（见 §8.8） | 见 §八.4 / §8.8 |
 | 6.1 依赖声明（P3） | **采纳** | 新增 `requirements.txt`（`xlrd>=2.0`/`openpyxl>=3.0`/`ezdxf>=1.0`，可选 matplotlib）；build 脚本延迟导入 + 明确错误码 | CI 用它装依赖；缺库时报 `NO_OPENPYXL` + exit 2（原裸 traceback） |
 | 6.2 最小 CI（P3） | **采纳** | `.github/workflows/offline-ci.yml`：windows-latest + Python 3.9，跑 5 个离线入口（含 csc 编译的 `selftest_lisp.ps1`），**不跑任何在线 CAD 测试** | 五个入口本机全绿（见 §五）；CI 本身尚未在 GitHub 实跑（需首次 push，见 §七） |
 | 6.3 文档一致性（P3） | **采纳** | `tmp/real/SCHEMA-v2.md` 脱敏后入库为 `docs/section-model-v2.md`（站码/站名/本机库路径/截图名替换）；`tests/README` 悬空指针改指向该文件并说明 `tmp/` 不入库；4 张 png 变为被引用；`tests/audit/README` 的"快照未随仓库分发"一节本已自洽，未动 | fresh clone 不再有悬空引用；公开仓库不新增真实站点/本机路径 |
@@ -88,7 +88,7 @@
    - windows runner 控制台是 **cp1252**，`tests/selftest.py` 打印中文明细抛 `UnicodeEncodeError` ⇒ job 级 `PYTHONUTF8=1`/`PYTHONIOENCODING=utf-8` + 三个测试入口加 `reconfigure(encoding="utf-8", errors="replace")` 自保；
    - 顺手把 `setup-python` 从 3.9 改 3.11（3.9 已 EOL、镜像可能缺失），"支持 3.9"改由新增的 `tests/check_py39_syntax.py`（`ast.parse(feature_version=(3,9))` 校验 34 个 .py）把关。
    证据：`gh run view 41943999965`；本机也按 CI 同编码（`PYTHONIOENCODING=cp1252`、清空 `PYTHONPATH`）预演过全部步骤。
-4. **下一轮可做**（按建议顺序；**前四项已于第二轮完成，见 §八**）：~~5.3 合并 build_sections~~ → ~~4.4 空间索引~~ → ~~4.2 注入管道抽象~~ → ~~5.1 第一批（Json/PipeIo）~~ → 剩余：5.1 **第二批**（Com/Cad/State/Daemon/PipeIo 之外的类逐类搬移，每搬一类跑一次离线回归）、4.4 的「gcd 宽表逐 cell 写 → append」、5.5 的 `--compare-source` 端到端 golden（需真实 `.xls` 源表）、`DEFAULT_DB_PATH` 延迟求值。
+4. **下一轮可做**（按建议顺序；**前四项已于第二轮完成，见 §八**）：~~5.3 合并 build_sections~~ → ~~4.4 空间索引~~ → ~~4.2 注入管道抽象~~ → ~~5.1 第一批（Json/PipeIo）~~ → 剩余：`DEFAULT_DB_PATH` 延迟求值（按「先别改语义」保留导入期求值）；`docs/section-model-v2.md` 里 helper 侧对 `SOURCE_COMPARE_UNMATCHED` 的透传建议（未验证，非阻塞）。**已完成**：5.1 第二/三批（ZwcHelper 拆 24 个 .cs）、4.4 宽表 append（评估后决定不改）、5.5 `--compare-source` golden。
 5. **本机现场**：`bin\cache` 已从 140 目录/13.39 MB 收敛到 10 目录/1.76 MB；`%TEMP%\zwcad-cooperate` 里的 `g3.*`、`gtest*`、`contours.json`、`sections-src.json` 等是 **2026-11-04 M3-E6 试验遗留**，非本轮产物，可随时手工删除（不在仓库内）。
 
 ## 八、第二轮执行（2026-11-05，按 §七 建议开工）
@@ -101,7 +101,7 @@
 - **空间索引**：候选对 **9,182,928 → 168,353（1.8%）**；关联段 **1.43 s → 0.14 s（×10.2）**；端到端真实数据 gcd **1.84→1.55 s (−16%)**、dmx **2.58→1.92 s (−26%)**（剩余为 openpyxl 保存与 matplotlib 三图，未变）。桶尺寸自适应（断面线 240 m 网格 31×36；等高线 66.4 m 网格 111×129），并与暴力解**逐结果相等**（最近线段含 t、等距取低序号、0.5 m 成员集合、2,845 个交点、标签 304/304、点 2,897、块分配 2,896/未分配 42 全一致）。
 - **测试**：新增 `tests/selftest_sections.py`（**82 断言**，纯离线合成夹具，覆盖几何/网格等价/两入口逐格断言/`NO_INPUT`/`BAD_INPUT`×4/`NO_OPENPYXL`×2/缺 matplotlib 仍 exit 0），已接入 CI。
 - **唯一内部修复**（真实数据观测不到，由合成夹具捕获）：dmx「说明」表 `合计` 行原用 `len(secs)`，改为 `len(rows)`。
-- **未做**：4.4 里「gcd 宽表逐 cell 写 → append」（改写法会动产物字节，留待单独一批）。
+- **尾巴（已评估）**：4.4 里「gcd 宽表逐 cell 写 → append」在真实 304 断面数据上做过候选实现与逐格/样式/产物 sha256 等价验证（34,024 cell 差异 0），但收益仅 ≈0.1%（宽表段 9.2→7.5 ms，占端到端 0.5%，端到端配对中位 −4.4 ms 在噪声内）⇒ **判定不值得、保留原写法**（候选 patch 留档 `tmp/py-section2/wide-append.patch`，将来数据量级变化可直接套用）；顺带把宽表**整表逐格**断言补进 `tests\selftest_sections.py`（82→85）。
 
 ### 8.2 4.2 LISP 注入管道抽象：`LispScan.cs`
 - 新增 `scripts/helper/LispScan.cs`（304 行）：CMDACTIVE/LASTPROMPT 守卫 → ssget 过滤串 → 生成/写盘/`SendCommand` → 两阶段哨兵 → GBK 读回 → finally CMDECHO 还原 + 成功删档/失败 `*.orphan`，**五步唯一实现**；纯函数可离线测。
@@ -119,7 +119,7 @@
 - **重复映射合并**：v1 `build_model` 与 v2 `build_db_model` 的坐标映射/bbox（17+11 行）、`TOO_TALL`（7+5）、`--layer-prefix`（3+3）、字高字面量（4+2+2）共 **54 行重复 → 24 行调用点 + 48 行单实现**（`CoordMapper`/`measure_bbox`/`resolve_layer_prefix`/`append_too_tall_warning`）。
 - **等价性**：golden **21/21 全等**（stdout 原始字节、退出码、stderr、落盘 sha256；覆盖 two-col/yssd block1-2/`--drop-suspect`/`--no-axis --label-every`/`TOO_WIDE` 失败例/from-db 单+多序列 v2/反转夹具/`.xls`→xlrd/`--list-dates`/`--summary`/4 个负例），另 `28/28` 补充差分全等；机械证明「只搬不改」：69 个顶层节点逐字节相同，仅 `build_model`/`build_db_model` 按显式替换表改动。
 - 迁移中 golden 抓到并修掉 1 个回归（v1 水位线 y 依赖的 `ky` 在合并后丢失 → NameError）——**这正是先抓 golden 的价值**。
-- **未做**：`--compare-source`（DB vs 源 `.xls`）端到端 golden（仓库内无匹配真实源表，函数逐字搬移已由 verify_split 证明）；`DEFAULT_DB_PATH` 仍导入期求值（按"先别改语义"）。
+- **尾巴（已做，见 §8.8）**：`--compare-source` 的离线 golden（用**合成** sqlite DB + 合成 yssd 源表，13 种形态）+ 正式测试 `tests\selftest_compare_source.py`（71 断言），并修掉两处真问题（0 点比对照报一致 → 新增 `SOURCE_COMPARE_UNMATCHED`；`--drop-suspect` 与比对下标错位 → 比对改用删点前原始序列）。**未做**：`DEFAULT_DB_PATH` 仍导入期求值（按"先别改语义"）。
 
 ### 8.5 第二轮验证矩阵（合并提交前）
 
@@ -149,3 +149,45 @@
 - 自证：25/25 成员三文件**各出现且仅一次**、顺序为 baseline 子序列、成员体 **sha 相等**；`baseline − 搬出成员块 == 三文件体` 逐字节重建；全仓恰 4 个 `partial Commands` 声明；Lead 独立复核（自写**行深度感知**成员切分器，避免上一版把方法体局部变量误判成成员）→ missing/extra/跨文件重复/成员体差异全 none。
 - 非搬移偏差仅"文件装配层"：三个文件头重写（原头描述的是拆分后已不存在的全集）、using 按文件重分配、成员间空行 24→22（两个文件边界各少 1）。
 - 验证：csc **24 源 0 error / 3 warning（均为基线）**；`selftest_lisp` 6 套 644 ALL PASS；python 五套（34 文件 3.9 语法门 / 41 / 89·0·3 / 82 / checkers）不变；`run_m1` 10/0/2；真机只读冒烟在**用户当前打开的** 8,511 实体图上 `read -Mode geom`→`lisp-file-geom`、`read`/`query`→`lisp-file`、`doctor` ok，CMDECHO=1、CMDACTIVE=0、%TEMP% 残留 0。
+
+### 8.8 数据侧尾巴收口（4.4 宽表 append 评估 / 5.5 `--compare-source` golden + 两处修复）
+
+**(a) 4.4 尾巴：gcd 宽表「逐 cell 写 → openpyxl append」= 评估后不改**
+先在真实 304 断面 / 2,938 块数据上做了候选实现（append 的 dict 形式，只创建有值 cell）并验证等价：
+4 sheet / **34,024 cell 值差异 0**、**全格样式指纹差异 0**、列宽与 freeze_panes 全同、CSV 与 3 张 PNG
+**sha256 逐字节相同**。但计时显示它**不是热点**：宽表写出阶段 **9.16 → 7.47 ms（−18%）**，只占端到端
+**0.5%**；端到端 13 对交替配对 **1.476 → 1.414 s（配对中位 −4.4 ms / −0.3%，7/13 胜）**，与噪声不可区分。
+真正耗时是 `openpyxl` 首次 import（325–372 ms）、写全本+save（≈190 ms，其中 save 139.5 ms）、
+`matplotlib.pyplot` import（474–590 ms）+ 3 张 PNG。
+⇒ **判定不值得、保留原写法**（候选 patch 留档 `tmp/py-section2/wide-append.patch`）；顺带补了宽表
+**整表逐格**数值/顺序断言（`tests/selftest_sections.py` 82 → **85**，含稀疏断面留空规则）。
+
+**(b) 5.5 尾巴：`--compare-source` 的离线 golden + 正式测试**
+仓库里没有匹配的真实源表，改用**合成夹具**：照 `hydro_data.db` 的真实 schema 建 sqlite（虚构站码
+`99000001`）+ 合成 yssd 多列块 xlsx（表头 ×3 组、块元信息、左/右岸标签行、刻意截断高程 `"88"`/`"75"`、
+0.03 偏差、起点距不符、源表缺批次）。13 种形态抓 golden（stdout 原始字节 / 退出码 / stderr / 落盘 sha256）：
+12/13 逐字节全等，唯一差异是下面修掉的真 bug。新增 `tests/selftest_compare_source.py`（**71 断言**、
+纯离线、自建夹具、py3.9 语法门 35 files 覆盖），已接入 CI（工作流 **12 步**）。
+
+**(c) 顺带修掉两个真问题（都是"静默错数据/误报"级别）**
+1. **0 点比对却报「两者一致」**：所选施测日期在源表里没有对应块时（`byDate[].matched=false`、`compared=0`），
+   旧行为输出 `SOURCE_COMPARE_SAME` +「比对 0 点，0 处不同（两者一致）」——下游只看 code 会把"源表缺日期"
+   当成"DB 与源表一致"。修法：`differingCount>0`→`DIFF`（文案不动）、`==0 且 unmatched>0`→**新码
+   `SOURCE_COMPARE_UNMATCHED`**、否则 `SAME`（文案不动）。`compare_db_vs_excel()` 数据层一行未改。
+2. **`--drop-suspect` 与 `--compare-source` 下标错位**：旧实现把"已被 drop 过的 `series[].points`"与源表条目
+   按下标 1:1 对齐 ⇒ 删点后下标前移，`sourceCompare` 的 compared/same/differingCount/byDate 全部失真（静默错数据）。
+   修法：只在「`--drop-suspect` + `--compare-source`」组合下，比对侧用 `_db_compare_series()` **重取删点前原始序列**
+   （普通路径零额外开销、模型输出不变）。语义澄清：**比对=数据审计（以原始数据为准），模型=成图数据**。
+   复现证据：合成用例 `2021-03-15`（2 个 >40 m 离群点、源表与 DB 原始值逐点一致）修前 `4/4/1/3`（且
+   `offsetMismatch=3`，伪差异如 `vert=2: dbOffset=20 vs xlsOffset=5`）→ 修后 **6/6/6/0**，与不带 `--drop-suspect`
+   的 `sourceCompare` 深度相等；多序列 `--last 5` 从 `28/23/16/7` → **30/25/21/4**（不删点正确值）。
+   既有 13 形态 golden **13/13 逐字节不变**；`15-drop-nocompare`（只 drop 的模型输出）与
+   `16-nodrop-compare`（正常路径）逐字节不变。
+
+**已知限制（记录，不做猜测性修复）**：源表表头只有「1月19日」这类**月-日**，DB 日期 `YYYY-MM-DD` 归一到
+`M-D` 匹配；同一份源表含跨年同月日、或一次比对选中不同年份的同月日批次时，会命中源表第一个同月日块
+（其余无法区分），相关结论需人工复核（源表信息不足的固有歧义）。
+
+**验证**：`selftest_compare_source` 71 / `selftest_sections` 85 / `selftest` 41 / `audit` 89·0·3 /
+`checkers` PASS / `py39` 35 files；`run_m1 -DryRunOnly` **无 CAD 时 8·0·4**（两个 CAD 步骤按设计 SKIP，
+CI 一直是这个口径；有 CAD 时 10·0·2）；C# 6 套 644 不变。
