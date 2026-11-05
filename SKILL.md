@@ -102,6 +102,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
   - `--from-db <站码> [--date/--years/--last N]`：直连 `hydro_data.db` 的 `cross_section`（162 站 / 5575 次施测 / 1965–2025）。库路径：`--db` 显式 > 环境变量 `HYDRO_DB`（**调用期读取**；显式 `--db ""` 仍是 `NO_DB`，不回退 env）。
   - `--data <xlsx>`（两列起点距/高程）或 `--profile yssd`（"实测大断面成果表"多列块格式，支持 `.xls`，带数据质量闸门）。
   - `--compare-source --from-excel <源表>`：DB 与源 `.xls` **逐点比对** → `sourceCompare{dbPoints,compared,same,differingCount,tolerance,byDate[],differing[]}`，告警码 `SOURCE_COMPARE_DIFF` / `SAME` / **`UNMATCHED`**（所选日期源表无对应施测块）；比对口径=**删点前**的 DB 原始序列，与 `--drop-suspect` 互不影响；离线自测 `tests\selftest_compare_source.py`。
+- `scripts\section\build_sections_profiles.py`：**从几何 dump 生成"起点距-高程"断面表**（断面线 `dmx` LINE + 高程点 `GCD` 块插入点 Z + 桩号 `KZD` TEXT；左岸=面向下游左手侧，下游方向取中心线局部切向）。中心线自动识别（图层名含"初设干渠治理段"、顶点最多的多段线），**不再硬编码分段/中心线句柄**；输入输出走环境变量 `ZWC_GEOM` / `ZWC_CACHE` / `ZWC_TAG` / `ZWC_UNIT_NOTE`，输出 `output\断面数据-<TAG>-起点距高程.xlsx/.csv` + 断面预览 PNG。同目录 `build_sections_from_dmx.py`（等高线求交）/ `build_sections_gcd.py`（GCD 块 Z）为两条专用捷径。
 - `scripts\audit\audit.py` + `run.ps1`：只读图纸体检（17 条规则，见 `reference/audit-rules.md`），吃 `info`/`read` 的 JSON，出 MD/JSON 报告，`-ExitCode` 可当门禁。
 
 ## 铁律（违反会伤到用户）
