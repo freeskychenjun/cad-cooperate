@@ -30,6 +30,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -728,6 +730,115 @@ def t_pure_function() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 7b) DEFAULT_DB_PATH：HYDRO_DB 必须**调用期**求值（导入期快照会让 import 后设的 env 失效）
+# ---------------------------------------------------------------------------
+def t_default_db_path(fx: Dict[str, str]) -> None:
+    if SEC not in sys.path:
+        sys.path.insert(0, SEC)
+    import prepare  # noqa: E402
+    import prep_db  # noqa: E402
+
+    old_env = os.environ.get("HYDRO_DB")
+    other_db = os.path.join(fx["base"], "another.db")
+    missing_db = os.path.join(fx["base"], "does-not-exist.db")
+    try:
+        # 1) 先 import（上面两行）再设 env：三条访问路径都必须立即反映新值。
+        #    旧实现把 os.environ.get 放在模块顶层，import 时就快照成 "" 了，做不到这点。
+        os.environ["HYDRO_DB"] = fx["db"]
+        check("DEFAULT_DB_PATH：import 之后才设 HYDRO_DB，prepare.default_db_path() 立即生效",
+              prepare.default_db_path() == fx["db"], "got=%r" % (prepare.default_db_path(),))
+        check("DEFAULT_DB_PATH：prep_db.DEFAULT_DB_PATH（PEP 562 兼容访问）同样立即生效",
+              prep_db.DEFAULT_DB_PATH == fx["db"], "got=%r" % (prep_db.DEFAULT_DB_PATH,))
+        check("DEFAULT_DB_PATH：prepare.DEFAULT_DB_PATH（委托 prep_db）同样立即生效",
+              prepare.DEFAULT_DB_PATH == fx["db"], "got=%r" % (prepare.DEFAULT_DB_PATH,))
+
+        # 2) 再改一次 -> 每次访问都重新读 env（不是首次读取后缓存）
+        os.environ["HYDRO_DB"] = other_db
+        check("DEFAULT_DB_PATH：再次改 env 后再访问仍是新值（调用期读取，非缓存）",
+              prepare.default_db_path() == other_db
+              and prep_db.DEFAULT_DB_PATH == other_db
+              and prepare.DEFAULT_DB_PATH == other_db,
+              "got=%r/%r" % (prepare.default_db_path(), prep_db.DEFAULT_DB_PATH))
+
+        # 3) argparse 定义期不再快照 env：即使 env 有值，--db 默认仍是 None
+        os.environ["HYDRO_DB"] = fx["db"]
+        ns = prepare.build_arg_parser().parse_args(
+            ["--from-db", STATION, "--out", os.path.join(TMP, "x.json")])
+        check("DEFAULT_DB_PATH：argparse --db 默认 None（定义期不再快照 env）",
+              ns.db is None, "got=%r" % (ns.db,))
+
+        # 4) 端到端（进程内）：import prepare 之后才设 env，main() 仍能生效（旧实现 -> NO_DB）
+        out_path = fresh("env-after-import")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = prepare.main(["--from-db", STATION, "--list-dates", "--out", out_path])
+        payload = out_json(buf.getvalue().encode("ascii", "replace"))
+        check("DEFAULT_DB_PATH：import 后才设 env + 进程内 main() 用 env 成功"
+              "（旧实现此处会 NO_DB）",
+              rc == 0 and payload.get("ok") is True and payload.get("count") == 5
+              and os.path.isfile(out_path),
+              "rc=%r ok=%r count=%r" % (rc, payload.get("ok"), payload.get("count")))
+
+        # 5) 优先级：显式 --db > env（用不存在的显式路径报错，证明用的是显式值）
+        code, so, _se = run(["--from-db", STATION, "--db", missing_db, "--date", D_B,
+                             "--out", fresh("prio-explicit")])
+        payload = out_json(so)
+        err = payload.get("error") or {}
+        check("DEFAULT_DB_PATH：显式 --db 优先于 env（显式不存在路径 -> NO_DB 数据库文件不存在）",
+              code == 2 and err.get("code") == "NO_DB"
+              and "数据库文件不存在" in err.get("message", ""),
+              "rc=%d err=%r" % (code, err))
+
+        # 6) 显式 --db "" 且 env 有值：仍是 NO_DB（is not None 判定，不回退 env）
+        code, so, _se = run(["--from-db", STATION, "--db", "", "--date", D_B,
+                             "--out", fresh("prio-empty")])
+        payload = out_json(so)
+        err = payload.get("error") or {}
+        check("DEFAULT_DB_PATH：显式 --db \"\" 且 env 有值 -> 仍是 NO_DB（不回退 env）",
+              code == 2 and err.get("code") == "NO_DB"
+              and "未指定数据库路径" in err.get("message", ""),
+              "rc=%d err=%r" % (code, err))
+
+        # 7) env 缺省/空串：default_db_path() 返回 ""，且 CLI 仍是原来的 NO_DB 文案/退出码
+        os.environ.pop("HYDRO_DB", None)
+        check("DEFAULT_DB_PATH：env 未设时 default_db_path() == \"\"",
+              prepare.default_db_path() == "" and prep_db.DEFAULT_DB_PATH == "",
+              "got=%r" % (prepare.default_db_path(),))
+        os.environ["HYDRO_DB"] = ""
+        check("DEFAULT_DB_PATH：env 设为空串时视同未设（\"\"）",
+              prepare.default_db_path() == "", "got=%r" % (prepare.default_db_path(),))
+        os.environ.pop("HYDRO_DB", None)
+        out_missing = fresh("nodbenv")
+        code, so, _se = run(["--from-db", STATION, "--date", D_B, "--out", out_missing])
+        payload = out_json(so)
+        err = payload.get("error") or {}
+        check("DEFAULT_DB_PATH：env 空 + 无 --db -> NO_DB 文案/退出码不变且不产文件",
+              code == 2 and err.get("code") == "NO_DB"
+              and "未指定数据库路径" in err.get("message", "")
+              and not os.path.exists(out_missing),
+              "rc=%d err=%r exists=%s" % (code, err, os.path.exists(out_missing)))
+
+        # 8) 显式 --db "" 且 env 也空 -> 仍是 NO_DB
+        code, so, _se = run(["--from-db", STATION, "--db", "", "--date", D_B,
+                             "--out", fresh("prio-empty2")])
+        payload = out_json(so)
+        err = payload.get("error") or {}
+        check("DEFAULT_DB_PATH：显式 --db \"\" 且 env 为空 -> NO_DB",
+              code == 2 and err.get("code") == "NO_DB", "rc=%d err=%r" % (code, err))
+
+        # 9) `from prep_db import DEFAULT_DB_PATH` 仍可用（PEP 562），取的是 import 那一刻的值
+        os.environ["HYDRO_DB"] = fx["db"]
+        from prep_db import DEFAULT_DB_PATH as compat_db_path  # noqa: E402
+        check("DEFAULT_DB_PATH：`from prep_db import DEFAULT_DB_PATH` 兼容可用",
+              compat_db_path == fx["db"], "got=%r" % (compat_db_path,))
+    finally:
+        if old_env is None:
+            os.environ.pop("HYDRO_DB", None)
+        else:
+            os.environ["HYDRO_DB"] = old_env
+
+
+# ---------------------------------------------------------------------------
 # 8) 协议：确定性 / 落盘编码
 # ---------------------------------------------------------------------------
 def t_protocol(fx: Dict[str, str]) -> None:
@@ -785,6 +896,7 @@ def main() -> int:
     t_drop_suspect(fx)
     t_negative(fx)
     t_pure_function()
+    t_default_db_path(fx)
     t_protocol(fx)
 
     width = max(len(n) for n, _, _ in RESULTS) if RESULTS else 10

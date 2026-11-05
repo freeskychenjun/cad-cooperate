@@ -104,11 +104,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 # ----------------------------------------------------------------------------- 依赖（拆分后从各模块导入）
 # 这里显式列出名字（不用 `from prep_io import *`）：
 #   1) prepare.py 仍是 CLI 入口；2) qa_yssd.py 里的 `import prepare` + prepare.xxx 仍可用。
-from prep_db import (DB_WATER_LABEL, DEFAULT_DB_PATH, SCHEMA_MODEL_V2, SERIES_PALETTE,
+from prep_db import (DB_WATER_LABEL, SCHEMA_MODEL_V2, SERIES_PALETTE,
                      _series_id, _series_stats, _series_summary, build_db_model,
                      compare_db_vs_excel, db_fetch_series, db_list_dates,
-                     db_station_info, db_water_level, open_db, parse_years,
-                     select_db_dates)
+                     db_station_info, db_water_level, default_db_path, open_db,
+                     parse_years, select_db_dates)
 from prep_io import (ELEV_ALIASES, OFFSET_ALIASES, SectionError, _WARNED, _find_header_row,
                      _header_matches, _is_blank, _load_rows_openpyxl, _load_rows_xlrd,
                      _match_alias, _norm_header, _soft_number, _to_number, load_rows,
@@ -125,6 +125,17 @@ from prep_yssd import (DUPLICATE_OFFSET_TOL, ELEV_TRUNC_RE, PROFILE_AUTO,
                        _elev_looks_reliable, _norm_date_key, assess_data_quality,
                        build_yssd_model, detect_yssd_profile, entries_to_points,
                        find_yssd_header, parse_yssd_blocks, select_yssd_block)
+
+
+def __getattr__(name: str) -> Any:
+    """PEP 562：`prepare.DEFAULT_DB_PATH` 兼容访问 —— 委托 prep_db，**调用期**读 env。
+
+    拆分前的 `DEFAULT_DB_PATH` 是导入期快照；现在从 prep_db 的 import 清单里去掉该名字，
+    需要用旧名字的脚本仍可 `prepare.DEFAULT_DB_PATH`，但拿到的是**访问那一刻**的值。
+    """
+    if name == "DEFAULT_DB_PATH":
+        return default_db_path()
+    raise AttributeError(name)
 
 
 # ----------------------------------------------------------------------------- 输出
@@ -151,7 +162,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     # ---- 数据库（schema v2 多序列）
     p.add_argument("--from-db", dest="from_db", default=None, metavar="STATION",
                    help="从 hydro_data.db 的 cross_section 出断面（站码，如 <站码>）")
-    p.add_argument("--db", default=DEFAULT_DB_PATH, help="hydro_data.db 路径（默认取环境变量 HYDRO_DB）")
+    p.add_argument("--db", default=None,
+                   help="hydro_data.db 路径（默认取环境变量 HYDRO_DB）")
     p.add_argument("--date", default=None,
                    help="选施测日期：DB 用 2025-01-19 / 2025；yssd 用 9-18 / 9月18日（选源表块）")
     p.add_argument("--years", default=None,
@@ -323,6 +335,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
     try:
+        # --db 的默认值不再在 argparse 定义期快照 env（argparse 默认 None）：这里统一解析一次。
+        # 必须用 `is not None` 判定 —— 显式 `--db ""` 的旧行为是 NO_DB，不能被当成「回退 env」。
+        args.db = args.db if args.db is not None else default_db_path()
         args.origin_xy = parse_origin(args.origin)
         water_levels = parse_water(args.water)
         if float(args.h_scale) <= 0 or float(args.v_scale) <= 0:

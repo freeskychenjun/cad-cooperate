@@ -7,7 +7,8 @@
 DB vs 源 .xls 逐点比对、v1 --summary 用的 _series_summary。
 
 **纯搬移**：除 import/模块头与「坐标映射改调 prep_model 单一实现」外，函数体逐字来自 prepare.py。
-注意 DEFAULT_DB_PATH 仍是**导入期求值**（与拆分前一致，语义未改）。
+`DEFAULT_DB_PATH` 已改为**调用期求值**（`default_db_path()` + PEP 562 `__getattr__` 兼容访问）：
+旧实现在导入期快照 `HYDRO_DB`，导致「先 `import prepare` 再设环境变量」不生效。
 """
 
 from __future__ import annotations
@@ -26,8 +27,26 @@ from prep_yssd import (DUPLICATE_OFFSET_TOL, ELEV_TRUNC_RE, SUSPECT_OUT_OF_RANGE
                        _norm_date_key)
 
 # ----------------------------------------------------------------------------- 数据库（hydro_data.db）
-# 水情数据库路径不写进仓库：优先读环境变量 HYDRO_DB，或用 --db 显式指定
-DEFAULT_DB_PATH = os.environ.get("HYDRO_DB", "")
+# 水情数据库路径不写进仓库：优先读环境变量 HYDRO_DB，或用 --db 显式指定。
+# 注意 HYDRO_DB 必须**调用期**求值：导入期快照会让「import 之后才设置的环境变量」失效。
+
+
+def default_db_path() -> str:
+    """环境变量 HYDRO_DB 的**调用期**值（导入期求值会让 main 里才设的 env 失效）。"""
+    return os.environ.get("HYDRO_DB", "")
+
+
+def __getattr__(name: str) -> Any:
+    """PEP 562：保住 `prep_db.DEFAULT_DB_PATH`（含 `from prep_db import DEFAULT_DB_PATH`）兼容。
+
+    返回的是**取属性那一刻**的 env 值（不再是导入期快照），因此旧调用点无需改造；
+    其它名字照旧抛 AttributeError，不改变探测语义。
+    """
+    if name == "DEFAULT_DB_PATH":
+        return default_db_path()
+    raise AttributeError(name)
+
+
 DB_WATER_LABEL = "日均水位"
 # 序列配色（ZWCAD ACI）：1红 3绿 5蓝 2黄 4青 6品红，避开 7=白（黑底/打印不可见）
 SERIES_PALETTE: Tuple[int, ...] = (1, 3, 5, 2, 4, 6)
