@@ -31,7 +31,7 @@
 | 通道 | 修复前 | 修复后 |
 |---|---|---|
 | COM `Coordinates` | 按 (x,y) 二元组切 (x,y,z) 三元组 ⇒ 顶点错位（16 个“顶点”里一半是 `[0,x]`/`[y,0]`）、bbox 错 | ✅ 5 顶点等高线回 5 个顶点、坐标与 AutoCAD 原生一致 |
-| LISP `entnext` 走 VERTEX 子实体 | `nverts=1`、顶点全 0 | ❌ 进一步实测**不可用**：链会跨 SEQEND 串到下一条多段线（11 顶点 → 99 条 V 记录），且 ≈2 ms/顶点（14.2 万顶点 = 12.5 分钟） |
+| LISP `entnext` 走 VERTEX 子实体 | `nverts=1`、顶点全 0 | ❌ 进一步实测**不可用**：链会跨 SEQEND 串到下一条多段线（11 顶点 → 99 条 V 记录），且 ≈2 ms/顶点（串线后虚增到 14 万+，耗时 ≈12.5 分钟） |
 | 结论 | — | LISP dump 只给 `elevation`（assoc 10 z），顶点由 `LispGeom.FillPolylineVertices` 用 **COM 一次 `Coordinates` 调用**补齐（`polylineComFilled` 回显） |
 
 夹具验收（`tests/bench/fixtures/acad-oldpoly.dxf`，由 `tests/bench/make_acad2021_fixture.py` 生成，含 2 条老式 POLYLINE + 1 条 LWPOLYLINE + 2 个带属性块 + 1 个 TEXT）：
@@ -63,7 +63,7 @@ readPath=lisp-file-geom  polylineComFilled=2  wall≈0.4–4 s
 | 场景（8511 实体真实图） | 数值 |
 |---|---|
 | `status` / `info` | 81 ms / 318 ms |
-| `read -Mode geom` LISP 清单（含 8123 块属性） | dump 9.2 MB / 167,107 行，修复前 ≈12.5 分钟（已改为 COM 补齐顶点，见 §三） |
+| `read -Mode geom`（LISP 清单 + 388 条多段线 COM 补齐） | **19.5 s**、dump **1.49 MB**、JSON 4.75 MB、`polylineComFilled=388`（修复前因串线虚增到 9.2 MB / ≈12.5 分钟） |
 | `read -Mode geom` 纯 COM 全扫 8500 实体 | ≈115 s（8123 块属性全读到） |
 | `snapshot` / `diff` | ≈41 s（COM 指纹，8511 实体） |
 | 夹具 LISP 路径（6 实体） | 0.4–4 s |

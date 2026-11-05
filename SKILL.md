@@ -127,7 +127,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | AutoCAD 2007 | 冷启动约 **135 s**（实战靠"附着用户已开实例"规避）；`finish -Quit` 需 `-TimeoutSec 180`。 |
 | **AutoCAD 2021+（SECURELOAD）** | `SECURELOAD=1` 时 LISP 文件加载受管（官方覆盖 LSP/FAS/VLX/MNL）⇒ 未信任的 `%TEMP%` 目录会弹模态安全框。默认降级 COM（`LISP_TRUST_BLOCKED`）；`trust -Action addTemp` 后可走快路径。 |
 | **老式 2D/3D 多段线** | `AcadPolyline.Coordinates` 是 (x,y,z) **三元组**（LWPOLYLINE 才是二元组）；顶点由 COM 补齐，LISP dump 只给 `elevation`。 |
-| **大顶点数图纸** | 388 条等高线 / ≈14.2 万顶点的真实图：LISP geom dump 曾要 **≈12.5 分钟 / 9.2 MB**（已改为 COM 补齐，LISP 只出清单+属性）；纯 COM geom 全扫 8.5 k 实体 **≈115 s**，`snapshot/diff` **≈41 s**。任务前先看实体数与顶点规模，给足 `-TimeoutSec`。 |
+| **大顶点数图纸** | 388 条等高线 / **24,012 顶点**的真实图（端到端 `read -Mode geom` **19.5 s**、dump 1.49 MB、`polylineComFilled=388`）。注意历史坑：`entnext` 串线会把顶点虚增到 14 万+、dump 9.2 MB、耗时 ≈12.5 分钟——已改 COM 补齐。纯 COM geom 全扫 8.5 k 实体 **≈115 s**，`snapshot/diff` **≈41 s**；任务前先看实体数与顶点规模，给足 `-TimeoutSec`。 |
 | 表格/动态块 | COM 面缺 `AddTable`（v16）、动态块属性读写不可靠 ⇒ 表格类任务建议 LISP 原生命令兜底或标记为人工。 |
 | 性能测量 | 本机（用户 WPS 在线）空闲内存仅 2.4–3.3 GB，测量抖动 ±100–200 ms；报数字必须标环境，静默测量需过安静门禁。 |
 | chaos 覆盖 | 真实"用户正在拖拽命令中/模态框"无法从进程外注入（ZWCAD 2025 实测），只能靠 `-FaultInject busy` 验证告警路径。 |
@@ -142,7 +142,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | **`read` 36,558 实体地形图（ZWCAD 2025）** | `handles` **743 ms**（LISP 写文件快路径，曾 ≈9 分钟）|
 | **`query -Type text` 36,558 实体** | **425 ms / 命中 10,293**（中文正确）|
 | 单实体写复杂度 | **O(1)**（图内 0→624 实体，p50 195→334 ms）|
-| **AutoCAD 2021（8511 实体真实图）** | `status` **81 ms**、`info` **318 ms**、`read -Mode geom` LISP 清单+COM 补齐（夹具 6 实体 442 ms）、`snapshot/diff` **41 s**、全量 COM geom **115 s** |
+| **AutoCAD 2021（8511 实体真实图）** | `status` **81 ms**、`info` **318 ms**、`read -Mode geom`（LISP 清单 + 388 条多段线 COM 补齐）**19.5 s** / dump 1.49 MB / JSON 4.75 MB、夹具 6 实体 0.4–4 s、`snapshot/diff` **41 s**、全量 COM geom **115 s** |
 | 任务级（20 条真实任务基准） | 读/查 0.6–0.8 s、改图 2–12 s、断面 8–28 s |
 
 > 大图快路径：ZWCAD 2025 / AutoCAD 2007 **没有 LISP 变量桥**时，`read`/`query` 在实体数 >2000 会自动改走「LISP 写 `%TEMP%` 文本 + `__START__`/`__DONE__` 两阶段哨兵 + GBK 读回」，`readPath:"lisp-file"`（handles/summary）或 `"lisp-file-geom"`（geom，含坐标/顶点/半径），失败回退 COM 并 `LISP_FILE_FALLBACK`。脚本由 `LispTemplate` 生成并过 **ASCII / 括号配平 / 只读白名单** 三重校验后才注入；模板带 AutoLISP `*error*` 处理器，脚本中途报错也会把 `CMDECHO` 还原；注入超时不会删除可能仍在写的临时文件（改名 `*.orphan` 留证，超过 24 h 的孤儿在下次扫描时清理）。
