@@ -115,6 +115,8 @@ namespace ZwcHelper
         public bool FpChanged;   // set when the drawing changed outside this session before a write
         public bool PlanOnly;       // dry-run/plan: resolutions may fall back to any open drawing (no writes)
         public JMap LispMeta;         // M3-E5: timing/size of the LISP file scan when used
+        public bool ForceLispInject;  // -ForceLispInject: inject even when SECURELOAD says it may prompt
+        public bool TrustReported;    // LISP_TRUST_BLOCKED was already explained for this request
         public object CachedCad;       // per-request app cache so the body does not re-attach
         public object CachedDoc;        // resolved once per write command (Stability.RunWrite)
         public string CachedMatchedBy;

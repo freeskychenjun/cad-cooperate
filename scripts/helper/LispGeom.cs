@@ -31,6 +31,7 @@
 //   * an unfinished injection renames its temp files to *.orphan instead of deleting them (CAD may
 //     still be writing them) and every scan sweeps leftovers older than 24 h.
 
+using System;
 using System.Collections.Generic;
 
 namespace ZwcHelper
@@ -51,7 +52,7 @@ namespace ZwcHelper
 
             JMap runMeta;
             string phase;
-            LispScan.Result scan = LispScan.Run(doc, ctx, req, out runMeta, out phase);
+            LispScan.Result scan = LispGate.Run(doc, ctx, req, out runMeta, out phase);
 
             // parse callback: E6 rows + side records -> the entity maps the COM path would have produced
             List<object> entities = new List<object>();
@@ -109,11 +110,35 @@ namespace ZwcHelper
                         {
                             m.Add("closed", (rec.Flags.Value & 1) == 1);
                         }
+                        else if (aux == "A" && rec.Attributes != null)
+                        {
+                            List<object> atts = new List<object>();
+                            for (int ai2 = 0; ai2 < rec.Attributes.Count; ai2++)
+                            {
+                                LispAttribute a = rec.Attributes[ai2];
+                                JMap am = new JMap();
+                                am.Add("tag", a.Tag);
+                                am.Add("value", a.Value);
+                                am.Add("x", a.X);
+                                am.Add("y", a.Y);
+                                am.Add("z", a.Z);
+                                atts.Add(am);
+                            }
+                            m.Add("attributes", atts);
+                        }
                     }
                 }
                 entities.Add(m);
                 if (!byHandle.ContainsKey(rec.Handle)) { byHandle[rec.Handle] = m; order.Add(rec.Handle); }
             }
+
+            // Old-style 2D/3D polylines: their vertices are VERTEX sub-entities that the LISP dump
+            // cannot read reliably (entnext crosses SEQEND on AutoCAD 2021 - measured: an 11-vertex
+            // contour came back with 99 vertices) and reading them vertex-by-vertex took 12.5 minutes
+            // on one real contour drawing. AcadPolyline.Coordinates returns the whole (x,y,z) triple
+            // array in ONE COM call, so the few polyline entities are filled through COM here and the
+            // LISP dump keeps doing what it is good at (the entity inventory + block attributes).
+            int polyFilled = FillPolylineVertices(doc, ctx, byHandle, order);
 
             // shape the geometry fields the COM path would return, so downstream code is path-agnostic
             foreach (string h in order)
@@ -139,6 +164,10 @@ namespace ZwcHelper
                     }
                     m.Add("points", pts2);
                     if (v != null) m.Add("vertices", pts2);
+                    // Old-style POLYLINE: the E row only sees the main entity, whose one group-10 point
+                    // is (0,0,elevation). The real vertex count comes from the VERTEX sub-entity walk,
+                    // so nverts must follow the collected V records or the number contradicts the list.
+                    if (v != null) m.Add("nverts", v.Count);
                     if (!m.Has("closed")) m.Add("closed", false);
                 }
                 else if (type == "AcDbMText" && p2 != null)
@@ -154,8 +183,45 @@ namespace ZwcHelper
             result.Add("sentinelCount", scan.SentinelCount);
             LispScan.AddMeta(runMeta, scan);   // after the parse: parseMs/totalMs keep their meaning
             runMeta.Add("mode", "geom");
+            runMeta.Add("polylineComFilled", polyFilled);
             meta = runMeta;
             return result;
+        }
+
+        /// <summary>Fill vertices/elevation/closed of old-style polylines through COM (one
+        /// Coordinates call per entity, triples for AcDb2d/3dPolyline). Returns how many were filled.
+        /// Best effort: a failure leaves the LISP data as it is and never fails the read.</summary>
+        private static int FillPolylineVertices(object doc, Ctx ctx, Dictionary<string, JMap> byHandle, List<string> order)
+        {
+            int filled = 0;
+            int failed = 0;
+            for (int i = 0; i < order.Count; i++)
+            {
+                JMap m = byHandle[order[i]];
+                string type = m.Str("type", "");
+                if (type != "AcDb2dPolyline" && type != "AcDb3dPolyline") continue;
+                try
+                {
+                    object e = Com.EntityByHandle(doc, order[i]);
+                    if (e == null) { failed++; continue; }
+                    double[] flat = Com.Flat(Com.TryGet(e, "Coordinates"));
+                    List<object> pts = new List<object>();
+                    for (int k = 0; k + 1 < flat.Length; k += 3) pts.Add(new List<object> { flat[k], flat[k + 1] });
+                    if (pts.Count == 0) { failed++; continue; }
+                    m.Add("vertices", pts);
+                    m.Add("points", pts);
+                    m.Add("nverts", pts.Count);
+                    object elev = Com.TryGet(e, "Elevation");
+                    if (elev != null) m.Add("elevation", Com.Dbl(elev));
+                    object closed = Com.TryGet(e, "Closed");
+                    if (closed != null) m.Add("closed", Com.Bool(closed));
+                    filled++;
+                }
+                catch (Exception) { failed++; }
+            }
+            if (failed > 0)
+                ctx.Warn("POLYLINE_COM_FILL_INCOMPLETE", failed + " old-style polyline(s) could not be filled through COM; their vertices stay as dumped");
+            return filled;
         }
     }
 }

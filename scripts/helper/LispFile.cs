@@ -102,7 +102,7 @@ namespace ZwcHelper
 
             JMap runMeta;
             string phase;
-            LispScan.Result scan = LispScan.Run(doc, ctx, req, out runMeta, out phase);
+            LispScan.Result scan = LispGate.Run(doc, ctx, req, out runMeta, out phase);
 
             // parse callback: E5 four-field rows -> the entity maps the COM path would have produced
             int textCount;

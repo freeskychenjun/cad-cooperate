@@ -86,6 +86,7 @@ namespace ZwcHelper
 
             string readPath = "com";
             JMap lispMeta = null;
+            ctx.ForceLispInject = args.Bool("forceLispInject", false);   // see Trust.cs
             // M3-E5: for a large model-space query push the type filter down into ssget and read the
             // dump file instead of sweeping COM (the same 0.4 s LISP trick used by `read`). Layer and
             // -Text stay client-side so their exact matching semantics do not change.
@@ -135,7 +136,10 @@ namespace ZwcHelper
                 }
                 catch (ZwcError ze)
                 {
-                    ctx.Warn("LISP_FILE_FALLBACK", "LISP file query failed (" + ze.Code + ": " + ze.Message + "); falling back to COM");
+                    if (ze.Code == "LISP_TRUST_BLOCKED")
+                        ctx.Warn("LISP_TRUST_BLOCKED", "AutoCAD SECURELOAD would prompt for the LISP query fast path; this query used the slower COM sweep instead (fix: trust -Action addTemp)");
+                    else
+                        ctx.Warn("LISP_FILE_FALLBACK", "LISP file query failed (" + ze.Code + ": " + ze.Message + "); falling back to COM");
                 }
                 catch (Exception ex)
                 {

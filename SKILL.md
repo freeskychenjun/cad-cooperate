@@ -1,7 +1,7 @@
 ---
 name: zwcad-cooperate
 description: 在用户已经打开的中望CAD / AutoCAD 图纸里**实时**读写——agent 画图、改标注、批量改文字/图层、按图层或文字查询、出断面图（含历年套绘）、做图纸体检、导出统计，所有改动当场出现在用户眼前的绘图窗口里，默认不落盘、一步可撤销。当用户要求：在中望CAD/AutoCAD 里改图纸、在这张图上画断面/加标注/改文字、批量换图层、查图纸里有什么、图纸体检/校对、统计图纸工程量、把数据画进现有图纸、一边看着一边改图，或提到 zwcad、中望、CAD 协作、实时改图时使用。不适用：纯离线批量改 DWG 文件（不开 CAD 窗口，用 ezdxf/ODA 方案）、只看文件不碰 CAD 的场景。
-version: 0.9.0
+version: 0.10.0
 ---
 
 # zwcad-cooperate：agent 与人在 CAD 图纸里实时协作
@@ -12,7 +12,7 @@ version: 0.9.0
 
 ## 适用 / 不适用
 
-**适用**：在打开的中望CAD（2016 Classic / 2025）或 AutoCAD 2007 里改图、画图、查图、体检、统计；把 Excel/水文数据库数据画进现有图纸；批量改文字/图层/字高；断面图（单断面、多序列历年套绘）。
+**适用**：在打开的中望CAD（2016 Classic / 2025）或 AutoCAD（**2007 / 2021 实机验收通过**；其它版本靠动态 ProgID 发现，未逐个验证）里改图、画图、查图、体检、统计；把 Excel/水文数据库数据画进现有图纸；批量改文字/图层/字高；断面图（单断面、多序列历年套绘）。
 **不适用**：不打开 CAD、纯离线改文件（用 ezdxf / ODA）；Word/Excel/PPT（用 `wps-office-cooperate`）；只读报告不碰图纸。
 
 ## 入口（三选一，agent 默认用第一个）
@@ -26,7 +26,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 - **stdout 永远是一段 JSON**（顶层 `ok` 是唯一判据）；退出码只看**顶层 `ok` 与 `error.code`**：`0`=ok、`2`=命令失败、`3`=门禁类失败（`VERIFY_FAILED`/`BAD_DATA`/`TOO_WIDE`/`CMD_STATE_POLLUTED`/`SENDCMD_TOO_LONG`/`LISP_UNBALANCED`/`OPEN_FAILED`）、`4`=引擎/输入错误。**message/detail 里出现这些词不影响退出码**（旧实现靠全文搜子串，已废除）。
 - 离线/排障专用子命令（不开 CAD、不连 daemon）：`bin\ZwcClient.exe hash`（打印本机算出的 helper 源码哈希）、`bin\ZwcClient.exe --prune-cache [-Keep N]`、`bin\ZwcClient.exe --selftest-exitcode [sample.json]`（退出码判据单测入口）。
 - 中文、几何、`-Items` 大 JSON **一律走文件**（`-RequestFile`/`-Items <file>`），命令行只传 ASCII 短参数（PS 5.1 按 ANSI 读 .ps1、cmd 会吃掉 `^` `=` `%`）。
-- **产品选择**：`-App zwcad|autocad`（默认 zwcad）；**强烈建议显式 `-ProgId ZWCAD.Application.16` / `ZWCAD.Application.2025` / `AutoCAD.Application.17`**。本机无版本 ProgID `ZWCAD.Application` 会被"最后启动的产品"改写；只开一个产品时不带 `-ProgId` 也能按进程自动识别，两个产品同开则返回 `MULTI_PRODUCT`（不猜）。
+- **产品选择**：`-App zwcad|autocad`（默认 zwcad）。**AutoCAD 侧自动发现所有已安装版本**：注册表枚举 `AutoCAD.Application.NN[.M]` → CLSID → `LocalServer32`（64/32 双视图，2007 只注册在 WOW6432Node）→ 目录名反推标签（`...\AutoCAD 2021\acad.exe` = "AutoCAD 2021"），再与正在运行的进程匹配；因此双版本共存时 `-App autocad` **不给 ProgId 也能命中正在跑的那个**（2026-11-05 实测）。后缀 = ACADVER 去掉尾部 `.0`（2021=`.24`、2022=`.24.1`、2024=`.24.3`），`.24` 覆盖 2021–2024 一族。**无版本键 `AutoCAD.Application` 不可依赖**（本机 CurVer 被 2007 抢成 `.17`），只作最后附着候选；中望侧 `ZWCAD.Application` 仍会被"最后启动的产品"改写。显式 `-ProgId` 永远优先；两个不同产品同开返回 `MULTI_PRODUCT`（不猜）。
 
 ## 命令参考
 
@@ -41,6 +41,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | `show` | 把当前附着的 CAD 窗口显示/置前（用户第一反应"看不到窗口"时用） | 返回 `hwnd/visible/foreground` |
 | `finish` | 收尾：关本次开的文档、只退**自己起的**实例、移除托盘图标、还原标题 | `-Quit`（必须给才会退出实例）、`-SweepHidden`（清理隐藏自动化实例）、`-TimeoutSec` |
 | `serve` | daemon 生命周期与本地维护 | `-Action start\|status\|stop\|reset\|recover\|prune`；`status` 另回 `helperSha/clientSha/recipeMatch`（哈希配方双侧自检，不一致报 `HASH_RECIPE_MISMATCH`）；`prune` = **纯本地**清 `bin\cache`（保最近 10 个非空 + 当前 sha + 运行中目录，空目录必清，被占目录只报不删；幂等） |
+| `trust` | **AutoCAD SECURELOAD 门禁**：报告/一次性修好「LISP 快路径会弹安全对话框」的问题 | `-Action status`（默认）/`addTemp`/`removeTemp`。`addTemp` 把 `%TEMP%\zwcad-cooperate` 写进 `TRUSTEDPATHS`（之后注入不再弹窗）；返回 `trust{secureLoad,trustedPaths,tempDir,tempTrusted,canInject}`。详见 [docs/autocad-2021-acceptance.md](docs/autocad-2021-acceptance.md) |
 
 ### 用户可见提示（接管标记）
 
@@ -57,7 +58,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | 命令 | 说明 | 关键参数 / 返回 |
 |---|---|---|
 | `info` | 图纸概况：单位/比例/范围/图层/块/布局/计数 | `units{insunits,dimscale,ltscale}`、`extents`、`layers[]`、`counts{}` |
-| `read` | 实体读取，**三级**：`-Mode handles`（句柄/类型/图层，最快）/`summary`（默认，+bbox）/`geom`（+顶点/文字/半径） | `-Max`、`-Limit/-Cursor` 分页、`-Space`、`-Doc` |
+| `read` | 实体读取，**三级**：`-Mode handles`（句柄/类型/图层，最快）/`summary`（默认，+bbox）/`geom`（+顶点/文字/半径/块属性） | `-Max`、`-Limit/-Cursor` 分页、`-Space`、`-Doc`；`geom` 额外回 `vertices/points/nverts/elevation/closed`，块引用另回 `attributes[{tag,value,x,y,z}]` |
 | `query` | 过滤查询，只回命中的句柄与摘要 | `-Layer`、`-Type`、`-Text <regex>`、`-BBox`、`-Space`、`-XData "APP:VALUE"`、`-Limit/-Cursor`、`-Mode` |
 | `snapshot` | 实体指纹快照（落 `%TEMP%`，绝不写用户图目录） | `-Out <file>` |
 | `diff` | 与快照比："这一轮到底改了什么"（人改的也算） | `-Since last\|<file>` → `added/removed/changed[fields{before,after}]` |
@@ -111,6 +112,8 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 13. **开工前先问清关键约定**（图层语义 / 高程在哪 / 起点方向 / 编号规则），一次问清通常省掉一半时间；不要用"全图扫 + 反推"去猜用户意图——反推的结果经常需要返工。
 14. **绝对不要调用 `SelectionSet.Delete()`**：ZWCAD 2025 的 COM 把它实现成**删除选择集里的实体**（不是删选择集对象）。2026-11-04 实测：一句 `$ss.Delete()` 删掉了 3,850 个实体（304 断面线 + 2,938 高程块 + 608 文字），靠 `UNDO` 两步才救回。要按层筛选：LISP 用 `(ssget "X" (list (cons 8 layer)))`；COM 用 `Select(...)` 但**只读不删**（选择集留在会话里无副作用，不随图纸保存）。
 15. **对用户正在编辑的图纸只读**：任何 `SendCommand`/LISP 注入都可能改变命令状态、污染撤销栈甚至改图；需要注入类测试时，一律在**自己 launch 的空图/夹具图**上做，用户图只做 `read/query/info/status`。
+16. **AutoCAD 的 LISP 注入先过 SECURELOAD 门**：`SECURELOAD=1` 且 `%TEMP%\zwcad-cooperate` 不在 `TRUSTEDPATHS` 时，`(load ...)` 会弹「安全性 - 未签名的可执行文件」，**模态阻塞整个 CAD**（Documents 变空、所有 COM 挂起）。工具已内置：默认不注入→降级 COM 并报 `LISP_TRUST_BLOCKED`；`-ForceLispInject` 强推时由后台看门狗把对话框点成「不加载」。一次性修法 `trust -Action addTemp`（前提是用户点头，它会改 CAD 配置）。
+17. **老式 POLYLINE 的顶点只能用 COM 取**：`(entnext)` 走 VERTEX 子实体会跨过 SEQEND 继续串到下一条多段线（实测 11 顶点的等高线被读成 99 个），而且慢（每顶点≈2 ms）。工具已改为：LISP dump 只给高程，顶点由 `LispGeom.FillPolylineVertices` 用 `AcadPolyline.Coordinates`（一次调用回全部三元组）补齐。
 
 ## 能力边界（已知限制，别承诺做不到的事）
 
@@ -122,6 +125,9 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | 中望 2025 | **没有 LISP 变量桥**（`Get/SetLispVariable`、`EvaluateLispExpression` 都 `DISP_E_UNKNOWNNAME`）⇒ 读侧只能 COM，比 Classic 慢 3–5 倍。 |
 | Classic 16 | 所有实体都不实现 `GetBoundingBox` ⇒ `read -Mode summary` 的 bbox 覆盖约 97%，其余记 `BBOX_UNAVAILABLE_FOR_TYPE`。 |
 | AutoCAD 2007 | 冷启动约 **135 s**（实战靠"附着用户已开实例"规避）；`finish -Quit` 需 `-TimeoutSec 180`。 |
+| **AutoCAD 2021+（SECURELOAD）** | `SECURELOAD=1` 时 LISP 文件加载受管（官方覆盖 LSP/FAS/VLX/MNL）⇒ 未信任的 `%TEMP%` 目录会弹模态安全框。默认降级 COM（`LISP_TRUST_BLOCKED`）；`trust -Action addTemp` 后可走快路径。 |
+| **老式 2D/3D 多段线** | `AcadPolyline.Coordinates` 是 (x,y,z) **三元组**（LWPOLYLINE 才是二元组）；顶点由 COM 补齐，LISP dump 只给 `elevation`。 |
+| **大顶点数图纸** | 388 条等高线 / ≈14.2 万顶点的真实图：LISP geom dump 曾要 **≈12.5 分钟 / 9.2 MB**（已改为 COM 补齐，LISP 只出清单+属性）；纯 COM geom 全扫 8.5 k 实体 **≈115 s**，`snapshot/diff` **≈41 s**。任务前先看实体数与顶点规模，给足 `-TimeoutSec`。 |
 | 表格/动态块 | COM 面缺 `AddTable`（v16）、动态块属性读写不可靠 ⇒ 表格类任务建议 LISP 原生命令兜底或标记为人工。 |
 | 性能测量 | 本机（用户 WPS 在线）空闲内存仅 2.4–3.3 GB，测量抖动 ±100–200 ms；报数字必须标环境，静默测量需过安静门禁。 |
 | chaos 覆盖 | 真实"用户正在拖拽命令中/模态框"无法从进程外注入（ZWCAD 2025 实测），只能靠 `-FaultInject busy` 验证告警路径。 |
@@ -136,6 +142,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | **`read` 36,558 实体地形图（ZWCAD 2025）** | `handles` **743 ms**（LISP 写文件快路径，曾 ≈9 分钟）|
 | **`query -Type text` 36,558 实体** | **425 ms / 命中 10,293**（中文正确）|
 | 单实体写复杂度 | **O(1)**（图内 0→624 实体，p50 195→334 ms）|
+| **AutoCAD 2021（8511 实体真实图）** | `status` **81 ms**、`info` **318 ms**、`read -Mode geom` LISP 清单+COM 补齐（夹具 6 实体 442 ms）、`snapshot/diff` **41 s**、全量 COM geom **115 s** |
 | 任务级（20 条真实任务基准） | 读/查 0.6–0.8 s、改图 2–12 s、断面 8–28 s |
 
 > 大图快路径：ZWCAD 2025 / AutoCAD 2007 **没有 LISP 变量桥**时，`read`/`query` 在实体数 >2000 会自动改走「LISP 写 `%TEMP%` 文本 + `__START__`/`__DONE__` 两阶段哨兵 + GBK 读回」，`readPath:"lisp-file"`（handles/summary）或 `"lisp-file-geom"`（geom，含坐标/顶点/半径），失败回退 COM 并 `LISP_FILE_FALLBACK`。脚本由 `LispTemplate` 生成并过 **ASCII / 括号配平 / 只读白名单** 三重校验后才注入；模板带 AutoLISP `*error*` 处理器，脚本中途报错也会把 `CMDECHO` 还原；注入超时不会删除可能仍在写的临时文件（改名 `*.orphan` 留证，超过 24 h 的孤儿在下次扫描时清理）。
@@ -165,6 +172,9 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | `LISP_NOT_STARTED` | 注入后脚本连第一行都没执行（命令态/管道问题，`__START__` 未出现） | CAD 里按 Esc 清场、确认无模态框后重试 |
 | `LISP_FILE_TIMEOUT` | 脚本已开始执行但 `__DONE__` 未出现（图太大/超时太短）；现场文件改名 `*.orphan` 留在 `%TEMP%\zwcad-cooperate` | 加大 `lispTimeoutSec`，或改用 COM 路径；别删用户 CAD 现场 |
 | `LISP_FILE_FALLBACK`（warning） | LISP 快路径失败已回退 COM 逐实体，大图会慢 1–2 个数量级 | 排 LISP 通道；大图优先修 LISP |
+| `LISP_TRUST_BLOCKED`（warning/error） | AutoCAD `SECURELOAD` 会让 `(load ...)` 弹安全框，工具**没有注入**、已降级 COM（若强推则弹窗被看门狗自动点成「不加载」） | 一次性修：`trust -Action addTemp`（改用户 CAD 配置，需用户同意）或让用户点一次「始终加载」；`-ForceLispInject` 可绕过预检 |
+| `POLYLINE_COM_FILL_INCOMPLETE`（warning） | 老式多段线的顶点 COM 补齐有失败项，这些实体的 `vertices` 仍是 dump 里的占位值 | 对这些句柄单独 `read -Scope handle:<h> -Mode geom` |
+| `TRUST_WRITE_FAILED` / `TRUST_NOT_APPLIED` | `trust -Action addTemp` 写 `TRUSTEDPATHS` 失败或回读未生效 | 手动在「选项 → 文件 → 受信任的位置」添加 `%TEMP%\zwcad-cooperate`；个别版本需重启 CAD |
 | `XDATA_READ_FALLBACK` | xdata 读走同机镜像 | 见能力边界 |
 | `TIMEOUT` / `CAD_HUNG` | 调用超时/CAD 疑似挂死 | `doctor -Deep` 确认；`serve -Action reset`（只杀本版本 daemon） |
 | `HASH_RECIPE_MISMATCH` | `serve -Action status` 自检发现 ps1 与 client 算出的 helper 源码哈希不一致（配方被只改了一边） | 对照 `hash` 子命令的 `key` 与 ps1 侧算法；只改一边会导致 client 连不上 daemon 且重复编译 |
@@ -184,9 +194,16 @@ bin\ZwcClient.exe undo -Token <token> -ProgId ZWCAD.Application.16
 bin\ZwcClient.exe finish -Quit -ProgId ZWCAD.Application.16
 
 # 回归（开发用，不随包分发）
-powershell -File tests\run_m1.ps1 -DryRunOnly -Python <完整 python 路径>   # 离线 10/0/2（含 lisp.wire）
+powershell -File tests\run_m1.ps1 -DryRunOnly -Python <完整 python 路径>   # 离线 8/0/4（含 lisp.wire）
 powershell -File tests\selftest_lisp.ps1                                  # C# 离线 6 套 644 断言（解析/模板/JSON/注入管道/核心模型/COM）
 powershell -File scripts\bench\run_bench.ps1 -Entry client -Product zwcad16 -Repeat 1   # 20 条任务基准
+
+# AutoCAD 2021 兼容（需要真 CAD；夹具专门覆盖老式 POLYLINE + 带属性块）
+$env:PYTHONPATH = "<repo>\tools\py-libs"; python tests\bench\make_acad2021_fixture.py
+bin\ZwcClient.exe open -Doc <repo>\tests\bench\fixtures\acad-oldpoly.dxf -NoHint -App autocad
+bin\ZwcClient.exe trust -Action status -App autocad                              # 看 SECURELOAD/TRUSTEDPATHS
+bin\ZwcClient.exe read -Mode geom -Doc acad-oldpoly.dxf -ForceLispFile -LispThreshold 1 -App autocad
+# 期望：readPath=lisp-file-geom、polylineComFilled=2、两条 POLYLINE 的 nverts=5/8、块属性 height=11.11/22.22
 
 # helper 编译缓存维护（源码每改一次会多一个 bin\cache\<sha12>\ 副本；实测 141 个目录→9 个、释放 12 MB）
 scripts\zwc.ps1 serve -Action prune
@@ -202,7 +219,7 @@ README.md                简介与安装
 reference\               深入文档：写原语契约 / 稳定性语义 / 体检规则 / 产品选择 / 性能
 scripts\zwc.ps1|.cmd     入口（兼容 + 管理命令）
 scripts\client\          原生客户端源码（编译成 bin\ZwcClient.exe）
-scripts\helper\          helper 源码（csc 按源码哈希编译缓存，24 个 .cs）。入口只剩 `ZwcHelper.cs`（`Program`，173 行）；`Core`（JMap/ZwcError/Ctx）/`Com`/`ComInterop`/`Procs`/`Cad`/`State`/`Cmd`/`Daemon` 各自独立文件；`Commands` 家族拆成**四个 partial**：`Commands`（共享参数 helper + 会话诊断）/`CommandsRead`（read）/`CommandsSection`（section·写图·rollback·undo）/`CommandsVerify`（回读 verify）；LISP 快路径：`LispTemplate`（模板+三重校验）/`LispScan`（注入管道单一实现）/`LispWire`（文本线解析）/`LispFile`·`LispGeom`（薄入口）；`Json`/`PipeIo`/`Core`/`Com`/`State`/`Cmd` 为可离线测的纯逻辑单元
+scripts\helper\          helper 源码（csc 按源码哈希编译缓存，26 个 .cs）。入口只剩 `ZwcHelper.cs`（`Program`，173 行）；`Core`（JMap/ZwcError/Ctx）/`Com`/`ComInterop`/`Procs`/`Cad`/`Cmd`/`Daemon` 各自独立文件；**`ProductRegistry`（AutoCAD 版本发现：ProgID→CLSID→LocalServer32→标签）/`Trust`（SECURELOAD 门禁 `LispTrust` + 弹窗看门狗 `DialogGuard` + 注入入口 `LispGate`）**；`Commands` 家族拆成**四个 partial**：`Commands`（共享参数 helper + 会话诊断）/`CommandsRead`（read）/`CommandsSection`（section·写图·rollback·undo）/`CommandsVerify`（回读 verify）；LISP 快路径：`LispTemplate`（模板+三重校验）/`LispScan`（注入管道单一实现）/`LispWire`（文本线解析）/`LispFile`·`LispGeom`（薄入口；`LispGeom` 还负责用 COM 补齐老式多段线顶点与块属性）；`Json`/`PipeIo`/`Core`/`Com`/`State`/`Cmd` 为可离线测的纯逻辑单元
 scripts\section\         数据侧：prepare.py（薄壳）+ prep_io/prep_yssd/prep_db/prep_model；build_sections_{from_dmx,gcd}.py（薄入口）+ section_lib.py 单一实现
 scripts\audit\           只读图纸体检
 requirements.txt         数据侧依赖（Python 3.9+；离线兜底库 tools\py-libs 不入库）

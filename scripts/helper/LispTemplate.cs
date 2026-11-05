@@ -95,7 +95,7 @@ namespace ZwcHelper
                 "progn", "setq", "while", "foreach", "if", "and", "or", "not", "car", "cdr",
                 "assoc", "nth", "length", "reverse", "cons", "list", "strcat", "rtos", "itoa",
                 "strlen", "substr", "chr", "princ", "getvar", "setvar", "ssget", "ssname",
-                "sslength", "entget", "open", "close", "write-line", "+", "-", "1+", "1-",
+                "sslength", "entget", "entnext", "open", "close", "write-line", "equal", "+", "-", "1+", "1-",
                 "=", "/=", "<", "<=", ">", ">=", "quote", "null", "defun"
             };
             if (src == null) return "empty script";
@@ -175,6 +175,19 @@ namespace ZwcHelper
                 "the generated LISP script failed the read-only safety gate: " + unsafeErr,
                 "only ssget/entget/assoc/open/write-line/close/... are allowed; never command/entdel/SelectionSets/Delete", null);
             File.WriteAllText(path, src, new ASCIIEncoding());   // no preamble => no BOM
+        }
+
+        /// <summary>Append the inline sanitizer used for text (CR/LF -> space, '|' -> '\|') for one
+        /// variable: LISP has no cheap string library here, so the loop is inlined per field.</summary>
+        private static void AppendEscape(StringBuilder sb, string srcVar, string dstVar)
+        {
+            sb.Append("(setq " + dstVar + " \"\" _zwc_j 1) ");
+            sb.Append("(while (<= _zwc_j (strlen " + srcVar + ")) ");
+            sb.Append("(setq _zwc_c (substr " + srcVar + " _zwc_j 1)) ");
+            sb.Append("(if (or (= _zwc_c (chr 13)) (= _zwc_c (chr 10))) (setq _zwc_c \" \")) ");
+            sb.Append("(if (= _zwc_c \"|\") (setq _zwc_c \"\\\\|\")) ");
+            sb.Append("(setq " + dstVar + " (strcat " + dstVar + " _zwc_c)) ");
+            sb.Append("(setq _zwc_j (1+ _zwc_j))) ");
         }
 
         internal static string PathForLisp(string path)
@@ -264,13 +277,18 @@ namespace ZwcHelper
 
             if (geom)
             {
+                // Old-style POLYLINE has exactly one (10 . point) group - (0,0,elevation) - and its real
+                // vertices are VERTEX sub-entities dumped further down. Emitting that placeholder as a
+                // vertex produced a bogus index 0 plus a duplicate index 0 from the walk.
+                sb.Append("(if (not (equal _zwc_t \"POLYLINE\")) (progn ");
                 sb.Append("(setq _zwc_ii 0) ");
                 sb.Append("(foreach _zwc_pp _zwc_vs ");
                 sb.Append("(setq _zwc_px (nth 0 _zwc_pp)) (if (= _zwc_px nil) (setq _zwc_px 0.0)) ");
                 sb.Append("(setq _zwc_py (nth 1 _zwc_pp)) (if (= _zwc_py nil) (setq _zwc_py 0.0)) ");
                 sb.Append("(setq _zwc_pz (nth 2 _zwc_pp)) (if (= _zwc_pz nil) (setq _zwc_pz 0.0)) ");
                 sb.Append("(write-line (strcat \"V|\" _zwc_h \"|\" (itoa _zwc_ii) \"|\" (rtos _zwc_px 2 6) \"|\" (rtos _zwc_py 2 6) \"|\" (rtos _zwc_pz 2 6)) _zwc_f) ");
-                sb.Append("(setq _zwc_ii (1+ _zwc_ii))) ");
+                sb.Append("(setq _zwc_ii (1+ _zwc_ii))) ");   // closes setq + foreach
+                sb.Append(")) ");                            // closes (progn ...) + (if (not ...) ...)
                 sb.Append("(setq _zwc_p2 (cdr (assoc 11 _zwc_d))) ");
                 sb.Append("(if (/= _zwc_p2 nil) (progn ");
                 sb.Append("(setq _zwc_p2x (nth 0 _zwc_p2)) (if (= _zwc_p2x nil) (setq _zwc_p2x 0.0)) ");
@@ -283,6 +301,33 @@ namespace ZwcHelper
                 sb.Append("(if (and (/= _zwc_hh nil) (or (= _zwc_t \"TEXT\") (= _zwc_t \"MTEXT\"))) (write-line (strcat \"H|\" _zwc_h \"|\" (rtos _zwc_hh 2 6)) _zwc_f)) ");
                 sb.Append("(if (or (= _zwc_t \"CIRCLE\") (= _zwc_t \"ARC\")) (if (/= _zwc_hh nil) (write-line (strcat \"R|\" _zwc_h \"|\" (rtos _zwc_hh 2 6)) _zwc_f))) ");
                 sb.Append("(if (or (= _zwc_t \"LWPOLYLINE\") (= _zwc_t \"POLYLINE\")) (progn (setq _zwc_fl (cdr (assoc 70 _zwc_d))) (if (/= _zwc_fl nil) (write-line (strcat \"CL|\" _zwc_h \"|\" (itoa _zwc_fl)) _zwc_f)))) ");
+                // Old-style 2D/3D POLYLINE: the group-10 sweep above only sees the placeholder
+                // (0,0,elevation) because the real vertices are separate VERTEX sub-entities. Walking
+                // them with (entnext) was measured WRONG on AutoCAD 2021: the chain crosses SEQEND and
+                // continues into the next polyline (an 11-vertex contour came back with 99 vertices),
+                // and it is slow (~2 ms per entget, 141k vertices took 12.5 minutes). So the LISP dump
+                // only reports the elevation here and LispGeom fills the vertices through COM
+                // (AcadPolyline.Coordinates returns the whole triple array in ONE call).
+                sb.Append("(setq _zwc_af (cdr (assoc 66 _zwc_d))) ");
+                sb.Append("(if (= _zwc_t \"POLYLINE\") (if (/= _zwc_z1 nil) (write-line (strcat \"ELEV|\" _zwc_h \"|\" (rtos _zwc_z1 2 6)) _zwc_f))) ");
+                // Block attributes are sub-entities too (ATTRIB ... SEQEND) and are gated the same way.
+                // Without them a drawing whose elevation labels live inside elevation-point blocks
+                // reads as "no text at all".
+                sb.Append("(if (and (= _zwc_t \"INSERT\") _zwc_af (= _zwc_af 1)) (progn ");
+                sb.Append("(setq _zwc_sub (entnext _zwc_e) _zwc_lim 0) ");
+                sb.Append("(while (and _zwc_sub (< _zwc_lim 200000) (setq _zwc_sd (entget _zwc_sub)) (equal (cdr (assoc 0 _zwc_sd)) \"ATTRIB\")) ");
+                sb.Append("(setq _zwc_lim (1+ _zwc_lim)) ");
+                sb.Append("(if (equal (cdr (assoc 0 _zwc_sd)) \"ATTRIB\") (progn ");
+                sb.Append("(setq _zwc_tag (cdr (assoc 2 _zwc_sd))) (if (= _zwc_tag nil) (setq _zwc_tag \"\")) ");
+                sb.Append("(setq _zwc_val (cdr (assoc 1 _zwc_sd))) (if (= _zwc_val nil) (setq _zwc_val \"\")) ");
+                AppendEscape(sb, "_zwc_tag", "_zwc_te");
+                AppendEscape(sb, "_zwc_val", "_zwc_ve");
+                sb.Append("(setq _zwc_sp (cdr (assoc 10 _zwc_sd))) ");
+                sb.Append("(setq _zwc_sx (nth 0 _zwc_sp)) (if (= _zwc_sx nil) (setq _zwc_sx 0.0)) ");
+                sb.Append("(setq _zwc_sy (nth 1 _zwc_sp)) (if (= _zwc_sy nil) (setq _zwc_sy 0.0)) ");
+                sb.Append("(setq _zwc_sz (nth 2 _zwc_sp)) (if (= _zwc_sz nil) (setq _zwc_sz 0.0)) ");
+                sb.Append("(write-line (strcat \"A|\" _zwc_h \"|\" _zwc_te \"|\" _zwc_ve \"|\" (rtos _zwc_sx 2 6) \"|\" (rtos _zwc_sy 2 6) \"|\" (rtos _zwc_sz 2 6)) _zwc_f))) ");
+                sb.Append("(setq _zwc_sub (entnext _zwc_sub))))) ");
             }
 
             sb.Append("(setq _zwc_cnt (1+ _zwc_cnt)) ");

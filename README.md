@@ -92,7 +92,7 @@ CAD 里的 AI 助手通常只有两条路：**离线改文件**（ezdxf/ODA：�
         ZwcHelper.exe（按 helper 源码哈希编译缓存，命中只花几次 stat）
                         │  COM 晚绑定 CreateObject / GetActiveObject
                         ▼
-         ZWCAD Classic 16 · ZWCAD 2025 · AutoCAD 2007（…可扩）
+         ZWCAD Classic 16 · ZWCAD 2025 · AutoCAD 2021 · AutoCAD 2007（注册表自动发现其它版本）
                         │
                         └─ 大图读侧快路径：LISP 写 %TEMP% 文本 + __DONE__ 哨兵 + GBK 读回
                          （目标产品没有 LISP 变量桥时自动启用，失败回退 COM）
@@ -108,7 +108,7 @@ CAD 里的 AI 助手通常只有两条路：**离线改文件**（ezdxf/ODA：�
 
 - Windows 10/11（本机实测）
 - .NET Framework 4.x（首次运行用系统 `csc.exe` 编译 client 与 helper，约 1–2 s，之后走哈希缓存）
-- 中望CAD 2016 Classic / 中望CAD 2025 专业版 / AutoCAD 2007（其它 AutoCAD 版本可显式给 ProgID）
+- 中望CAD 2016 Classic / 中望CAD 2025 专业版 / **AutoCAD 2021（实测）· AutoCAD 2007（实测）**；其它 AutoCAD 版本由注册表 `AutoCAD.Application.NN[.M]` 动态发现（未逐个复验）
 - Python 3.9+（**可选**，只有数据侧 `prepare.py` 与体检 `audit.py` 需要；依赖见 [`requirements.txt`](requirements.txt)：`xlrd>=2.0` / `openpyxl` / `ezdxf`）
 
 ### 拉下来跑第一条命令
@@ -142,7 +142,7 @@ cd zwcad-cooperate
 ```powershell
 .\scripts\zwc.cmd status -ProgId ZWCAD.Application.16        # 中望 Classic 16
 .\scripts\zwc.cmd status -ProgId ZWCAD.Application.2025      # 中望 2025
-.\scripts\zwc.cmd status -ProgId AutoCAD.Application.17      # AutoCAD 2007
+.\scripts\zwc.cmd status -ProgId AutoCAD.Application.24      # AutoCAD 2021（也可直接 -App autocad 自动识别）
 ```
 
 同一台机器装多个产品时，**无版本 ProgID `ZWCAD.Application` 会被"最后启动的产品"改写**，所以建议总是显式给 `-ProgId`。只开一个产品时不带也能自动识别；两个产品同开则返回 `MULTI_PRODUCT`——**不猜**。详见 [docs/progid-selection.md](docs/progid-selection.md)。
@@ -279,6 +279,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\audit\run.ps1 -ProgI
 | **中望 2025** | 无 LISP 变量桥（`Get/SetLispVariable`、`EvaluateLispExpression` 全 `DISP_E_UNKNOWNNAME`）⇒ 小图读侧只能 COM。 |
 | **中望 Classic 16** | 所有实体都不实现 `GetBoundingBox` ⇒ `read -Mode summary` 的包围盒覆盖约 97%，其余标 `BBOX_UNAVAILABLE_FOR_TYPE`。 |
 | **AutoCAD 2007** | 冷启动约 **135 s**（唯一硬伤；实战靠"附着用户已开实例"规避）；`finish -Quit` 需 `-TimeoutSec 180`。 |
+| **AutoCAD 2021+（SECURELOAD）** | `SECURELOAD=1` 时 LISP 文件加载（LSP/FAS/VLX/MNL）受管：未信任的 `%TEMP%` 目录会弹**模态**安全框并把 CAD 卡住。工具默认跳过注入、降级 COM 并告警 `LISP_TRUST_BLOCKED`；一次性修：`zwc.cmd trust -Action addTemp`（写 TRUSTEDPATHS）。详见 [docs/autocad-2021-acceptance.md](docs/autocad-2021-acceptance.md)。 |
+| **老式 2D/3D 多段线** | `AcadPolyline.Coordinates` 是 (x,y,z) 三元组（LWPOLYLINE 才是二元组）；顶点由 COM 一次调用补齐，LISP 只出 `elevation`。 |
 | **表格 / 动态块** | COM 面缺 `AddTable`（v16）、动态块属性读写不可靠 ⇒ 表类任务建议 LISP 原生命令兜底或标记为人工。 |
 | **只碰模型空间** | 锁定/冻结图层、外部参照内实体、只读图纸一律拒绝（`READONLY_*` / `XREF_SKIPPED`）。 |
 | **不做图上批注** | 批注/标记会进打印、工程量与外部参照 ⇒ 本项目明确不做"把注释画进图里"，改用托盘徽标与命令行横幅告知。 |
@@ -346,6 +348,7 @@ python tests\cross_app_diff.py --read a=tmp\compare\zwcad16\read.json --read b=t
 | [docs/M3-E2-writes.md](docs/M3-E2-writes.md) | `entity` 写原语契约：三趟校验、回滚、xdata 限制 |
 | [docs/M3-E3-stability.md](docs/M3-E3-stability.md) | 文档锁 / 忙态自愈 / 写前重锚定 / 挂死恢复的语义与实测 |
 | [docs/progid-selection.md](docs/progid-selection.md) | 多产品并存时如何选 ProgID（无版本 ProgID 会被改写） |
+| [docs/autocad-2021-acceptance.md](docs/autocad-2021-acceptance.md) | **AutoCAD 2021 实机验收**：版本动态发现 / SECURELOAD 弹窗与 `trust` / 老式多段线顶点 / 块属性 / 性能 |
 | [docs/audit-rules.md](docs/audit-rules.md) | 图纸体检 17 条规则的判据、阈值与误报边界 |
 | [docs/M3-E1-perf.md](docs/M3-E1-perf.md) | 性能底座：daemon / client / read 分级的改造与实测 |
 | [docs/M3-E5-lisp-file-canvas.md](docs/M3-E5-lisp-file-canvas.md) | LISP 写文件大图读侧、接管可见性与 UX 修复 |

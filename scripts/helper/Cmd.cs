@@ -38,7 +38,22 @@ namespace ZwcHelper
         {
             if (string.IsNullOrEmpty(prompt)) return false;
             if (prompt.IndexOf("Missing:", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            // our own artifact, not a waiting prompt: cancelling AutoCAD's SECURELOAD dialog leaves
+            // "; Error: File load canceled: <path>" / the Chinese equivalent in LASTPROMPT
+            if (IsCancelledLoad(prompt)) return false;
             return prompt.TrimEnd().EndsWith(">", StringComparison.Ordinal);
+        }
+
+        /// <summary>True when LASTPROMPT reports a cancelled LISP load (AutoCAD SECURELOAD dialog
+        /// answered with "Do Not Load"). Treated as clean: nothing is waiting for input.</summary>
+        public static bool IsCancelledLoad(string prompt)
+        {
+            if (string.IsNullOrEmpty(prompt)) return false;
+            if (prompt.IndexOf("\u6587\u4EF6\u52A0\u8F7D\u5DF2\u53D6\u6D88", StringComparison.Ordinal) >= 0) return true;   // file load canceled (zh)
+            if (prompt.IndexOf("\u52A0\u8F7D\u5DF2\u53D6\u6D88", StringComparison.Ordinal) >= 0) return true;               // load canceled (zh)
+            if (prompt.IndexOf("load canceled", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (prompt.IndexOf("load cancelled", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            return false;
         }
 
         public static void AssertClean(object doc, string what)

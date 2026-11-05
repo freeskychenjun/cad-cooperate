@@ -65,6 +65,10 @@ namespace ZwcHelper
             public string TimeoutLabel = "LISP scan";         // "<TimeoutLabel> did not finish within ..."
             public string BusyHint = "retry when the command prompt is idle";
             public string PollutedHint = "send ESC in CAD, or let the tool retry";
+            /// <summary>Optional caller-supplied probe polled inside the sentinel wait loop. Returning
+            /// true aborts the injection (used by LispGate to cancel an unexpected modal security
+            /// dialog). BCL-only delegate so this file stays unit-testable offline.</summary>
+            public Func<bool> AbortProbe;
         }
 
         /// <summary>Raw pipeline outcome. Parsing/mapping happen in the caller, which then calls
@@ -154,6 +158,17 @@ namespace ZwcHelper
             return n;
         }
 
+        /// <summary>True when LASTPROMPT reports a cancelled LISP load (AutoCAD SECURELOAD dialog
+        /// answered with "Do Not Load"). BCL-only so the offline suites can exercise it too.</summary>
+        internal static bool IsCancelledLoadPrompt(string prompt)
+        {
+            if (string.IsNullOrEmpty(prompt)) return false;
+            if (prompt.IndexOf("\u6587\u4EF6\u52A0\u8F7D\u5DF2\u53D6\u6D88", StringComparison.Ordinal) >= 0) return true;   // "file load canceled" (zh)
+            if (prompt.IndexOf("load canceled", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (prompt.IndexOf("load cancelled", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            return false;
+        }
+
         /// <summary>Decode the dump with the local ANSI code page (cp936/GBK): the LISP file writer uses
         /// it, so a UTF-8 read turns Chinese annotations into mojibake. Falls back to the platform
         /// default when the code page is not installed.</summary>
@@ -209,14 +224,22 @@ namespace ZwcHelper
                             req.BusyHint, null);
                     object lp = Com.Call(doc, "GetVariable", "LASTPROMPT");
                     string prompt = Com.Str(lp) ?? "";
-                    if (prompt.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0
-                        || prompt.IndexOf("undefined", StringComparison.OrdinalIgnoreCase) >= 0
-                        || prompt.IndexOf("错误", StringComparison.Ordinal) >= 0)
+                    // A cancelled SECURELOAD dialog (AutoCAD answered "Do Not Load") leaves
+                    // "; Error: File load canceled: <path>" in LASTPROMPT. That is our own artifact and
+                    // means the command line is idle - the next injection must not be refused because
+                    // of it (measured 2026-11-05: it disabled the fast path until a manual Esc).
+                    if (!IsCancelledLoadPrompt(prompt)
+                        && (prompt.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0
+                            || prompt.IndexOf("undefined", StringComparison.OrdinalIgnoreCase) >= 0
+                            || prompt.IndexOf("\u9519\u8BEF", StringComparison.Ordinal) >= 0))
                         throw new ZwcError("PROMPT_POLLUTED", "CAD command prompt is polluted: " + prompt,
                             req.PollutedHint, null);
                 }
                 catch (ZwcError) { throw; }
                 catch (Exception) { /* probes are best effort */ }
+
+                // ---------------- step 1b: nothing to do here; the AutoCAD SECURELOAD gate and its
+                // dialog watchdog live in Trust.cs (LispGate.Run) so this pipeline stays BCL-only.
 
                 // ---------------- step 2 + 3: generate the script (validated), write it, inject it
                 string src = LispTemplate.BuildDump(req.Geom, req.TextPath, req.DonePath, req.StartPath, req.SsFilter);
@@ -235,6 +258,7 @@ namespace ZwcHelper
                 long deadline = Math.Max(1000, req.TimeoutMs);
                 while (sw.ElapsedMilliseconds < deadline)
                 {
+                    if (req.AbortProbe != null && req.AbortProbe()) break;
                     if (!startSeen && File.Exists(req.StartPath)) startSeen = true;
                     if (File.Exists(req.DonePath))
                     {
@@ -251,6 +275,13 @@ namespace ZwcHelper
                         catch (Exception) { }
                     }
                     Thread.Sleep(25);
+                }
+                if (req.AbortProbe != null && req.AbortProbe() && !done)
+                {
+                    throw new ZwcError("LISP_ABORTED",
+                        "the injection was aborted by the caller (AutoCAD SECURELOAD prompt or another external condition)",
+                        "see LISP_TRUST_BLOCKED / the caller's warning for the one-time fix",
+                        null);
                 }
                 if (!done)
                 {
@@ -284,7 +315,7 @@ namespace ZwcHelper
             }
             finally
             {
-                // ---------------- cleanup: restore the user's CMDECHO, then delete or keep the evidence
+                // ---------------- cleanup: restore CMDECHO, keep or drop the evidence files
                 try { Commands.RestoreCmdEcho(doc, echoBefore); } catch (Exception) { }
                 if (readBack)
                 {

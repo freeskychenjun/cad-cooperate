@@ -1025,7 +1025,7 @@ namespace ZwcClient
         {
             "launch", "readonly", "nohint", "dryrun", "nocad", "noaxis", "nopointno", "noautoscale",
             "axis", "handles", "summary", "fast", "clear", "quit", "new", "deep", "keep", "help",
-            "slow", "keeponfail", "nolegend", "scalebar", "pointno", "strict", "continue", "plan", "noundomark", "reveal", "sweephidden", "noreveal", "tray", "geom", "forcelispfile"
+            "slow", "keeponfail", "nolegend", "scalebar", "pointno", "strict", "continue", "plan", "noundomark", "reveal", "sweephidden", "noreveal", "tray", "geom", "forcelispfile", "forcelispinject"
         };
 
         private static readonly string[] ValueSwitches = new string[]

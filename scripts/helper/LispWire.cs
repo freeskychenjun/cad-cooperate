@@ -37,6 +37,15 @@ using System.Text;
 
 namespace ZwcHelper
 {
+    /// <summary>One block attribute read through the LISP dump (A record). Kept BCL-only so the
+    /// parser stays testable without COM/JMap.</summary>
+    internal sealed class LispAttribute
+    {
+        public string Tag = "";
+        public string Value = "";
+        public double X, Y, Z;
+    }
+
     /// <summary>One parsed entity record plus the geometry side-records that belong to it.
     /// Vertices are kept as double[3]; the consumer decides how many components it needs.</summary>
     internal sealed class LispRecord
@@ -56,6 +65,7 @@ namespace ZwcHelper
         public double? Height;           // H record (assoc 40)
         public double? Radius;           // R record (assoc 40 on CIRCLE/ARC)
         public int? Flags;               // CL record (assoc 70)
+        public List<LispAttribute> Attributes;   // A records (block attributes, ATTRIB sub-entities)
         /// <summary>Aux kinds in the order they appeared in the dump ("V","P2","ELEV","H","R","CL").
         /// Consumers replay this order so the emitted JSON keeps the pre-refactor key order.</summary>
         public List<string> AuxOrder;
@@ -121,6 +131,7 @@ namespace ZwcHelper
                 case "H":
                 case "R":
                 case "CL":
+                case "A":
                     return true;
                 default:
                     return false;
@@ -206,6 +217,16 @@ namespace ZwcHelper
                     double fl; TryNum(p[2], out fl);
                     target.Flags = (int)fl;
                     MarkAux(target, "CL");
+                }
+                else if (string.Equals(kind, "A", StringComparison.Ordinal) && p.Length >= 7)
+                {
+                    LispAttribute att = new LispAttribute();
+                    att.Tag = UnescapeField(p[2]);
+                    att.Value = UnescapeField(p[3]);
+                    TryNum(p[4], out att.X); TryNum(p[5], out att.Y); TryNum(p[6], out att.Z);
+                    if (target.Attributes == null) target.Attributes = new List<LispAttribute>();
+                    target.Attributes.Add(att);
+                    MarkAux(target, "A");
                 }
             }
             return list;

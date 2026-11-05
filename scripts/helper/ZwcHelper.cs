@@ -69,6 +69,7 @@ namespace ZwcHelper
                     case "section": resultOut = Stability.RunWrite(req, argMap, ctx, "section", delegate { return Commands.SectionCmd(req, argMap, ctx); }); break;
                     case "undo": resultOut = Stability.RunWrite(req, argMap, ctx, "undo", delegate { return Commands.UndoCmd(req, argMap, ctx); }); break;
                     case "hint": resultOut = Commands.HintCmd(req, argMap, ctx); break;
+                    case "trust": resultOut = Commands.TrustCmd(req, argMap, ctx); break;
                     case "show": resultOut = Commands.ShowCmd(req, argMap, ctx); break;
                     case "lispgen": resultOut = Commands.LispGenCmd(req, argMap, ctx); break;
                     case "finish": resultOut = Commands.Finish(req, argMap, ctx); break;

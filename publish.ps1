@@ -37,6 +37,7 @@ $manifest = @(
     @{ src = 'docs\M3-E5-lisp-file-canvas.md';           dst = 'reference\lisp-file-canvas.md' }
     @{ src = 'docs\M3-E6-geometry-dump.md';              dst = 'reference\geometry-dump.md' }
     @{ src = 'docs\tray-badge.md';                       dst = 'reference\tray-badge.md' }
+    @{ src = 'docs\autocad-2021-acceptance.md';           dst = 'reference\autocad-2021.md' }
     @{ src = 'scripts\zwc.ps1';                           dst = 'scripts\zwc.ps1' }
     @{ src = 'scripts\zwc.cmd';                           dst = 'scripts\zwc.cmd' }
     @{ src = 'scripts\tray.ps1';                          dst = 'scripts\tray.ps1' }

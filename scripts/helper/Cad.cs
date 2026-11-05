@@ -80,10 +80,19 @@ namespace ZwcHelper
             }
             else if (k == "autocad")
             {
-                // Only one AutoCAD is installed here, and no dynamic rewrite of the unversioned
-                // ProgID was observed; keep the versioned ProgID first because on this machine
-                // "AutoCAD.Application" is not registered at all in the 64-bit view.
-                l.Add(new ProdInfo { Label = "AutoCAD 2007", ProgId = "AutoCAD.Application.17", Clsid = "28b7aa99-c0f9-4c47-995e-8a8d729603a1" });
+                // Every installed AutoCAD release, discovered from the registry (ProductRegistry).
+                // Measured 2026-11-05 with 2007 + 2021 installed: the hardcoded ".17 only" list made
+                // `-App autocad` answer NO_INSTANCE while AutoCAD 2021 was running, and every response
+                // labelled that instance "AutoCAD 2007".
+                List<RegProduct> installed = ProductRegistry.AutoCadProducts();
+                for (int i = 0; i < installed.Count; i++)
+                {
+                    RegProduct p = installed[i];
+                    l.Add(new ProdInfo { Label = p.Label, ProgId = p.ProgId, Clsid = p.Clsid });
+                }
+                // documented fallback: the one build this project was first verified against
+                if (l.Count == 0)
+                    l.Add(new ProdInfo { Label = "AutoCAD 2007", ProgId = "AutoCAD.Application.17", Clsid = "28b7aa99-c0f9-4c47-995e-8a8d729603a1" });
             }
             return l;
         }
@@ -104,6 +113,9 @@ namespace ZwcHelper
             if (c == "2f671ea1-669f-11e7-91b7-bc5ff42ac839") return "ZWCAD 2025";
             if (c == "2f671eb4-669f-11e7-91b7-bc5ff42ac839") return "ZWCAD 2025";
             if (c == "28b7aa99-c0f9-4c47-995e-8a8d729603a1") return "AutoCAD 2007";
+            // any other AutoCAD build: ask the registry (CLSID -> LocalServer32 -> folder name)
+            string dynamicLabel = ProductRegistry.LabelFromClsid(c);
+            if (!string.IsNullOrEmpty(dynamicLabel)) return dynamicLabel;
             return null;
         }
 
@@ -147,8 +159,15 @@ namespace ZwcHelper
             string b = ((exePath == null ? "" : exePath) + "|" + (title == null ? "" : title)).ToLowerInvariant();
             string k = (kind == null ? "" : kind.Trim().ToLowerInvariant());
             if (k.IndexOf("autocad", StringComparison.Ordinal) >= 0)
-                return (b.IndexOf("acad.exe", StringComparison.Ordinal) >= 0 || b.IndexOf("autocad", StringComparison.Ordinal) >= 0)
-                    ? "AutoCAD 2007" : null;
+            {
+                if (b.IndexOf("acad.exe", StringComparison.Ordinal) < 0 && b.IndexOf("autocad", StringComparison.Ordinal) < 0) return null;
+                // label from the executable's folder ("...\AutoCAD 2021\acad.exe"), never a hardcoded
+                // release: ProductRegistry stays the single place that maps a build to a name.
+                string label = ProductRegistry.LabelFromExe(exePath);
+                if (!string.IsNullOrEmpty(label)) return label;
+                label = ProductRegistry.LabelFromExe(title);
+                return string.IsNullOrEmpty(label) ? "AutoCAD" : label;
+            }
             if (b.IndexOf("zwcad 2025", StringComparison.Ordinal) >= 0) return "ZWCAD 2025";
             if (b.IndexOf("classic", StringComparison.Ordinal) >= 0) return "ZWCAD Classic 16";
             if (b.IndexOf("2025", StringComparison.Ordinal) >= 0) return "ZWCAD 2025";
@@ -332,7 +351,14 @@ namespace ZwcHelper
             string blob = (full == null ? "" : full).ToLowerInvariant();
             if (blob.IndexOf("zwcad 2025", StringComparison.Ordinal) >= 0) return "ZWCAD 2025";
             if (blob.IndexOf("classic", StringComparison.Ordinal) >= 0) return "ZWCAD Classic 16";
-            if (blob.IndexOf("acad.exe", StringComparison.Ordinal) >= 0) return "AutoCAD 2007";
+            if (blob.IndexOf("acad.exe", StringComparison.Ordinal) >= 0)
+            {
+                // "...\AutoCAD 2021\acad.exe" -> "AutoCAD 2021"; never a hardcoded release name
+                string label = ProductRegistry.LabelFromExe(full);
+                if (!string.IsNullOrEmpty(label)) return label;
+                string acadVer = Com.Str(Com.TryGet(app, "Version"));
+                return string.IsNullOrEmpty(acadVer) ? "AutoCAD" : "AutoCAD " + acadVer;
+            }
             string ver = Com.Str(Com.TryGet(app, "Version"));
             return ver == null ? "unknown" : ver;
         }

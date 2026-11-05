@@ -139,6 +139,19 @@ namespace ZwcHelper
             JMap probes = new JMap();
             List<object> eNot = new List<object>();
 
+            // AutoCAD 2014+ gates LISP file loading through SECURELOAD/TRUSTEDPATHS. Report it here so
+            // "why is the fast path missing / why did a security dialog appear" is answerable without
+            // guessing (see Trust.cs for the behaviour measured on AutoCAD 2021).
+            if (doc != null)
+            {
+                try
+                {
+                    LispTrust trust = LispTrust.Read(doc, IsAutoCad(ctx), ctx);
+                    r.Add("lispTrust", trust.ToMap());
+                }
+                catch (Exception eTrust) { ctx.Warn("TRUST_READ_FAILED", "lisp trust probe failed: " + Com.Hr(eTrust)); }
+            }
+
             // EvaluateLispExpression is a declared-but-empty shell; probing it is safe and tells us
             // whether this build changed. Application.Eval is NOT probed (RPC_E_SERVERFAULT crashed
             // the server twice during the probe run) - it is recorded as known-bad instead.
@@ -626,6 +639,70 @@ namespace ZwcHelper
                 bool barOk = Com.TrySet(cad.App, "StatusBar", text);
                 r.Add("statusBar", barOk);
                 if (!barOk) ctx.Warn("STATUSBAR_FAILED", "Application.StatusBar rejected the text");
+            }
+            return r;
+        }
+
+        // ------------------------------------------------------------------ trust
+        /// <summary>True when the attached product is AutoCAD (case-insensitive, works with the
+        /// dynamically discovered labels like "AutoCAD 2021").</summary>
+        internal static bool IsAutoCad(Ctx ctx)
+        {
+            string p = ctx.AppMap == null ? "" : ctx.AppMap.Str("product", "");
+            return p.IndexOf("autocad", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>`trust`: report and (optionally) fix the AutoCAD SECURELOAD gate that makes the
+        /// LISP fast path pop the "Security - Unsigned Executable File" dialog for %TEMP% scripts.
+        /// -Action status (default) | addTemp | removeTemp. Only an explicit action changes the
+        /// user's TRUSTEDPATHS - a read/query never does.</summary>
+        public static JMap TrustCmd(JMap req, JMap args, Ctx ctx)
+        {
+            string kind = Kind(req, args);
+            Cad cad = Cad.Attach(kind, false, ctx, Cad.ExplicitProgId(req, args));
+            ctx.AppMap = cad.AppInfo();
+            string matchedBy;
+            object doc = cad.ResolveDoc(DocArg(req, args), true, ctx, out matchedBy);
+            ctx.DocMap = Cad.DocInfo(doc);
+
+            string action = (args.Str("action", "status") ?? "status").Trim().ToLowerInvariant();
+            LispTrust before = LispTrust.Read(doc, IsAutoCad(ctx), ctx);
+            JMap r = new JMap();
+            r.Add("action", action);
+            r.Add("matchedBy", matchedBy);
+
+            if (action == "addtemp" || action == "removetemp")
+            {
+                string want = action == "addtemp"
+                    ? LispTrust.AddPath(before.TrustedPaths, before.TempDir)
+                    : LispTrust.RemovePath(before.TrustedPaths, before.TempDir);
+                bool changed = !string.Equals(want, before.TrustedPaths, StringComparison.Ordinal);
+                if (changed)
+                {
+                    try { Com.Call(doc, "SetVariable", "TRUSTEDPATHS", want); }
+                    catch (Exception e)
+                    {
+                        throw new ZwcError("TRUST_WRITE_FAILED",
+                            "Document.SetVariable(\"TRUSTEDPATHS\") failed: " + Com.Hr(e),
+                            "add the temp dir by hand: Options > Files > Trusted Locations", null);
+                    }
+                }
+                LispTrust after = LispTrust.Read(doc, IsAutoCad(ctx), ctx);
+                r.Add("changed", changed);
+                r.Add("trustedPathsBefore", before.TrustedPaths);
+                r.Add("trustedPathsAfter", after.TrustedPaths);
+                r.Add("trust", after.ToMap());
+                if (action == "addtemp" && !after.TempTrusted)
+                    ctx.Warn("TRUST_NOT_APPLIED", "TRUSTEDPATHS was written but the temp dir still does not read back as trusted; restarting AutoCAD may be required");
+            }
+            else if (action == "status")
+            {
+                r.Add("trust", before.ToMap());
+            }
+            else
+            {
+                throw new ZwcError("BAD_ARGS", "unknown trust action '" + action + "'",
+                    "use -Action status|addTemp|removeTemp", null);
             }
             return r;
         }
