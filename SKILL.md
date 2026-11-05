@@ -201,7 +201,7 @@ README.md                简介与安装
 reference\               深入文档：写原语契约 / 稳定性语义 / 体检规则 / 产品选择 / 性能
 scripts\zwc.ps1|.cmd     入口（兼容 + 管理命令）
 scripts\client\          原生客户端源码（编译成 bin\ZwcClient.exe）
-scripts\helper\          helper 源码（csc 按源码哈希编译缓存，22 个 .cs）。入口只剩 `ZwcHelper.cs`（`Program`，173 行）；`Core`（JMap/ZwcError/Ctx）/`Com`/`ComInterop`/`Procs`/`Cad`/`State`/`Cmd`/`Daemon` 各自独立文件；`Commands`+`CommandsRead` 为双 partial（会话诊断 / read·section·写图·verify）；LISP 快路径：`LispTemplate`（模板+三重校验）/`LispScan`（注入管道单一实现）/`LispWire`（文本线解析）/`LispFile`·`LispGeom`（薄入口）；`Json`/`PipeIo`/`Core`/`Com`/`State`/`Cmd` 为可离线测的纯逻辑单元
+scripts\helper\          helper 源码（csc 按源码哈希编译缓存，24 个 .cs）。入口只剩 `ZwcHelper.cs`（`Program`，173 行）；`Core`（JMap/ZwcError/Ctx）/`Com`/`ComInterop`/`Procs`/`Cad`/`State`/`Cmd`/`Daemon` 各自独立文件；`Commands` 家族拆成**四个 partial**：`Commands`（共享参数 helper + 会话诊断）/`CommandsRead`（read）/`CommandsSection`（section·写图·rollback·undo）/`CommandsVerify`（回读 verify）；LISP 快路径：`LispTemplate`（模板+三重校验）/`LispScan`（注入管道单一实现）/`LispWire`（文本线解析）/`LispFile`·`LispGeom`（薄入口）；`Json`/`PipeIo`/`Core`/`Com`/`State`/`Cmd` 为可离线测的纯逻辑单元
 scripts\section\         数据侧：prepare.py（薄壳）+ prep_io/prep_yssd/prep_db/prep_model；build_sections_{from_dmx,gcd}.py（薄入口）+ section_lib.py 单一实现
 scripts\audit\           只读图纸体检
 requirements.txt         数据侧依赖（Python 3.9+；离线兜底库 tools\py-libs 不入库）

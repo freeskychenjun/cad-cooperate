@@ -192,6 +192,8 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 | `Daemon.cs` | Daemon | 108 |
 | `Commands.cs` + `CommandsRead.cs` | Commands（拆成 **双 partial**：共享 helper + 会话诊断 / read·section·写图·verify·rollback） | 810 + 1,382 |
 
+> **5.1 第三批（同日）**：`CommandsRead.cs` 的 1,382 行再拆成三个 partial：`CommandsRead.cs`（read 家族，**456 行 / 7 成员**：ReadState/Read/LispBridgeAvailable/KindOf/DescribeEntity/TryBBoxFromEntity/LispDumpHandles）、`CommandsSection.cs`（section+写图，**670 行 / 14 成员**：SectionCmd + plan meta/roles/waters/types/layers + CreateEntity/EnsureLayer/EnsureTextStyle/EnsureLinetype/Rollback/WaitIdle/UndoCmd）、`CommandsVerify.cs`（verify，**287 行 / 4 成员**：VerifySection/Extend/AddIssue/TypeMatches）。仍是**纯搬移 + partial**：crossref 实测 `AddPlanMeta`…`Rollback` 的引用者只有 `SectionCmd`，read/verify 各自闭合成簇，零成员跨文件重复、零可见性/调用点改动；24 个 `.cs` 编译 0 error，`selftest_lisp` 6 套 644 与 python 五套不变。
+
 `ZwcHelper.cs` **4,100 → 2,321 → 173 行**（只剩 `Program.HandleRequestText` + `Main`）；`scripts\helper` 22 个 `.cs`，**csc / `zwc.ps1` 的 `*.cs` 通配与测试源清单零改动**。
 
 "纯搬移"自证（脚本在 `tmp/helper-split2/`）：

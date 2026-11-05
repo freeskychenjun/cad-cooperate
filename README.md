@@ -298,7 +298,7 @@ scripts\
   client\ZwcClient.cs     原生客户端（→ bin\ZwcClient.exe，命名管道）
   helper\ZwcHelper.cs     入口与调度（**只剩 173 行**：`Program.HandleRequestText` + `Main`；C#5，按源码哈希编译缓存）
   helper\{Core,ComInterop,Com,Procs,Cad,State,Cmd,Daemon}.cs   核心数据模型(JMap/ZwcError/Ctx) / OLE 消息过滤器 / COM 晚绑定 / 进程探测 / 产品选择 / 会话状态 / 命令行守卫 / 常驻 daemon
-  helper\{Commands,CommandsRead}.cs   **双 partial**：共享参数 helper + 会话诊断（doctor/status/open/info/caption/cmdecho/finish） / read·section·写图·回读 verify·rollback
+  helper\{Commands,CommandsRead,CommandsSection,CommandsVerify}.cs   **四个 partial**：共享参数 helper + 会话诊断（doctor/status/open/info/caption/cmdecho/finish） / read（Read·DescribeEntity·bbox·句柄） / section·写图·rollback·undo / 回读 verify
   helper\{Edits,EditsQuery,SectionOverlay,Stability}.cs   写原语 / 查询 / 断面绘制 / 稳定性
   helper\{LispTemplate,LispScan,LispWire,LispFile,LispGeom}.cs   LISP 快路径：模板+三重校验、注入管道单一实现、文本线解析、E5 canvas / E6 几何 dump 薄入口
   helper\{Json,PipeIo}.cs  可离线测的纯逻辑单元（自研 JSON writer/parser、命名管道 framing）

@@ -142,3 +142,10 @@
 - 收益：入口文件 4,100→173 行；`Core`/`Com`/`State`/`Cmd` 成为可独立离线单测的单元；read/section 家族与会话诊断家族不再混在一个 2,135 行的类里。**未做**（按纯搬移纪律原样保留）：`Doctor` 的 `deepMatched` 死变量等，留待专门清理（`JMap`/`Json` 两处过时注释已随本批修正）。
 - **配套离线测试（5.1 的收益兑现）**：新增 `tests/coreself/CoreTests.cs`（**103 断言**：JMap 覆盖写/键序/大小写/缺键/类型不匹配、ZwcError/Ctx、Json 往返、State 的内存态 session/token 函数）与 `ComCmdTests.cs`（**131 断言**：POCO 假 COM 对象走 `Com.Get/TryGet/Call/Set/Str/Dbl/I32/Bool/Pt/Flat/Hr`、**永久失败不重试**这个 M3-E1 策略（`ReadRetries=5` 时实际调用仍 1 次）、`Cmd.Balanced`/`PromptPolluted`/`Send` 四类守卫）。**零桩**：直接编译真的 `Core.cs`/`Com.cs`/`Cmd.cs`/`State.cs`；`tests/jsonself/JMapStub.cs` 删除，JsonTests 改用**真 JMap**（断言数不变 132）。
   C# 离线套件从 4 套/410 断言长到 **6 套/644 断言**（LispWire 106 + LispTemplate 53 + Json 132 + LispScan 119 + Core 103 + ComCmd 131），`tests\selftest_lisp.ps1` 一次跑完，CI 无需改动。
+
+### 8.7 5.1 第三批：`CommandsRead.cs` 再拆 read / section / verify 三文件
+- `CommandsRead.cs` **1,382 行 / 25 成员** → `CommandsRead.cs`（**456 行 / 7 成员**：read 家族）、新建 `CommandsSection.cs`（**670 行 / 14 成员**：section + plan meta/roles/waters/types/layers + 写原语 + Rollback/WaitIdle/UndoCmd）、新建 `CommandsVerify.cs`（**287 行 / 4 成员**）。`scripts\helper` 现 **24 个 `.cs`**；`Commands` 家族 = **四个 partial** 文件，仍是零调用点改动。
+- 分配**由 crossref 实测决定**而非按名字猜：`AddPlanMeta/ByRole/WatersOut/CountTypes/CountLayers/CreateEntity/EnsureLayer/EnsureTextStyle/EnsureLinetype/Rollback` 的引用者只有 `SectionCmd`；`FirstExistingFont` 只被 `EnsureTextStyle` 引用；`WaitIdle` 被 `Rollback/VerifySection/UndoCmd` 共用（partial 跨文件可见）；read 7 个与 verify 4 个各自闭合成簇。
+- 自证：25/25 成员三文件**各出现且仅一次**、顺序为 baseline 子序列、成员体 **sha 相等**；`baseline − 搬出成员块 == 三文件体` 逐字节重建；全仓恰 4 个 `partial Commands` 声明；Lead 独立复核（自写**行深度感知**成员切分器，避免上一版把方法体局部变量误判成成员）→ missing/extra/跨文件重复/成员体差异全 none。
+- 非搬移偏差仅"文件装配层"：三个文件头重写（原头描述的是拆分后已不存在的全集）、using 按文件重分配、成员间空行 24→22（两个文件边界各少 1）。
+- 验证：csc **24 源 0 error / 3 warning（均为基线）**；`selftest_lisp` 6 套 644 ALL PASS；python 五套（34 文件 3.9 语法门 / 41 / 89·0·3 / 82 / checkers）不变；`run_m1` 10/0/2；真机只读冒烟在**用户当前打开的** 8,511 实体图上 `read -Mode geom`→`lisp-file-geom`、`read`/`query`→`lisp-file`、`doctor` ok，CMDECHO=1、CMDACTIVE=0、%TEMP% 残留 0。
