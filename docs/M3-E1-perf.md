@@ -176,3 +176,29 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 `ZwcHelper.cs`（4,371 行）里的自研 **JSON writer/parser** 与 **命名管道 framing** 两个自包含类整体搬到 `scripts/helper/Json.cs`（262 行）与 `PipeIo.cs`（51 行）：`git diff --numstat` = **0 insertions / 271 deletions**，两个类体逐字节相等（`Json` 9,552 字符 / `PipeIo` 1,087 字符，字符串/注释感知的括号 walker 独立复核 IDENTICAL），方法体、错误文案、数字格式、管道长度前缀协议全部不变。
 新增 `tests/jsonself/JsonTests.cs`（**132 断言**）：转义（`\\ \" \n \r \t \b \f \uXXXX`/`\u0000`）、bool/null、int/long(min,max)/double（`2.0`→`2`、`1e20`→`1E+20`、`1e-7`→`1E-07`、NaN/Inf→null）、空/嵌套 JMap+List、键序与重复键、中文 UTF-8 往返；parser 侧整数保持 long、BOM/空白容忍、50 层嵌套、15 个非法输入不崩溃；`Write→UTF8→Parse→Write` 字节相等。**这套测试是 5.1 的收益证据：JSON 层从此能在没有 CAD 的机器上被 CI 回归**（`tests\selftest_lisp.ps1` 的 4 套之一）。
 > 编码约定（本次查证）：request 文件写侧统一 **UTF-8 无 BOM**（`zwc.ps1` / `ZwcClient.cs` / helper 回写均 `UTF8Encoding(false)`）；读侧 `Json.ParseFile` 与 helper one-shot 用 `File.ReadAllText(path, new UTF8Encoding(false))` + `Parse` 再剥首部 U+FEFF ⇒ UTF-8 有/无 BOM 都吃、连带 BOM 的 UTF-16LE/BE 也能靠 StreamReader 嗅探解码；**但 GBK/ANSI 不会被拒绝**，非法字节静默变 U+FFFD（乱码），所以调用方绝不能拿 ANSI 写 request 文件。
+
+### 10.6 helper 巨石第二步：逐类拆到 22 个 .cs，`ZwcHelper.cs` 只剩入口
+上一节拆出 `Json`/`PipeIo` 后，`ZwcHelper.cs` 仍有 4,100 行、13 个类型。第二步继续按"纯搬移"拆完：
+
+| 新文件 | 搬出的类型 | 行数 |
+|---|---|---|
+| `Core.cs` | JMap / ZwcError / Ctx | 130 |
+| `ComInterop.cs` | IOleMessageFilter / MessageFilter | 64 |
+| `Com.cs` | Com / Coll | 269 |
+| `Procs.cs` | Procs | 124 |
+| `Cad.cs` | Cad（含嵌套 ProdInfo / ProgChoice） | 864 |
+| `State.cs` | State | 218 |
+| `Cmd.cs` | Cmd | 126 |
+| `Daemon.cs` | Daemon | 108 |
+| `Commands.cs` + `CommandsRead.cs` | Commands（拆成 **双 partial**：共享 helper + 会话诊断 / read·section·写图·verify·rollback） | 810 + 1,382 |
+
+`ZwcHelper.cs` **4,100 → 2,321 → 173 行**（只剩 `Program.HandleRequestText` + `Main`）；`scripts\helper` 22 个 `.cs`，**csc / `zwc.ps1` 的 `*.cs` 通配与测试源清单零改动**。
+
+"纯搬移"自证（脚本在 `tmp/helper-split2/`）：
+1. 8 个搬移块在搬移前 baseline 字节流中各唯一出现、互不重叠（纯字节偏移定位）；
+2. `baseline − 8 块 − 随块吃掉的空行 == 搬移后文件`，**198,878→118,438 B 逐字节相同**（零夹带）；
+3. 第 6 步成员级：baseline `Commands` 类体 2,100 成员行**每行恰好属于一个成员一次**，46 个成员在两个 partial 文件中**各出现且仅一次**、顺序是 baseline 序的子序列；
+4. Lead 独立复核（不复用对方脚本）：按成员名+成员体比对 → `missing/extra/跨文件重复/成员体差异` 全为 none；`HEAD − Commands 块` 与当前文件 diff **只剩 −9 行 using/空行、+0 行**。
+
+明确标注的 3 处非搬移偏差：① 两个 partial 文件类声明插入 `partial `；② 原文件 12 处"相邻成员无空行"在新文件中以单空行分隔（空行不属于成员）；③ `ZwcHelper.cs` 删除 8 条已无用的 `using`（编译器可证）。
+> 收益：入口文件从 4,100 行降到 173 行；`Core`/`Com`/`State`/`Cmd` 成为可离线单测的独立单元（配套测试见 `tests\coreself\`），`Commands` 的 read/section 家族与会话诊断家族不再混在一个 2,135 行的类里。**未做**：`JMap` 头注释里"writer + parser"的过时文案、以及 `Doctor` 的 `deepMatched` 死变量等，按"纯搬移"纪律原样保留，留待专门清理。

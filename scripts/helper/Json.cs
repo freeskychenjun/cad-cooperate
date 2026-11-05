@@ -11,8 +11,8 @@
 //   * parser returns long for integer tokens (no '.'/'e') and double otherwise;
 //   * malformed input throws FormatException instead of returning a half-parsed value.
 //
-// JMap (the ordered map type the writer walks) stays in ZwcHelper.cs because the whole command
-// layer uses it; the offline suite in tests\jsonself\ compiles against a minimal JMap stand-in.
+// JMap (the ordered map type the writer walks) lives in Core.cs since the 5.1 batch-2 split, so the
+// offline suite in tests\jsonself\ now compiles against the REAL JMap (the old stand-in was deleted).
 //
 // ParseFile reads UTF-8 without a BOM (UTF8Encoding(false)) and tolerates a BOM at the start.
 

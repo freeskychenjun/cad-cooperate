@@ -17,6 +17,7 @@
 | `tests\run_m1.ps1` | 端到端 runner（纯 ASCII + UTF-8 BOM + CRLF）；`-DryRunOnly` / `-NoCad` 无 CAD 全绿 |
 | `tests\selftest.py` | 计算侧全量自测（41 项：基准/负例/反序/bad 用例/升档/变体/回读 schema） |
 | `tests\selftest_sections.py` | 断面提取两条路线自测（**82 项**，纯离线合成夹具，写 `tmp\selftest-sections\`，不需要 `%TEMP%` 真实数据）：`section_lib` 几何/网格索引与暴力解等价、两个薄入口逐格断言、坏输入/缺库负例 |
+| `tests\coreself\` | helper 纯逻辑离线套件（csc 编译，零 CAD）：`CoreTests.cs`（JMap/ZwcError/Ctx/Json 往返/State 内存态，**103 断言**）、`ComCmdTests.cs`（COM 反射晚绑定 + 重试策略 + Cmd 括号/提示符守卫，**131 断言**）——由 `tests\selftest_lisp.ps1` 统一跑 |
 | `tests\fixtures\section-30.xlsx` | 30 点合成断面（起点距 0..290 步长 10 m，高程 38.55..44.30 m，深泓第 15 点/140 m），表头行「起点距/高程」，D1/D2 附设计水位 42.30（供人读，程序从参数取） |
 | `tests\fixtures\section-30.expected.json` | 验收基准（实体清单 + `expected.total` + `bbox` + `computed`） |
 | `tests\fixtures\section-30-reversed.xlsx` | 同行序完全反向，验自动反转 + `ORDER_REVERSED` |
@@ -119,7 +120,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -NoCad     
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 [-Doc <dwg>]  # 真画（需调用方已开图纸）
 ```
 
-步骤：`prepare.py` → `verify` → `check_dxf`（ezdxf 往返）→ **`lisp.wire`（C# 离线 4 套，调 `tests\selftest_lisp.ps1`）** → `verify --tamper` → 3 个 bad 用例 → `zwc.ps1 section -DryRun`（并与基准交叉核对 `result.expected`）→ 真画（`-DryRunOnly/-NoCad` 时跳过）→ `zwc.ps1 read` → `verify`。
+步骤：`prepare.py` → `verify` → `check_dxf`（ezdxf 往返）→ **`lisp.wire`（C# 离线 6 套，调 `tests\selftest_lisp.ps1`）** → `verify --tamper` → 3 个 bad 用例 → `zwc.ps1 section -DryRun`（并与基准交叉核对 `result.expected`）→ 真画（`-DryRunOnly/-NoCad` 时跳过）→ `zwc.ps1 read` → `verify`。
 
 - **绝不启动 CAD**：不传 `-Launch`，只 attach 已开实例。真画/回读在无 CAD 或 CAD 未开图时判 `SKIP` 而非 FAIL（`NO_INSTANCE`/`NO_CAD`/`NO_DOC` 等错误码）。
 - `--water` 由 runner 从 `expected.json` 运行时拼出（保证 `.ps1` 纯 ASCII）。
@@ -145,7 +146,7 @@ python tests\selftest.py                        # 41 项 PASS
 python tests\selftest_sections.py               # 82 项 PASS（断面提取两条路线）
 python tests\audit\test_audit.py                # PASS 89 / FAIL 0 / SKIP 3
 python tests\bench\selftest_checkers.py         # SELFTEST PASS
-powershell -File tests\selftest_lisp.ps1        # C# 4 套：106 + 53 + 132 + 119 = 410 PASS
+powershell -File tests\selftest_lisp.ps1        # C# 6 套：106+53+132+119+103+131 = 644 PASS
 powershell -File tests\run_m1.ps1 -DryRunOnly -Python <python全路径>   # PASS 10 / FAIL 0 / SKIP 2（CAD 步按设计跳过）
 ```
 

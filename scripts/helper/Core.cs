@@ -12,7 +12,8 @@ using System.Globalization;
 namespace ZwcHelper
 {
     // ======================================================================================
-    // Ordered JSON map + writer + tiny recursive-descent parser (no external assembly).
+    // Ordered JSON map. The JSON writer/parser itself lives in Json.cs (moved out 2026-11-05);
+    // JMap stays here because every command result and every request is built out of it.
     // ======================================================================================
     internal sealed class JMap
     {

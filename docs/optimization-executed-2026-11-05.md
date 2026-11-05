@@ -121,9 +121,19 @@
 
 | 项 | 结果 |
 |---|---|
-| helper 编译（12 个 `.cs`） | **0 error**（3 条历史 warning 不变） |
+| helper 编译 | 第二轮中途 12 个 `.cs` → 5.1 第二批后 **22 个 `.cs`，0 error**（3 条历史 warning 不变） |
 | `tests\selftest.py` / `test_audit.py` / `selftest_checkers.py` | 41 PASS / 89·0·3 / SELFTEST PASS（与第一轮一致） |
 | `tests\selftest_sections.py`（新） | **82 PASS / 0 FAIL** |
-| `tests\selftest_lisp.ps1`（现 4 套） | **410 PASS / 0 FAIL**（LispWire 106 + LispTemplate 53 + Json 132 + LispScan 119） |
+| `tests\selftest_lisp.ps1`（现 6 套） | **644 PASS / 0 FAIL**（LispWire 106 + LispTemplate 53 + Json 132 + LispScan 119 + Core 103 + ComCmd 131） |
 | `tests\run_m1.ps1 -DryRunOnly -NoCad` | **PASS 10 / FAIL 0 / SKIP 2**（`lisp.wire` 步 PASS lines 291→410） |
 | 四个 golden 对比 | 数据侧 34,024+69,987 cell 0 差异；prepare 21/21 全等；LISP 真机 0 字段差异 |
+| 真机只读冒烟（5.1 第二批后） | status / read geom 20 / read 20 / query 10 / doctor 全 ok，`readPath` 仍 lisp-file-geom / lisp-file；CMDECHO=1、CMDACTIVE=0、%TEMP% 残留 0 |
+
+### 8.6 5.1 第二批：`ZwcHelper.cs` 逐类拆完（4,100 → 173 行）
+- 13 个类型按 6 步搬出：`Core.cs`(130) `ComInterop.cs`(64) `Com.cs`(269) `Procs.cs`(124) `Cad.cs`(864) `State.cs`(218) `Cmd.cs`(126) `Daemon.cs`(108)，`Commands`（2,135 行 / 46 成员）拆成 **双 partial**：`Commands.cs`(810，共享 helper+会话诊断) + `CommandsRead.cs`(1,382，read/section/写图/verify/rollback)。`ZwcHelper.cs` 只剩 `Program`（173 行）；`scripts\helper` 现 22 个 `.cs`，**csc 通配、`zwc.ps1`、run_m1 源清单零改动**。
+- **纯搬移自证**：8 个搬移块在 baseline 字节流中各唯一出现、互不重叠；`baseline − 块 − 随块空行 == 搬移后文件`（198,878→118,438 B 逐字节相同，零夹带）；第 6 步成员级：baseline 类体 2,100 成员行**每行恰好归属一个成员一次**、46 成员在两文件中**各出现且仅一次**、顺序为 baseline 序子序列。
+- **Lead 独立复核**（不复用对方脚本）：按成员名+成员体比对 → missing/extra/跨文件重复/成员体差异全 none；`HEAD − Commands 块` 与当前文件 diff **只剩 −9 行 using/空行、+0 行**。
+- 3 处非搬移偏差（已批准）：两文件类声明插入 `partial `；原 12 处相邻成员间补单个空行；`ZwcHelper.cs` 删 8 条无用 `using`（编译器可证最小集）。
+- 收益：入口文件 4,100→173 行；`Core`/`Com`/`State`/`Cmd` 成为可独立离线单测的单元；read/section 家族与会话诊断家族不再混在一个 2,135 行的类里。**未做**（按纯搬移纪律原样保留）：`Doctor` 的 `deepMatched` 死变量等，留待专门清理（`JMap`/`Json` 两处过时注释已随本批修正）。
+- **配套离线测试（5.1 的收益兑现）**：新增 `tests/coreself/CoreTests.cs`（**103 断言**：JMap 覆盖写/键序/大小写/缺键/类型不匹配、ZwcError/Ctx、Json 往返、State 的内存态 session/token 函数）与 `ComCmdTests.cs`（**131 断言**：POCO 假 COM 对象走 `Com.Get/TryGet/Call/Set/Str/Dbl/I32/Bool/Pt/Flat/Hr`、**永久失败不重试**这个 M3-E1 策略（`ReadRetries=5` 时实际调用仍 1 次）、`Cmd.Balanced`/`PromptPolluted`/`Send` 四类守卫）。**零桩**：直接编译真的 `Core.cs`/`Com.cs`/`Cmd.cs`/`State.cs`；`tests/jsonself/JMapStub.cs` 删除，JsonTests 改用**真 JMap**（断言数不变 132）。
+  C# 离线套件从 4 套/410 断言长到 **6 套/644 断言**（LispWire 106 + LispTemplate 53 + Json 132 + LispScan 119 + Core 103 + ComCmd 131），`tests\selftest_lisp.ps1` 一次跑完，CI 无需改动。

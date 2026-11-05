@@ -296,7 +296,9 @@ publish.ps1               打包部署（staging + 原子切换 + 干跑 + 安�
 scripts\
   zwc.ps1 / zwc.cmd       入口（兼容包装 + 管理命令 + 首次编译 bootstrap）
   client\ZwcClient.cs     原生客户端（→ bin\ZwcClient.exe，命名管道）
-  helper\ZwcHelper.cs     COM 晚绑定主体（4,100 行单文件，C#5，按源码哈希编译缓存）
+  helper\ZwcHelper.cs     入口与调度（**只剩 173 行**：`Program.HandleRequestText` + `Main`；C#5，按源码哈希编译缓存）
+  helper\{Core,ComInterop,Com,Procs,Cad,State,Cmd,Daemon}.cs   核心数据模型(JMap/ZwcError/Ctx) / OLE 消息过滤器 / COM 晚绑定 / 进程探测 / 产品选择 / 会话状态 / 命令行守卫 / 常驻 daemon
+  helper\{Commands,CommandsRead}.cs   **双 partial**：共享参数 helper + 会话诊断（doctor/status/open/info/caption/cmdecho/finish） / read·section·写图·回读 verify·rollback
   helper\{Edits,EditsQuery,SectionOverlay,Stability}.cs   写原语 / 查询 / 断面绘制 / 稳定性
   helper\{LispTemplate,LispScan,LispWire,LispFile,LispGeom}.cs   LISP 快路径：模板+三重校验、注入管道单一实现、文本线解析、E5 canvas / E6 几何 dump 薄入口
   helper\{Json,PipeIo}.cs  可离线测的纯逻辑单元（自研 JSON writer/parser、命名管道 framing）
@@ -323,7 +325,7 @@ python tests\selftest.py                     # 41 项：prepare/verify/夹具/�
 python tests\audit\test_audit.py             # 体检规则引擎 + 报告渲染
 python tests\bench\selftest_checkers.py      # 基准检查器负例（必须拒错）
 python tests\selftest_sections.py            # 断面提取两条路线（section_lib + 两个薄入口，82 断言）
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\selftest_lisp.ps1                      # C# 离线 4 套（LispWire 106 / LispTemplate 53 / Json 132 / LispScan 119）
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\selftest_lisp.ps1                      # C# 离线 6 套（LispWire 106 / LispTemplate 53 / Json 132 / LispScan 119 / Core 103 / ComCmd 131）
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -DryRunOnly -NoCad -Python <你的python路径>
 
 # 20 条任务级基准（自起独占实例，采成功率/命令数/墙钟，收尾归零进程）

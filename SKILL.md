@@ -184,7 +184,7 @@ bin\ZwcClient.exe finish -Quit -ProgId ZWCAD.Application.16
 
 # 回归（开发用，不随包分发）
 powershell -File tests\run_m1.ps1 -DryRunOnly -Python <完整 python 路径>   # 离线 10/0/2（含 lisp.wire）
-powershell -File tests\selftest_lisp.ps1                                  # C# LISP 行解析 + 模板生成（csc，离线）
+powershell -File tests\selftest_lisp.ps1                                  # C# 离线 6 套 644 断言（解析/模板/JSON/注入管道/核心模型/COM）
 powershell -File scripts\bench\run_bench.ps1 -Entry client -Product zwcad16 -Repeat 1   # 20 条任务基准
 
 # helper 编译缓存维护（源码每改一次会多一个 bin\cache\<sha12>\ 副本；实测 141 个目录→9 个、释放 12 MB）
@@ -201,7 +201,7 @@ README.md                简介与安装
 reference\               深入文档：写原语契约 / 稳定性语义 / 体检规则 / 产品选择 / 性能
 scripts\zwc.ps1|.cmd     入口（兼容 + 管理命令）
 scripts\client\          原生客户端源码（编译成 bin\ZwcClient.exe）
-scripts\helper\          helper 源码（csc 按源码哈希编译缓存）；LISP 快路径：`LispTemplate`（模板+三重校验）/`LispScan`（注入管道单一实现）/`LispWire`（文本线解析）/`LispFile`·`LispGeom`（薄入口）；`Json`/`PipeIo` 为可离线测的纯逻辑单元
+scripts\helper\          helper 源码（csc 按源码哈希编译缓存，22 个 .cs）。入口只剩 `ZwcHelper.cs`（`Program`，173 行）；`Core`（JMap/ZwcError/Ctx）/`Com`/`ComInterop`/`Procs`/`Cad`/`State`/`Cmd`/`Daemon` 各自独立文件；`Commands`+`CommandsRead` 为双 partial（会话诊断 / read·section·写图·verify）；LISP 快路径：`LispTemplate`（模板+三重校验）/`LispScan`（注入管道单一实现）/`LispWire`（文本线解析）/`LispFile`·`LispGeom`（薄入口）；`Json`/`PipeIo`/`Core`/`Com`/`State`/`Cmd` 为可离线测的纯逻辑单元
 scripts\section\         数据侧：prepare.py（薄壳）+ prep_io/prep_yssd/prep_db/prep_model；build_sections_{from_dmx,gcd}.py（薄入口）+ section_lib.py 单一实现
 scripts\audit\           只读图纸体检
 requirements.txt         数据侧依赖（Python 3.9+；离线兜底库 tools\py-libs 不入库）
