@@ -191,3 +191,21 @@
 **验证**：`selftest_compare_source` 71 / `selftest_sections` 85 / `selftest` 41 / `audit` 89·0·3 /
 `checkers` PASS / `py39` 35 files；`run_m1 -DryRunOnly` **无 CAD 时 8·0·4**（两个 CAD 步骤按设计 SKIP，
 CI 一直是这个口径；有 CAD 时 10·0·2）；C# 6 套 644 不变。
+
+**(c) `DEFAULT_DB_PATH` 从导入期求值改为调用期求值（计划 5.5 的最后一条尾巴）**
+旧实现 `prep_db.py` 在**导入时**快照 `os.environ["HYDRO_DB"]`，`prepare.py` 又把它当 argparse `--db` 的默认值
+⇒ "先 import、后设环境变量"永远不生效（对测试/嵌入式调用尤其反直觉）。
+改法：`prep_db.default_db_path()` **调用期**读 env；`prep_db` 与 `prepare` 各加 PEP 562 模块级 `__getattr__`，
+保留 `DEFAULT_DB_PATH` / `from prep_db import DEFAULT_DB_PATH` 的兼容访问（返回访问那一刻的值）；
+`--db` 的 argparse 默认改为 `None`，`main()` 统一 `args.db = args.db if args.db is not None else default_db_path()`
+——**`is not None`** 确保显式 `--db ""` 仍是 `NO_DB` 而不是"回退 env"（旧行为一致）。
+**验证**：10 种形态 golden（显式 `--db` / 纯 `HYDRO_DB` env / `--list-dates` 两种 / `--summary` /
+`--compare-source` / 缺 DB→`NO_DB` / **显式 `--db ""` + env→仍 `NO_DB`** / 显式空串无 env /
+显式不存在路径优先于 env）**10/10 逐字节全等**（stdout/退出码/stderr/落盘 sha256）；task-12 的 13 例与
+task-13 的 18 例在新代码下仍然全等；`import prepare` 的 85 个公开名/常量/`--help` 兼容检查 PASS。
+新增 13 条断言（`selftest_compare_source` 71 → **84**），含"进程内 import 后改 env 立即生效"与"再改一次仍生效"
+（证明是每次调用都读、而非缓存一次）。
+
+> 本轮另外发现（**并发会话在改 C# 侧，本文件不记录其结论**）：`scripts/helper/*.cs` 当时正处于另一个会话的
+> 在途改动中（`Trust.cs`/`ProductRegistry.cs` + Cad/Cmd/CommandsRead/Core/LispScan 等），因此本轮只提交
+> **数据侧 + 文档 + .gitignore**，不触碰、不提交那些 C# 改动；C# 侧的验证由 CI 在**已提交版本**上完成。

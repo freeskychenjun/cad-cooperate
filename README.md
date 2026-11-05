@@ -155,7 +155,7 @@ cd zwcad-cooperate
 # 数据 → 模型 JSON（xlsx 两列：起点距 / 高程）
 python scripts\section\prepare.py --data tests\fixtures\section-30.xlsx --out %TEMP%\m.json
 
-# 或直接读本机水情数据库（cross_section 表，需 --db 指定库文件）
+# 或直接读本机水情数据库（cross_section 表；库路径 `--db` 显式指定，或环境变量 HYDRO_DB——调用期读取）
 python scripts\section\prepare.py --from-db <站码> --last 4 --out %TEMP%\m.json
 
 .\scripts\zwc.cmd open  -Doc "<你的图纸>.dwg" -ProgId ZWCAD.Application.16
@@ -325,7 +325,7 @@ python tests\selftest.py                     # 41 项：prepare/verify/夹具/�
 python tests\audit\test_audit.py             # 体检规则引擎 + 报告渲染
 python tests\bench\selftest_checkers.py      # 基准检查器负例（必须拒错）
 python tests\selftest_sections.py            # 断面提取两条路线（section_lib + 两个薄入口，85 断言）
-python tests\selftest_compare_source.py      # --compare-source（DB vs 源表，合成 DB+源表夹具，71 断言）
+python tests\selftest_compare_source.py      # --compare-source（DB vs 源表，合成 DB+源表夹具，84 断言）
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\selftest_lisp.ps1                      # C# 离线 6 套（LispWire 106 / LispTemplate 53 / Json 132 / LispScan 119 / Core 103 / ComCmd 131）
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -DryRunOnly -NoCad -Python <你的python路径>
 
@@ -364,7 +364,7 @@ python tests\cross_app_diff.py --read a=tmp\compare\zwcad16\read.json --read b=t
 仓库里**不含真实图纸、真实站名/站码、本机绝对路径和界面截图**：
 
 - 示例一律用占位符（`<站码>` / `<你的图纸>.dwg` / `%HYDRO_DB%` / `<repo>`），照着替换即可；
-- 数据侧数据库路径不硬编码，改为环境变量 `HYDRO_DB`，或 `prepare.py --db <路径>` 显式指定；
+- 数据侧数据库路径不硬编码，改为环境变量 `HYDRO_DB`（**每次调用时读取**，`import` 后再设也生效），或 `prepare.py --db <路径>` 显式指定（显式优先；显式空串仍是 `NO_DB`）；
 - 真机证据快照（`tests/audit/real/`、`tests/audit/out/`）与所有截图均未随仓库分发，可用 `tests/audit/run-real-validation.ps1` 与 `tests/` 下各脚本在本机重新生成（对应的离线自测会如实 SKIP 而不是假装通过）。
 
 ## 许可与声明

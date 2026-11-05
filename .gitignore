@@ -34,6 +34,11 @@ __pycache__/
 *.dwl
 *.dwl2
 
+# ---------------------------------------------------------------- agent harness scratch
+# `.dsh/` is created by the DeepSeek Harness inside the workspace (pasted screenshots and
+# attachments, session scratch). Machine/session specific, never source: keep it out of the repo.
+/.dsh/
+
 # ---------------------------------------------------------------- editor / OS noise
 *.swp
 *~

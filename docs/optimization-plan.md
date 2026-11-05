@@ -203,6 +203,8 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 ### 5.5 prepare.py 模块化（最大的一项，可与 5.3 合并排期）
 
 - **证据**：2,048 行六类职责；`build_model` 与 `build_db_model` 坐标映射/elev_base/TOO_TALL/params 逐字重复（prepare.py:1464-1479 vs 1075-1085、1765-1771 vs 1184-1188、1711-1713 vs 1202-1203）；`_series_stats` 与 `_series_summary` 重叠（1015-1035 vs 1875-1882）；`DEFAULT_DB_PATH` 在导入期求值（:855）。
+> **执行注记（2026-11-05）**：以上均已处理 —— prepare.py 已拆四模块（`prep_io/prep_yssd/prep_db/prep_model`，行号随拆分失效），
+> 重复映射已合并，`DEFAULT_DB_PATH` 已改为**调用期**求值（`prep_db.default_db_path()` + PEP 562 兼容访问 `DEFAULT_DB_PATH`）。
 - **方案**：按 `io_excel.py / yssd.py / db.py / model.py / cli.py` 拆包；v1/v2 两套建模合并为"序列来源不同、坐标映射单一实现"；DB 路径延迟到 main 里读环境变量。**保持 stdout JSON 协议与退出码语义逐字节不变**（tests/run_m1.ps1 全链是现成回归）。
 - **工作量**：2–3 人日。**风险**：中——纯行为保持重构，靠 41 项 selftest + check_dxf 三方互证兜底。
 
