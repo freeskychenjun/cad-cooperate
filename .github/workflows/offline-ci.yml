@@ -33,6 +33,12 @@ jobs:
   offline:
     runs-on: windows-latest
     timeout-minutes: 20
+    env:
+      # The Windows runner's console defaults to cp1252; the data-side scripts and their tests print
+      # Chinese details, so make every python process use UTF-8 for its own I/O and for subprocesses
+      # (this also makes subprocess text=True decode UTF-8, matching what the scripts emit).
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
 
     steps:
       - name: checkout

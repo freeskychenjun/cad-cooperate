@@ -39,6 +39,15 @@ FIXTURE = os.path.join(FIX, "section-30.xlsx")
 EXPECTED = os.path.join(FIX, "section-30.expected.json")
 WATER = "42.30=设计水位"
 
+# CI runners default the console code page to cp1252 while the details printed below contain
+# Chinese: force UTF-8 with replacement instead of dying with UnicodeEncodeError (the same guard
+# tests\bench\selftest_checkers.py already had). Harmless on a real console.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 RESULTS: List[Tuple[str, bool, str]] = []
 
 

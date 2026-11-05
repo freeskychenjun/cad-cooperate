@@ -34,6 +34,15 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+
+# CI runners default the console code page to cp1252 while fixture details below are Chinese:
+# force UTF-8 with replacement instead of dying with UnicodeEncodeError.
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
 SEC = os.path.join(ROOT, 'scripts', 'section')
 GCD = os.path.join(SEC, 'build_sections_gcd.py')
 DMX = os.path.join(SEC, 'build_sections_from_dmx.py')

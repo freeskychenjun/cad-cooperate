@@ -28,6 +28,14 @@ FIXTURES = os.path.join(HERE, "fixtures")
 REAL = os.path.join(HERE, "real")
 TMP = tempfile.mkdtemp(prefix="audit-test-")
 
+# CI runners default the console code page to cp1252; some details below are Chinese. Force UTF-8
+# with replacement so the run reports PASS/FAIL instead of dying with UnicodeEncodeError.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 PASS = 0
 FAIL = 0
 SKIP = 0
