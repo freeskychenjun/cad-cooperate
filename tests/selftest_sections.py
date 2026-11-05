@@ -383,6 +383,39 @@ def t_gcd_route():
           and wide[3][1] == 20 and wide[3][5] == 80, 'row2=%r row3=%r' % (wide[2], wide[3]))
     check('gcd 宽表高程段（base=10）', wide[9][0] == '高程(m)' and wide[10][1] == 12
           and wide[10][2] == 13 and wide[10][5] == 16, 'base=%r' % (wide[9],))
+    # 逐格数值/顺序：宽表第 k 行第 j 列 == 第 j 个断面第 k 个点的起点距/高程（同一几何
+    # 只出现一次：4 条 5 点断面 + 1 条 2 点断面 ⇒ maxn=5，起点距段 rows 2..6、
+    # 空两行、高程段 rows 10..14；缺点的格子必须留空 None，不能错位）
+    sec_pts = [[(round(40.0 - x, 2), BLOCK_Z[j] + i) for j, x in enumerate(BLOCK_X)]
+               for i in range(4)]
+    sec_pts.append([(0.0, BLOCK_Z[0] + 4), (80.0, BLOCK_Z[4] + 4)])
+    narrow = 1 + len(sec_pts)
+    expect_wide = [['序号'] + CHAINS,
+                   ['起点距(m)'] + [None] * len(CHAINS)]
+    for k in range(5):
+        expect_wide.append([None] + [sec_pts[j][k][0] if k < len(sec_pts[j]) else None
+                                     for j in range(len(sec_pts))])
+    expect_wide.append([None] * narrow)
+    expect_wide.append([None] * narrow)
+    expect_wide.append(['高程(m)'] + [None] * len(CHAINS))
+    for k in range(5):
+        expect_wide.append([None] + [sec_pts[j][k][1] if k < len(sec_pts[j]) else None
+                                     for j in range(len(sec_pts))])
+    check('gcd 宽表逐格数值/顺序（全表 %dx%d 逐格相等）'
+          % (len(expect_wide), narrow), wide == expect_wide,
+          'rows=%d/%d first diff=%r'
+          % (len(wide), len(expect_wide),
+             next((('%d,%d %r!=%r' % (r, c, wide[r][c], expect_wide[r][c]))
+                   for r in range(min(len(wide), len(expect_wide)))
+                   for c in range(narrow) if wide[r][c] != expect_wide[r][c]),
+                  'none')))
+    mapping_ok = all(wide[2 + k][1 + j] == expect_wide[2 + k][1 + j]
+                     and wide[10 + k][1 + j] == expect_wide[10 + k][1 + j]
+                     for k in range(5) for j in range(len(CHAINS)))
+    sparse_ok = (wide[2 + 2][1 + 4] is None and wide[2 + 4][1 + 4] is None
+                 and wide[10 + 2][1 + 4] is None and wide[2 + 1][1 + 4] == 80)
+    check('gcd 宽表映射规则（行=点序、列=断面；缺点留空）', mapping_ok and sparse_ok,
+          'mapping=%s sparse=%s' % (mapping_ok, sparse_ok))
     notes = sheets[3][1]
     check('gcd 说明表行数/项目列', len(notes) == 10 and notes[0] == ['项目', '说明'],
           'rows=%d' % len(notes))
@@ -459,6 +492,20 @@ def t_dmx_route():
           'header=%r rows=%d' % (wide[0], len(wide)))
     check('dmx 宽表逐行高程（列=断面，含原实现的列偏移）',
           wide[1][:5] == [11, 12, 13, 14, 15], 'got=%r' % (wide[1][:5],))
+    # 逐格：第 k+2 行第 j+1 列 == 第 j 个断面第 k 个合并点的 Z（列=A 列被首断面覆盖是
+    # 既有实现的形态，这里连同"仅 5 个断面值、第 6 列留空"一起锁死）
+    dmx_z = [[11.0 + i, 12.0, 13.5 + i, 14.0, 11.5 + i, 15.0, 11.8 + i] for i in range(5)]
+    expect_dmx = [['起点距(m)'] + CHAINS]
+    for k in range(7):
+        expect_dmx.append([dmx_z[j][k] for j in range(5)] + [None])
+    check('dmx 宽表逐格数值/顺序（全表 %dx%d 逐格相等）'
+          % (len(expect_dmx), len(expect_dmx[0])), wide == expect_dmx,
+          'rows=%d/%d first diff=%r'
+          % (len(wide), len(expect_dmx),
+             next((('%d,%d %r!=%r' % (r, c, wide[r][c], expect_dmx[r][c]))
+                   for r in range(min(len(wide), len(expect_dmx)))
+                   for c in range(len(expect_dmx[0]))
+                   if c >= len(wide[r]) or wide[r][c] != expect_dmx[r][c]), 'none')))
     extra = sheets[3][1]
     check('dmx 仅高程点表行数=20+1 且全为高程点',
           len(extra) == 21 and extra[0] == ['序号', '桩号', '起点距(m)', '高程(m)', '点句柄']

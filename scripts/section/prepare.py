@@ -202,6 +202,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _db_compare_series(args: argparse.Namespace) -> List[Dict[str, Any]]:
+    """--compare-source 用的 DB 序列：取**删点前**的原始测点（与源表条目按点身份 1:1 对齐）。
+
+    为什么单独取一次：`--drop-suspect` 会让 build_db_model 从 model["series"] 里删掉离群点，
+    若比对仍用删点后的序列按下标对齐，删点位置之后的下标整体前移 -> 比对静默错位
+    （compared/same/differing/byDate 全部失真）。比对是「数据审计」，应以原始数据为准；
+    这里复用同一套选日期逻辑重取一次只读查询（仅在本组合下多一次 DB 打开，通常 <0.3 s）。
+    """
+    con = open_db(args.db)
+    try:
+        dates = select_db_dates(db_list_dates(con, args.from_db),
+                                args.date, args.years, args.last)
+        return [{"date": s["date"], "points": s["points"]}
+                for s in (db_fetch_series(con, args.from_db, d["date"]) for d in dates)]
+    finally:
+        try:
+            con.close()
+        except Exception as exc:
+            warn_exc("DB_CLOSE_FAILED", exc, db=os.path.abspath(args.db))
+
+
 def _run_db(args: argparse.Namespace, water_levels: List[Tuple[float, str]],
             xls_path: Optional[str]) -> int:
     """DB 路径：schema v2 多序列（--list-dates / --compare-source / --summary）。"""
@@ -238,7 +259,12 @@ def _run_db(args: argparse.Namespace, water_levels: List[Tuple[float, str]],
         if header is None:
             raise SectionError("BAD_DATA", "比对源表未识别到实测大断面表头", path=xls_path)
         blocks = parse_yssd_blocks(rows, header[0], header[1])
-        db_series = [{"date": s["date"], "points": s["points"]} for s in model["series"]]
+        # --drop-suspect 会从 series 里删点；比对必须用删点前的原始序列（否则下标前移、静默错位）。
+        # 不带 --drop-suspect 时保持原路径（模型 series 即原始序列，行为零变化）。
+        if args.drop_suspect:
+            db_series = _db_compare_series(args)
+        else:
+            db_series = [{"date": s["date"], "points": s["points"]} for s in model["series"]]
         cmp = compare_db_vs_excel(db_series, blocks)
         for row in cmp["byDate"]:
             ser = next((s for s in model["series"] if s["date"] == row.get("date")), None)
@@ -246,11 +272,20 @@ def _run_db(args: argparse.Namespace, water_levels: List[Tuple[float, str]],
                 row["dbWaterLevel"] = ser["waterLevels"][0]["value"]
         cmp["xlsPath"] = os.path.abspath(xls_path)
         model["sourceCompare"] = cmp
-        code = "SOURCE_COMPARE_DIFF" if cmp["differingCount"] else "SOURCE_COMPARE_SAME"
-        msg = ("DB vs 源 .xls：比对 %d 点，%d 处不同%s"
-               % (cmp["compared"], cmp["differingCount"],
-                  "（源表高程被截断成无小数点短文本，DB 为正确值）"
-                  if cmp["differingCount"] else "（两者一致）"))
+        # 源表里找不到的施测日期（byDate[].matched=false）不能计入「两者一致」：修前这种
+        # 情形会误报 SOURCE_COMPARE_SAME（比对 0 点却称「两者一致」），现单独给 UNMATCHED。
+        unmatched = sum(1 for row in cmp["byDate"] if not row.get("matched"))
+        if cmp["differingCount"]:
+            code = "SOURCE_COMPARE_DIFF"
+            msg = ("DB vs 源 .xls：比对 %d 点，%d 处不同（源表高程被截断成无小数点短文本，"
+                   "DB 为正确值）" % (cmp["compared"], cmp["differingCount"]))
+        elif unmatched:
+            code = "SOURCE_COMPARE_UNMATCHED"
+            msg = ("DB vs 源 .xls：%d 个施测日期在源表里没有对应施测块，未做比对"
+                   "（见 sourceCompare.byDate[].matched=false）" % unmatched)
+        else:
+            code = "SOURCE_COMPARE_SAME"
+            msg = "DB vs 源 .xls：比对 %d 点，0 处不同（两者一致）" % cmp["compared"]
         model["warnings"].append({"code": code, "message": msg,
                                   "compared": cmp["compared"], "same": cmp["same"],
                                   "differingCount": cmp["differingCount"]})
