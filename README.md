@@ -335,7 +335,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bench\run_bench.ps1 
 python tests\cross_app_diff.py --read a=tmp\compare\zwcad16\read.json --read b=tmp\compare\zwcad2025\read.json
 ```
 
-以上离线层已接进 `.github\workflows\offline-ci.yml`（push/PR 自动跑；**在线 CAD 部分永远不在 CI 里跑**，领域固有约束）。测试与基准的产物一律写 `tmp\`（已在 `.gitignore`，按需再生）。数据侧依赖统一见 [`requirements.txt`](requirements.txt)（本机开发环境里另有离线兜底库 `tools\py-libs`，不入库）。
+以上离线层已接进 `.github\workflows\offline-ci.yml`（push/PR 自动跑；**在线 CAD 部分永远不在 CI 里跑**，领域固有约束）。**首次实跑 11 步全绿**（[run 41943999965](https://github.com/freeskychenjun/zwcad-cooperate/actions/runs/41943999965)，1m14s）：python 3.9 语法门（安装的解释器是 3.11，"3.9+" 由 `tests\check_py39_syntax.py` 的 `ast.parse(feature_version=(3,9))` 把关）→ 数据侧 41 → 体检 89·0·3 → 检查器负例 → 断面 82 → 端到端 dry-run 10·0·2 → C# 6 套 644 → 证据 artifact。测试与基准的产物一律写 `tmp\`（已在 `.gitignore`，按需再生）。数据侧依赖统一见 [`requirements.txt`](requirements.txt)（本机开发环境里另有离线兜底库 `tools\py-libs`，不入库）。
 
 ## 深入文档
 

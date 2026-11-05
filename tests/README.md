@@ -150,7 +150,7 @@ powershell -File tests\selftest_lisp.ps1        # C# 6 套：106+53+132+119+103+
 powershell -File tests\run_m1.ps1 -DryRunOnly -Python <python全路径>   # PASS 10 / FAIL 0 / SKIP 2（CAD 步按设计跳过）
 ```
 
-以上全部已接进 `.github\workflows\offline-ci.yml`（push/PR，windows + Python 3.9，零 CAD）。
+以上全部已接进 `.github\workflows\offline-ci.yml`（push/PR，windows runner，零 CAD）：首次实跑 11 步全绿（[run 41943999965](https://github.com/freeskychenjun/zwcad-cooperate/actions/runs/41943999965)）。跑 CI 等价环境时注意两件事：`run_m1.ps1` 的 `-Python` 要传**解析后的路径**（它对参数做 `Test-Path` 预检）；runner 控制台默认 **cp1252**，本目录脚本已各自 `reconfigure(encoding="utf-8", errors="replace")` 自保。
 
 - 30 点 fixture → **67 实体**：`LWPOLYLINE 1 / LINE 3 / TEXT 62 / CIRCLE 1`；`AI-SEC-GROUND 1 / WATER 1 / ANNO 63 / AXIS 2`。
 - `bbox={x0:0,y0:10,x1:290,y1:125}`、`widthMm=290`、`heightMm=115`、`elevBase=38.05`、`scale=1000/50`、`autoScaled=true`。

@@ -83,7 +83,11 @@
 
 1. **真机 `radius` 未观测**：本轮样本图前 500 实体不含 CIRCLE/ARC。建议下次在一张有圆/弧的图上跑 `read -Mode geom -Limit 50` 确认（离线断言与模板已覆盖生成/消费两端）。
 2. **全量 geom 响应体上限（既有边界，未改协议）**：41k 实体全量 `read -Mode geom` 时，LISP 扫描只需 ≈1.5 s 且 dump 与基线逐字节相同（4.8 MB），但"41k 实体 → JSON 响应"产生不出应答（client 180 s 超时、stdout 0 字节；直连 one-shot helper 也不写 response）。已写入 `SKILL.md` 能力边界与 `docs/M3-E6-geometry-dump.md §6.3`；**可用做法**是 `-Limit` 分页或直接消费 `%TEMP%` 的 dump 文件。若要做"一次拿全量"，需要改协议（分块/流式/落盘引用），属独立课题。
-3. **CI 未在 GitHub 实跑**：`offline-ci.yml` 的 5 个入口在本机已全绿，但 Actions 需要首次 push 后确认（特别是 windows runner 上 `csc.exe` 可用性与 Python 3.9 依赖安装）。首次 push 后请看一眼 `offline-ci` 工作流。
+3. ~~**CI 未在 GitHub 实跑**~~ → **已完成（2026-11-05 08:48Z）**：推 `main` 后 `offline-ci` 首跑即暴露两个真问题，修完第二跑 11 步全绿（run [41943999965](https://github.com/freeskychenjun/zwcad-cooperate/actions/runs/41943999965)，1m14s）：
+   - `run_m1.ps1` 对参数做 `Test-Path` 预检 ⇒ workflow 里裸 `python` 必然 `missing: python`，改为 `-Python (Get-Command python).Source`；
+   - windows runner 控制台是 **cp1252**，`tests/selftest.py` 打印中文明细抛 `UnicodeEncodeError` ⇒ job 级 `PYTHONUTF8=1`/`PYTHONIOENCODING=utf-8` + 三个测试入口加 `reconfigure(encoding="utf-8", errors="replace")` 自保；
+   - 顺手把 `setup-python` 从 3.9 改 3.11（3.9 已 EOL、镜像可能缺失），"支持 3.9"改由新增的 `tests/check_py39_syntax.py`（`ast.parse(feature_version=(3,9))` 校验 34 个 .py）把关。
+   证据：`gh run view 41943999965`；本机也按 CI 同编码（`PYTHONIOENCODING=cp1252`、清空 `PYTHONPATH`）预演过全部步骤。
 4. **下一轮可做**（按建议顺序；**前四项已于第二轮完成，见 §八**）：~~5.3 合并 build_sections~~ → ~~4.4 空间索引~~ → ~~4.2 注入管道抽象~~ → ~~5.1 第一批（Json/PipeIo）~~ → 剩余：5.1 **第二批**（Com/Cad/State/Daemon/PipeIo 之外的类逐类搬移，每搬一类跑一次离线回归）、4.4 的「gcd 宽表逐 cell 写 → append」、5.5 的 `--compare-source` 端到端 golden（需真实 `.xls` 源表）、`DEFAULT_DB_PATH` 延迟求值。
 5. **本机现场**：`bin\cache` 已从 140 目录/13.39 MB 收敛到 10 目录/1.76 MB；`%TEMP%\zwcad-cooperate` 里的 `g3.*`、`gtest*`、`contours.json`、`sections-src.json` 等是 **2026-11-04 M3-E6 试验遗留**，非本轮产物，可随时手工删除（不在仓库内）。
 
@@ -128,6 +132,7 @@
 | `tests\run_m1.ps1 -DryRunOnly -NoCad` | **PASS 10 / FAIL 0 / SKIP 2**（`lisp.wire` 步 PASS lines 291→410） |
 | 四个 golden 对比 | 数据侧 34,024+69,987 cell 0 差异；prepare 21/21 全等；LISP 真机 0 字段差异 |
 | 真机只读冒烟（5.1 第二批后） | status / read geom 20 / read 20 / query 10 / doctor 全 ok，`readPath` 仍 lisp-file-geom / lisp-file；CMDECHO=1、CMDACTIVE=0、%TEMP% 残留 0 |
+| **GitHub Actions `offline-ci`** | **首次实跑 11 步全绿**（run [41943999965](https://github.com/freeskychenjun/zwcad-cooperate/actions/runs/41943999965)，1m14s）：语法门 → selftest 41 → audit 89·0·3 → checkers → sections 82 → run_m1 10·0·2 → selftest_lisp 6 套 644 → 证据 artifact |
 
 ### 8.6 5.1 第二批：`ZwcHelper.cs` 逐类拆完（4,100 → 173 行）
 - 13 个类型按 6 步搬出：`Core.cs`(130) `ComInterop.cs`(64) `Com.cs`(269) `Procs.cs`(124) `Cad.cs`(864) `State.cs`(218) `Cmd.cs`(126) `Daemon.cs`(108)，`Commands`（2,135 行 / 46 成员）拆成 **双 partial**：`Commands.cs`(810，共享 helper+会话诊断) + `CommandsRead.cs`(1,382，read/section/写图/verify/rollback)。`ZwcHelper.cs` 只剩 `Program`（173 行）；`scripts\helper` 现 22 个 `.cs`，**csc 通配、`zwc.ps1`、run_m1 源清单零改动**。

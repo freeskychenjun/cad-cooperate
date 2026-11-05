@@ -191,7 +191,7 @@ powershell -File scripts\bench\run_bench.ps1 -Entry client -Product zwcad16 -Rep
 scripts\zwc.ps1 serve -Action prune
 ```
 
-> 离线层已接入 `.github\workflows\offline-ci.yml`（push/PR 跑数据侧自测 + 体检规则 + 端到端 dry-run + csc 解析测试；**在线 CAD 一律不进 CI**）。
+> 离线层已接入 `.github\workflows\offline-ci.yml`（push/PR 跑 3.9 语法门 + 数据侧自测 + 体检规则 + 检查器负例 + 断面提取 + 端到端 dry-run + C# 6 套 644 断言；**在线 CAD 一律不进 CI**）。首次实跑 11 步全绿（run 41943999965，1m14s）。
 
 ## 目录
 
