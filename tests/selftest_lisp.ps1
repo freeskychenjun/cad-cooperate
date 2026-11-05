@@ -1,20 +1,25 @@
-# selftest_lisp.ps1 - offline regression tests for the LISP wire parser + dump template (M3-E6).
+# selftest_lisp.ps1 - offline regression tests for the helper's CAD-free logic: the LISP wire
+# parser + dump template (M3-E6) and, since the 5.1 split, the core/COM/state/command units.
 #
 # Pure ASCII on purpose: on this machine the pwsh tool actually runs Windows PowerShell 5.1, which
 # parses a BOM-less .ps1 with the ANSI code page, so any Chinese literal here would become mojibake
 # and a syntax error. Everything Chinese belongs to the dumped data, never to this script.
 #
-# What it does (no CAD, no COM, no drawing is touched, nothing is injected):
+# What it does (no CAD, no COM server, no drawing is touched, nothing is injected):
 #   1. compile tests\lispwire\LispWireTests.cs + scripts\helper\LispWire.cs             -> tmp\lispwire\
 #   2. compile tests\lispwire\LispTemplateTests.cs + tests\lispwire\ZwcErrorStub.cs
 #      + scripts\helper\LispTemplate.cs + scripts\helper\LispWire.cs                    -> tmp\lispwire\
-#   3. compile tests\jsonself\JsonTests.cs + tests\jsonself\JMapStub.cs
-#      + scripts\helper\Json.cs                                                         -> tmp\lispwire\
+#   3. compile tests\jsonself\JsonTests.cs + scripts\helper\{Json,Core}.cs
+#      (the real JMap from Core.cs, no stand-in)                                        -> tmp\lispwire\
 #   4. compile tests\lispwire\LispScanTests.cs + tests\lispwire\LispScanStubs.cs
 #      + tests\lispwire\ZwcErrorStub.cs + scripts\helper\{LispScan,LispWire,LispTemplate}.cs
 #      (the injection pipeline: ssget filter, temp paths, load command, sentinel count, GBK
 #       decode, phase classification, cleanup decision - all pure functions, no CAD)      -> tmp\lispwire\
-#   5. run all suites, forward their PASS/FAIL lines, exit 1 when a suite fails to compile or
+#   5. compile tests\coreself\CoreTests.cs + scripts\helper\{Core,Json,State}.cs        -> tmp\lispwire\
+#      (JMap/ZwcError/Ctx, Json round-trip, State's in-memory session/token helpers)
+#   6. compile tests\coreself\ComCmdTests.cs + scripts\helper\{Core,Com,Cmd}.cs         -> tmp\lispwire\
+#      (COM late-binding via reflection on POCOs, retry policy, Cmd's prompt/bracket guards)
+#   7. run all suites, forward their PASS/FAIL lines, exit 1 when a suite fails to compile or
 #      reports at least one FAIL.
 #
 # Usage:  powershell -NoProfile -ExecutionPolicy Bypass -File tests\selftest_lisp.ps1
@@ -36,6 +41,7 @@ $root = Split-Path -Parent $here
 $helperDir = Join-Path $root 'scripts\helper'
 $lispTests = Join-Path $here 'lispwire'
 $jsonTests = Join-Path $here 'jsonself'
+$coreTests = Join-Path $here 'coreself'
 $outDir = Join-Path $root 'tmp\lispwire'
 
 $csc = Get-CscPath
@@ -58,7 +64,7 @@ function Compile-Suite {
     if (Test-Path -LiteralPath $Exe) {
         try { Remove-Item -LiteralPath $Exe -Force } catch { }
     }
-    $cscArgs = @('-nologo', '-optimize+', '-target:exe', '-platform:anycpu', '-codepage:65001', ('-out:' + $Exe)) + $Sources
+    $cscArgs = @('-nologo', '-optimize+', '-target:exe', '-platform:anycpu', '-codepage:65001', '-nowarn:0649', ('-out:' + $Exe)) + $Sources
     $log = (& $csc @cscArgs 2>&1 | Out-String)
     if (-not (Test-Path -LiteralPath $Exe)) {
         Write-Host ('FAIL compile ' + $Name + ': ' + $log.Trim())
@@ -89,8 +95,8 @@ $suites = @(
         Exe     = (Join-Path $outDir 'JsonTests.exe')
         Sources = @(
             (Join-Path $jsonTests 'JsonTests.cs'),
-            (Join-Path $jsonTests 'JMapStub.cs'),
-            (Join-Path $helperDir 'Json.cs')
+            (Join-Path $helperDir 'Json.cs'),
+            (Join-Path $helperDir 'Core.cs')
         )
     },
     [ordered]@{
@@ -103,6 +109,26 @@ $suites = @(
             (Join-Path $helperDir 'LispScan.cs'),
             (Join-Path $helperDir 'LispWire.cs'),
             (Join-Path $helperDir 'LispTemplate.cs')
+        )
+    },
+    [ordered]@{
+        Name    = 'CoreTests'
+        Exe     = (Join-Path $outDir 'CoreTests.exe')
+        Sources = @(
+            (Join-Path $coreTests 'CoreTests.cs'),
+            (Join-Path $helperDir 'Core.cs'),
+            (Join-Path $helperDir 'Json.cs'),
+            (Join-Path $helperDir 'State.cs')
+        )
+    },
+    [ordered]@{
+        Name    = 'ComCmdTests'
+        Exe     = (Join-Path $outDir 'ComCmdTests.exe')
+        Sources = @(
+            (Join-Path $coreTests 'ComCmdTests.cs'),
+            (Join-Path $helperDir 'Core.cs'),
+            (Join-Path $helperDir 'Com.cs'),
+            (Join-Path $helperDir 'Cmd.cs')
         )
     }
 )
