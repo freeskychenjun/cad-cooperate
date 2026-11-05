@@ -436,6 +436,199 @@ namespace ZwcHelper
             return c;
         }
 
+        // ------------------------------------------------------------------ -App any (auto)
+        // Product families are separate COM identities, so "which CAD is this request about" is a
+        // real question. `-App any` (now the default) resolves it without asking the user:
+        //   * exactly one family is running -> that one (AutoCAD versions are told apart by process);
+        //   * both families are running    -> only the TARGET DOCUMENT can decide: the family that
+        //                                     already has that file open wins, otherwise we refuse
+        //                                     to guess (AMBIGUOUS_PRODUCT with the candidate list);
+        //   * nothing is running           -> NO_INSTANCE (and -Launch alone cannot pick a family).
+
+        internal static bool IsAnyKind(string kind)
+        {
+            if (string.IsNullOrEmpty(kind)) return true;
+            string k = kind.Trim().ToLowerInvariant();
+            return k == "any" || k == "auto" || k == "*";
+        }
+
+        /// <summary>Running instances of BOTH families, each entry tagged with its kind.</summary>
+        internal static List<JMap> DetectRunningBoth()
+        {
+            List<JMap> all = new List<JMap>();
+            string[] kinds = new string[] { "zwcad", "autocad" };
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                List<JMap> one = DetectRunning(kinds[i]);
+                for (int j = 0; j < one.Count; j++)
+                {
+                    JMap m = one[j];
+                    m.Add("kind", kinds[i]);
+                    all.Add(m);
+                }
+            }
+            return all;
+        }
+
+        /// <summary>Which running instance already has this drawing open? Compares the full path when
+        /// the argument is an absolute path, otherwise the file name. Returns null when nobody has it
+        /// (or when the probe fails).</summary>
+        internal static JMap FindRunningDocOwner(string wantedDoc, Ctx ctx)
+        {
+            if (string.IsNullOrEmpty(wantedDoc)) return null;
+            string wantFull = null;
+            string wantName = null;
+            try
+            {
+                if (System.IO.Path.IsPathRooted(wantedDoc)) wantFull = NormalizeDocPath(wantedDoc);
+                wantName = System.IO.Path.GetFileName(wantedDoc);
+            }
+            catch (Exception) { }
+            if (wantName == null) wantName = wantedDoc;
+            if (wantFull != null) wantName = null;   // an absolute path is matched strictly
+
+            List<JMap> running = DetectRunningBoth();
+            for (int i = 0; i < running.Count; i++)
+            {
+                JMap r = running[i];
+                string kind = r.Str("kind", "zwcad");
+                string product = r.Str("product", null);
+                string prog = SuggestProgId(kind, product);
+                if (string.IsNullOrEmpty(prog))
+                {
+                    List<ProdInfo> known = KnownProducts(kind);
+                    if (known.Count > 0) prog = known[0].ProgId;
+                }
+                if (string.IsNullOrEmpty(prog)) continue;
+                object app = null;
+                try { app = Marshal.GetActiveObject(prog); }
+                catch (Exception) { continue; }
+                if (app == null) continue;
+                try
+                {
+                    object docs = Com.TryGet(app, "Documents");
+                    if (docs == null) continue;
+                    int n = Com.I32(Com.TryGet(docs, "Count"));
+                    int baseIdx = Coll.DetectBase(docs, n);
+                    for (int k = 0; k < n; k++)
+                    {
+                        object doc = Coll.At(docs, baseIdx, k, n);
+                        if (doc == null) continue;
+                        string full = Com.Str(Com.TryGet(doc, "FullName"));
+                        string name = Com.Str(Com.TryGet(doc, "Name"));
+                        bool hit = wantFull != null
+                            ? (full != null && string.Equals(NormalizeDocPath(full), wantFull, StringComparison.OrdinalIgnoreCase))
+                            : (string.Equals(name, wantName, StringComparison.OrdinalIgnoreCase)
+                               || (full != null && string.Equals(System.IO.Path.GetFileName(full), wantName, StringComparison.OrdinalIgnoreCase)));
+                        if (!hit) continue;
+                        JMap found = new JMap();
+                        found.Add("found", true);
+                        found.Add("kind", kind);
+                        found.Add("product", product);
+                        found.Add("progId", prog);
+                        found.Add("pid", r.Int("pid", 0));
+                        found.Add("doc", name);
+                        found.Add("docFullName", full);
+                        return found;
+                    }
+                }
+                catch (Exception) { }
+            }
+            return null;
+        }
+
+        private static string NormalizeDocPath(string p)
+        {
+            if (string.IsNullOrEmpty(p)) return "";
+            string s = p.Trim();
+            try { s = System.IO.Path.GetFullPath(s); } catch (Exception) { }
+            return s.Replace('/', '\\').TrimEnd('\\');
+        }
+
+        /// <summary>Resolve `-App any` when no target document can decide: exactly one family running
+        /// wins, two families are an error, none is NO_INSTANCE. Never launches anything.</summary>
+        internal static string ResolveAnyKind(Ctx ctx, out JMap detail, out string errorCode)
+        {
+            detail = new JMap();
+            errorCode = null;
+            List<JMap> running = DetectRunningBoth();
+            List<object> zw = new List<object>();
+            List<object> ac = new List<object>();
+            for (int i = 0; i < running.Count; i++)
+            {
+                JMap r = running[i];
+                JMap m = new JMap();
+                m.Add("product", r.Str("product", null));
+                m.Add("pid", r.Int("pid", 0));
+                m.Add("title", r.Str("title", null));
+                if (r.Str("kind", "") == "autocad") ac.Add(m); else zw.Add(m);
+            }
+            detail.Add("zwcad", zw);
+            detail.Add("autocad", ac);
+            bool hasZw = zw.Count > 0;
+            bool hasAc = ac.Count > 0;
+            if (hasZw && !hasAc) return "zwcad";
+            if (hasAc && !hasZw) return "autocad";
+            if (!hasZw && !hasAc) { errorCode = "NO_INSTANCE"; return null; }
+            errorCode = "AMBIGUOUS_PRODUCT";
+            return null;
+        }
+
+        /// <summary>Attach for one request: honours -App zwcad|autocad (explicit), otherwise resolves
+        /// `any` (single running family, or the family that already has the target document open).</summary>
+        internal static Cad AttachFor(JMap req, JMap args, Ctx ctx, string wantedDoc)
+        {
+            string appArg = args.Str("app", null);
+            if (string.IsNullOrEmpty(appArg)) appArg = req.Str("app", null);
+            bool launch = args.Bool("launch", false);
+            string explicitProgId = ExplicitProgId(req, args);
+
+            if (!IsAnyKind(appArg))
+            {
+                ctx.Kind = appArg.Trim().ToLowerInvariant();
+                return Attach(ctx.Kind, launch, ctx, explicitProgId);
+            }
+
+            // -App any: the target document decides first (only when both families are running)
+            List<JMap> running = DetectRunningBoth();
+            bool hasZw = false, hasAc = false;
+            for (int i = 0; i < running.Count; i++)
+            {
+                if (running[i].Str("kind", "") == "autocad") hasAc = true; else hasZw = true;
+            }
+            if (hasZw && hasAc && !string.IsNullOrEmpty(wantedDoc))
+            {
+                JMap owner = FindRunningDocOwner(wantedDoc, ctx);
+                if (owner != null)
+                {
+                    ctx.Kind = owner.Str("kind", "zwcad");
+                    string prog = owner.Str("progId", null);
+                    return Attach(ctx.Kind, false, ctx, prog);
+                }
+            }
+            JMap detail;
+            string code;
+            string kind = ResolveAnyKind(ctx, out detail, out code);
+            if (kind == null)
+            {
+                if (code == "NO_INSTANCE")
+                    throw new ZwcError("NO_INSTANCE",
+                        launch
+                            ? "no CAD instance is running and -App was not given, so the product to start is unknown"
+                            : "no ZWCAD and no AutoCAD instance is running",
+                        launch
+                            ? "pass -App zwcad|autocad (plus -ProgId when several versions of that product are installed) so the tool knows which CAD to start"
+                            : "open the drawing in ZWCAD or AutoCAD first; the tool never starts a CAD on its own",
+                        Json.Write(detail));
+                throw new ZwcError("AMBIGUOUS_PRODUCT",
+                    "both a ZWCAD and an AutoCAD instance are running and the target drawing is open in neither; refusing to guess which one to drive",
+                    "pass -App zwcad|autocad (and -ProgId when several versions of that product run), or open the drawing in the one you want",
+                    Json.Write(detail));
+            }
+            ctx.Kind = kind;
+            return Attach(kind, launch, ctx, explicitProgId);
+        }
+
         public static Cad AttachWithChoice(string kind, bool launch, Ctx ctx, ProgChoice pc, string explicitProgId)
         {
             Cad c = new Cad();

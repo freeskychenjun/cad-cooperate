@@ -120,7 +120,7 @@ namespace ZwcHelper
         // ------------------------------------------------------------------ entity
         public static JMap EntityCmd(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Commands.AppKindOf(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, Commands.DocArgOf(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(Commands.DocArgOf(req, args), args.Bool("allowActive", false), ctx, out matchedBy);
@@ -1025,7 +1025,7 @@ namespace ZwcHelper
         /// <summary>xprobe: dump what GetXData/SetXData really return on this CAD build.</summary>
         public static JMap XProbeCmd(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Commands.AppKindOf(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, Commands.DocArgOf(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(Commands.DocArgOf(req, args), args.Bool("allowActive", false), ctx, out matchedBy);

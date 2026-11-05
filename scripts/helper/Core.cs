@@ -112,6 +112,7 @@ namespace ZwcHelper
         public JMap DocMap;
         public JMap AppMap;
         public string UndoToken;
+        public string Kind;           // product family actually resolved for this request ("zwcad"|"autocad")
         public bool FpChanged;   // set when the drawing changed outside this session before a write
         public bool PlanOnly;       // dry-run/plan: resolutions may fall back to any open drawing (no writes)
         public JMap LispMeta;         // M3-E5: timing/size of the LISP file scan when used

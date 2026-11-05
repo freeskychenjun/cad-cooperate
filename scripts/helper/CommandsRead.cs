@@ -40,7 +40,7 @@ namespace ZwcHelper
 
         public static JMap Read(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Kind(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, DocArg(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(DocArg(req, args), args.Bool("allowActive", false), ctx, out matchedBy);

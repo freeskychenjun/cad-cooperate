@@ -1083,7 +1083,9 @@ namespace ZwcClient
                 }
             }
 
-            string appKind = opts.ContainsKey("app") ? opts["app"] : "zwcad";
+            // -App default: "any" = the helper resolves from the running instances (single family), or
+            // from the drawing that is already open (both families). -App zwcad|autocad still forces one.
+            string appKind = opts.ContainsKey("app") ? opts["app"] : "any";
             string docArg = null;
             if (opts.ContainsKey("doc")) docArg = opts["doc"];
             if (opts.ContainsKey("timeoutsec"))

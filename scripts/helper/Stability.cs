@@ -530,7 +530,7 @@ namespace ZwcHelper
             }
             else
             {
-                cad = Cad.Attach(attachKind, false, ctx, attachProg);
+                cad = Cad.AttachFor(req, args, ctx, Commands.DocArgOf(req, args));
                 _rwCad = cad; _rwKey = attachKey; _rwAt = DateTime.Now;
             }
             ctx.CachedCad = cad;

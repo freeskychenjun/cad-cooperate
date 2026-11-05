@@ -26,7 +26,7 @@ namespace ZwcHelper
         {
             string k = args.Str("app", null);
             if (string.IsNullOrEmpty(k)) k = req.Str("app", null);
-            if (string.IsNullOrEmpty(k)) k = "zwcad";
+            if (string.IsNullOrEmpty(k)) k = "any";   // -App any: resolve from the running instances
             return k;
         }
 
@@ -56,11 +56,30 @@ namespace ZwcHelper
         {
             string kind = Kind(req, args);
             string explicitProgId = Cad.ExplicitProgId(req, args);
+            bool anyKind = Cad.IsAnyKind(kind);
+            string anyError = null;
+            JMap anyDetail = null;
+            if (anyKind)
+            {
+                // -App any: doctor must be able to explain BOTH families. Pick the unambiguous one for
+                // the capability probes; when it is ambiguous report the candidate list instead of
+                // guessing (the caller sees instanceError + detectionAll).
+                string code;
+                string resolved = Cad.ResolveAnyKind(ctx, out anyDetail, out code);
+                if (resolved == null) { anyError = code; kind = "zwcad"; }
+                else kind = resolved;
+            }
             Cad.ProgChoice pc = Cad.ResolveProgIds(kind, explicitProgId, ctx);
 
             JMap r = new JMap();
             r.Add("tempDir", State.Dir());
             r.Add("stateFile", State.FilePath());
+            if (anyKind)
+            {
+                r.Add("appRequested", "any");
+                r.Add("appResolved", anyError == null ? kind : null);
+                r.Add("appAnyDetail", anyDetail);
+            }
 
             string csc = null;
             string[] archs = new string[] { "Framework64", "Framework" };
@@ -114,6 +133,20 @@ namespace ZwcHelper
             r.Add("session", st.Get("session"));
 
             ctx.Result = r;
+
+            if (anyError != null)
+            {
+                r.Add("instanceFound", false);
+                r.Add("instanceError", anyError);
+                ctx.AppMap = null;
+                ctx.Result = r;
+                throw new ZwcError(anyError,
+                    anyError == "AMBIGUOUS_PRODUCT"
+                        ? "both a ZWCAD and an AutoCAD instance are running, so -App any cannot tell which one is meant"
+                        : "no ZWCAD and no AutoCAD instance is running",
+                    "pass -App zwcad|autocad (plus -ProgId when several versions of that product run); see appAnyDetail for the candidate list",
+                    Json.Write(anyDetail));
+            }
 
             Cad cad;
             try { cad = Cad.AttachWithChoice(kind, false, ctx, pc, explicitProgId); }
@@ -275,7 +308,7 @@ namespace ZwcHelper
 
         public static JMap Status(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Kind(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, DocArg(req, args));
             ctx.AppMap = cad.AppInfo();
             List<object> docs = cad.Documents();
             object active = cad.ActiveDocument();
@@ -311,7 +344,10 @@ namespace ZwcHelper
             bool wantNew = args.Bool("new", false);
             string docArg = DocArg(req, args);
 
-            Cad cad = Cad.Attach(kind, launch, ctx, Cad.ExplicitProgId(req, args));
+            // -App any: when both families run, the drawing that is ALREADY OPEN decides - that is the
+            // whole point of "open this document" (no second copy in the wrong CAD, no asking the user).
+            Cad cad = Cad.AttachFor(req, args, ctx, docArg);
+            kind = ctx.Kind;
             ctx.AppMap = cad.AppInfo();
 
             object doc = null;
@@ -417,7 +453,7 @@ namespace ZwcHelper
         // ------------------------------------------------------------------ info
         public static JMap Info(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Kind(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, DocArg(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(DocArg(req, args), args.Bool("allowActive", false), ctx, out matchedBy);
@@ -579,7 +615,7 @@ namespace ZwcHelper
         /// <summary>`show`: make the currently attached CAD window visible and bring it forward.</summary>
         public static JMap ShowCmd(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Kind(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, DocArg(req, args));
             ctx.AppMap = cad.AppInfo();
             JMap r = Cad.Reveal(cad, ctx);
             ctx.AppMap = cad.AppInfo();
@@ -592,7 +628,7 @@ namespace ZwcHelper
         // ------------------------------------------------------------------ hint
         public static JMap HintCmd(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Kind(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, DocArg(req, args));
             ctx.AppMap = cad.AppInfo();
             string text = args.Str("text", null);
             bool clear = args.Bool("clear", false);
@@ -658,8 +694,7 @@ namespace ZwcHelper
         /// user's TRUSTEDPATHS - a read/query never does.</summary>
         public static JMap TrustCmd(JMap req, JMap args, Ctx ctx)
         {
-            string kind = Kind(req, args);
-            Cad cad = Cad.Attach(kind, false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, DocArg(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(DocArg(req, args), true, ctx, out matchedBy);
@@ -744,7 +779,7 @@ namespace ZwcHelper
             }
 
             Cad cad = null;
-            try { cad = Cad.Attach(Kind(req, args), false, ctx, Cad.ExplicitProgId(req, args)); }
+            try { cad = Cad.AttachFor(req, args, ctx, DocArg(req, args)); }
             catch (ZwcError) { cad = null; }
 
             bool ours = false;
@@ -838,9 +873,10 @@ namespace ZwcHelper
             // Count OUR product family (acad vs zwcad), not always ZWCAD: AutoCAD 2007 answered
             // Quit() successfully but kept its process alive, and the old counter watched the wrong
             // image name, so callers had to kill it by hand. Every step below stays bounded.
-            string kindForProcs = Kind(req, args);
+            // counting must follow the family that was ACTUALLY attached ( -App any may have resolved
             int timeoutMs = args.Int("timeoutSec", 25) * 1000;
             Stopwatch sw = Stopwatch.StartNew();
+            string kindForProcs = string.IsNullOrEmpty(ctx.Kind) ? Kind(req, args) : ctx.Kind;
             int after = Procs.FamilyCount(kindForProcs);
             while (after > 0 && ours && quit && sw.ElapsedMilliseconds < timeoutMs)
             {

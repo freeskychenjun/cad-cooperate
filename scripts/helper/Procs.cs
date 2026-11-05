@@ -46,11 +46,16 @@ namespace ZwcHelper
 
         public static int ZwcadCount() { return Zwcad().Count; }
 
-        /// <summary>Count processes of the product family we drive: "acad" for AutoCAD, "zwcad" for ZWCAD.</summary>
+        /// <summary>Processes of the product family we drive: "acad" for AutoCAD, "zwcad" for ZWCAD.
+        /// "any"/empty counts BOTH families (that is what `-App any` means once a request never named a
+        /// product, and what `finish` must sweep then).</summary>
         public static List<object> Family(string kind)
         {
-            bool acad = (kind ?? "").IndexOf("autocad", StringComparison.OrdinalIgnoreCase) >= 0;
-            string needle = acad ? "acad" : "zwcad";
+            bool any = string.IsNullOrEmpty(kind) || kind.Trim().Length == 0
+                || kind.Trim().Equals("any", StringComparison.OrdinalIgnoreCase)
+                || kind.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase);
+            bool acad = !any && (kind ?? "").IndexOf("autocad", StringComparison.OrdinalIgnoreCase) >= 0;
+            string needle = any ? null : (acad ? "acad" : "zwcad");
             List<object> found = new List<object>();
             try
             {
@@ -59,7 +64,11 @@ namespace ZwcHelper
                     try
                     {
                         string nm = p.ProcessName;
-                        if (nm != null && nm.ToLowerInvariant().Contains(needle))
+                        string low = nm == null ? "" : nm.ToLowerInvariant();
+                        bool hit = needle == null
+                            ? (low.Contains("acad") || low.Contains("zwcad"))
+                            : low.Contains(needle);
+                        if (hit)
                         {
                             JMap m = new JMap();
                             m.Add("name", nm);
@@ -81,8 +90,11 @@ namespace ZwcHelper
         internal static List<object> HiddenAutomation(string kind)
         {
             List<object> list = new List<object>();
-            bool acad = (kind ?? "").IndexOf("autocad", StringComparison.OrdinalIgnoreCase) >= 0;
-            string needle = acad ? "acad" : "zwcad";
+            bool any = string.IsNullOrEmpty(kind) || kind.Trim().Length == 0
+                || kind.Trim().Equals("any", StringComparison.OrdinalIgnoreCase)
+                || kind.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase);
+            bool acad = !any && (kind ?? "").IndexOf("autocad", StringComparison.OrdinalIgnoreCase) >= 0;
+            string needle = any ? null : (acad ? "acad" : "zwcad");
             try
             {
                 using (System.Management.ManagementObjectSearcher searcher = new System.Management.ManagementObjectSearcher(
@@ -96,7 +108,11 @@ namespace ZwcHelper
                             string exePath = mo["ExecutablePath"] as string;
                             int pid = Convert.ToInt32(mo["ProcessId"], CultureInfo.InvariantCulture);
                             if (cmdline == null) continue;
-                            if (cmdline.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                            bool cmdHit = needle == null
+                                ? (cmdline.IndexOf("acad", StringComparison.OrdinalIgnoreCase) >= 0
+                                   || cmdline.IndexOf("zwcad", StringComparison.OrdinalIgnoreCase) >= 0)
+                                : cmdline.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+                            if (!cmdHit) continue;
                             bool automation = cmdline.IndexOf("Automation", StringComparison.OrdinalIgnoreCase) >= 0
                                 || cmdline.IndexOf("-Embedding", StringComparison.OrdinalIgnoreCase) >= 0;
                             if (!automation) continue;

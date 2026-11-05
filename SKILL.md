@@ -26,7 +26,16 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 - **stdout 永远是一段 JSON**（顶层 `ok` 是唯一判据）；退出码只看**顶层 `ok` 与 `error.code`**：`0`=ok、`2`=命令失败、`3`=门禁类失败（`VERIFY_FAILED`/`BAD_DATA`/`TOO_WIDE`/`CMD_STATE_POLLUTED`/`SENDCMD_TOO_LONG`/`LISP_UNBALANCED`/`OPEN_FAILED`）、`4`=引擎/输入错误。**message/detail 里出现这些词不影响退出码**（旧实现靠全文搜子串，已废除）。
 - 离线/排障专用子命令（不开 CAD、不连 daemon）：`bin\ZwcClient.exe hash`（打印本机算出的 helper 源码哈希）、`bin\ZwcClient.exe --prune-cache [-Keep N]`、`bin\ZwcClient.exe --selftest-exitcode [sample.json]`（退出码判据单测入口）。
 - 中文、几何、`-Items` 大 JSON **一律走文件**（`-RequestFile`/`-Items <file>`），命令行只传 ASCII 短参数（PS 5.1 按 ANSI 读 .ps1、cmd 会吃掉 `^` `=` `%`）。
-- **产品选择**：`-App zwcad|autocad`（默认 zwcad）。**AutoCAD 侧自动发现所有已安装版本**：注册表枚举 `AutoCAD.Application.NN[.M]` → CLSID → `LocalServer32`（64/32 双视图，2007 只注册在 WOW6432Node）→ 目录名反推标签（`...\AutoCAD 2021\acad.exe` = "AutoCAD 2021"），再与正在运行的进程匹配；因此双版本共存时 `-App autocad` **不给 ProgId 也能命中正在跑的那个**（2026-11-05 实测）。后缀 = ACADVER 去掉尾部 `.0`（2021=`.24`、2022=`.24.1`、2024=`.24.3`），`.24` 覆盖 2021–2024 一族。**无版本键 `AutoCAD.Application` 不可依赖**（本机 CurVer 被 2007 抢成 `.17`），只作最后附着候选；中望侧 `ZWCAD.Application` 仍会被"最后启动的产品"改写。显式 `-ProgId` 永远优先；两个不同产品同开返回 `MULTI_PRODUCT`（不猜）。
+- **产品选择（`-App`）与"打开某个文档"的语义**——默认 `-App any`，**用户不需要指定用哪个程序**，除非有真歧义：
+
+  | 场景 | 工具行为 |
+  |---|---|
+  | 只开着中望或只开着 AutoCAD（任一版本） | **自动**用它（AutoCAD 靠运行进程区分 2007/2021…）|
+  | 两族都在跑，但目标文件（`-Doc`）只在其中一个里开着 | **自动**附着"已经开着这份图"的那个实例（`open -Doc` 不会再开第二份）|
+  | 两族都在跑、目标文件两边都没开（或命令没给 `-Doc`）| `AMBIGUOUS_PRODUCT`，列出 `{zwcad,autocad}` 候选，要求 `-App`（同族多版本再给 `-ProgId`）|
+  | 一个都没开 | `NO_INSTANCE`；**带 `-Launch` 也必须显式 `-App`**（工具不猜该启动谁）|
+
+  `-App zwcad|autocad` 可强制产品族；`-ProgId` 永远最高优先。AutoCAD 版本自动发现：注册表枚举 `AutoCAD.Application.NN[.M]` → CLSID → `LocalServer32`（64/32 双视图，2007 只注册在 WOW6432Node）→ 目录名反推标签（`...\AutoCAD 2021\acad.exe` = "AutoCAD 2021"）。后缀 = ACADVER 去掉尾部 `.0`（2021=`.24`、2022=`.24.1`、2024=`.24.3`），`.24` 覆盖 2021–2024 一族。**无版本键 `AutoCAD.Application` 不可依赖**（本机 CurVer 被 2007 抢成 `.17`），只作最后附着候选；中望侧 `ZWCAD.Application` 仍会被"最后启动的产品"改写。
 
 ## 命令参考
 
@@ -36,7 +45,7 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 |---|---|---|
 | `doctor` | 环境自检：产品、进程、能力探测、E_NOTIMPL 清单 | `-Deep` 另做管道/COM/窗口 ping → `CAD_HUNG` |
 | `status` | 当前实例与文档列表、是否忙、产品、`mappedBy` | `docs[{name,fullName,saved,readOnly,count}]`、`cmdActive` |
-| `open` | 附着/新建文档；可打"〔AI接管中〕"标题标记；`-Launch` 默认把窗口显示到前台 | `-Doc <path>`、`-Launch`、`-New`、`-ReadOnly`、`-NoHint` |
+| `open` | 附着/新建文档；**`-Doc` 优先附着"已经开着这份图"的实例**（两族同开时也不会开第二份）；可打"〔AI接管中〕"标题标记；`-Launch` 默认把窗口显示到前台 | `-Doc <path>`、`-Launch`、`-New`、`-ReadOnly`、`-NoHint` |
 | `hint` | 用户可见提示：系统托盘「AI」图标 + 标题前缀 + 命令行横幅 | `-Text`、`-Tray`、`-Clear` |
 | `show` | 把当前附着的 CAD 窗口显示/置前（用户第一反应"看不到窗口"时用） | 返回 `hwnd/visible/foreground` |
 | `finish` | 收尾：关本次开的文档、只退**自己起的**实例、移除托盘图标、还原标题 | `-Quit`（必须给才会退出实例）、`-SweepHidden`（清理隐藏自动化实例）、`-TimeoutSec` |
@@ -156,7 +165,8 @@ powershell -File scripts\zwc.ps1 <cmd> ...  # 兼容入口：复杂参数/兜底
 | 错误码 | 含义 | 处置 |
 |---|---|---|
 | `NO_INSTANCE` | 没有对应产品的 CAD 实例 | 先让用户打开图纸；或 `open -Launch`（ACAD 冷启动 ≥3 min） |
-| `MULTI_PRODUCT` | 两个产品同时开 | 显式 `-ProgId` 指定 |
+| `MULTI_PRODUCT` | 同一产品族里两个不同版本同时开 | 显式 `-ProgId` 指定 |
+| `AMBIGUOUS_PRODUCT` | `-App any`（默认）时中望与 AutoCAD 都在跑，且目标文件不属于任何一方（或命令没给 `-Doc`）| 显式 `-App zwcad\|autocad`；同族多版本再给 `-ProgId`；或先让用户在那个程序里打开目标图 |
 | `PRODUCT_MISMATCH` | 显式 ProgId 与运行产品不一致（仅告警） | 核对 `-ProgId` |
 | `DOC_AMBIGUOUS` | 多文档且没给 `-Doc` | 传精确全路径或图名 |
 | `DOC_NOT_FOUND` / `DOC_GONE` | 文档没开 / 已被用户关掉 | 重新 `open` |

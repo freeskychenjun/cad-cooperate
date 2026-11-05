@@ -68,7 +68,25 @@ readPath=lisp-file-geom  polylineComFilled=2  wall≈0.4–4 s
 | `snapshot` / `diff` | ≈41 s（COM 指纹，8511 实体） |
 | 夹具 LISP 路径（6 实体） | 0.4–4 s |
 
-## 六、复跑
+## 六、产品自动解析（`-App any`，默认）
+
+问题：同一台机器同时装着中望与 AutoCAD（各自还有多个版本），"打开某个文档"时到底用哪个程序？
+`.dwg` 文件本身不记录该用哪个 CAD（Windows 文件关联与 COM 无关），所以工具按**运行实例**判定：
+
+| 场景（2026-11-05 真机实测） | 结果 |
+|---|---|
+| 只开着 AutoCAD 2021，`status`（不给 `-App`） | ✅ 自动 → `product=AutoCAD 2021, progId=.24, mappedBy=process`（改动前默认 zwcad → `NO_INSTANCE`） |
+| `doctor`（不给 `-App`） | ✅ `appRequested:"any"`、`appResolved:"autocad"`、`appAnyDetail={zwcad:[], autocad:[{product:"AutoCAD 2021",pid:6060}]}` |
+| `open -Doc <未打开的夹具>`（只开 AutoCAD） | ✅ 在 AutoCAD 里打开（`opened:true`），不启动新程序 |
+| 同一个文件再 `open` 一次 | ✅ `opened:false, matchedBy:"fullName"`——不重复开第二份 |
+| **两族都在跑**（中望 Classic 16 pid 13780 + AutoCAD 2021 pid 6060），`status` | ✅ `AMBIGUOUS_PRODUCT`，`detail` 列出两族候选与 pid，hint 指明传 `-App` 或先打开目标图 |
+| 两族都在跑，`open -Doc <只在 AutoCAD 里开着的夹具>` | ✅ **自动附着"已经开着这份图"的那个实例**（实测选中 AutoCAD 2021，`matchedBy:"cached"`），不报歧义 |
+| 两族都在跑，`-App zwcad` | ✅ 强制中望 Classic 16 |
+| 收尾 `finish -Quit -App zwcad` | ✅ 只退我们自己起的 pid（`ours:true, processesAfter:0, docsClosed:2`），AutoCAD 用户实例不受影响 |
+
+实现：`Cad.IsAnyKind / DetectRunningBoth / FindRunningDocOwner / ResolveAnyKind / AttachFor`；`Ctx.Kind` 记录实际解析结果，供 `finish` 的进程族计数与 `section` 的线型/字体分支使用。新增错误码 `AMBIGUOUS_PRODUCT`（同族多版本仍报 `MULTI_PRODUCT`）。
+
+## 七、复跑
 
 ```powershell
 cd <repo>

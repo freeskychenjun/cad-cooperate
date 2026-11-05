@@ -57,7 +57,7 @@ namespace ZwcHelper
                 return result;
             }
 
-            Cad cad = Cad.Attach(Kind(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, DocArg(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(DocArg(req, args), args.Bool("allowActive", false), ctx, out matchedBy);
@@ -90,7 +90,7 @@ namespace ZwcHelper
             JMap styleInfo = EnsureTextStyle(doc, styleName, Com.Str(Com.TryGet(cad.App, "FullName")), ctx);
             result.Add("textStyle", styleInfo);
 
-            JMap dashInfo = EnsureLinetype(doc, "DASHED", Kind(req, args), ctx);
+            JMap dashInfo = EnsureLinetype(doc, "DASHED", string.IsNullOrEmpty(ctx.Kind) ? Kind(req, args) : ctx.Kind, ctx);
             bool dashed = dashInfo.Bool("ok", false);
             double dashScale = dashInfo.Dbl("scale", 1.0);
             if (!dashed) ctx.Warn("LINETYPE_UNAVAILABLE", "DASHED is not available in this drawing; the water lines stay CONTINUOUS");
@@ -594,7 +594,7 @@ namespace ZwcHelper
         // ------------------------------------------------------------------ undo
         public static JMap UndoCmd(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Kind(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, DocArg(req, args));
             ctx.AppMap = cad.AppInfo();
 
             string token = OptStr(args, "token");

@@ -546,7 +546,7 @@ $finalText = $null
 $exitCode = 0
 try {
     # ---------------------------------------------------------------- request JSON
-    $appKind = 'zwcad'
+    $appKind = 'any'   # -App default: let the helper resolve from the running instances
     if ($opts.ContainsKey('app')) { $appKind = [string]$opts['app'] }
     $docArg = $null
     if ($opts.ContainsKey('doc')) { $docArg = Resolve-ExistingPath ([string]$opts['doc']) }

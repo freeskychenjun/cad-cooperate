@@ -139,13 +139,19 @@ cd zwcad-cooperate
 
 ### 选择产品（重要）
 
+**默认 `-App any`：你不需要告诉它用中望还是 AutoCAD。** 只开着一个产品时自动用它（AutoCAD 靠运行进程区分 2007/2021…）；两个产品都在跑时，`-Doc` 指向的**那份图在谁那里开着就用谁**（不会在另一个 CAD 里再开一份）；只有当两族都在跑、目标图又不在其中一边时，才报 `AMBIGUOUS_PRODUCT` 让你选。
+
 ```powershell
+.\scripts\zwc.cmd status                                     # 自动：单族在跑就用它
+.\scripts\zwc.cmd open -Doc "D:\某图.dwg"                     # 自动：谁开着这份图就附着谁
+.\scripts\zwc.cmd status -App zwcad                          # 强制产品族（同族多版本再给 -ProgId）
 .\scripts\zwc.cmd status -ProgId ZWCAD.Application.16        # 中望 Classic 16
 .\scripts\zwc.cmd status -ProgId ZWCAD.Application.2025      # 中望 2025
-.\scripts\zwc.cmd status -ProgId AutoCAD.Application.24      # AutoCAD 2021（也可直接 -App autocad 自动识别）
+.\scripts\zwc.cmd status -ProgId AutoCAD.Application.24      # AutoCAD 2021
+.\scripts\zwc.cmd status -ProgId AutoCAD.Application.17      # AutoCAD 2007
 ```
 
-同一台机器装多个产品时，**无版本 ProgID `ZWCAD.Application` 会被"最后启动的产品"改写**，所以建议总是显式给 `-ProgId`。只开一个产品时不带也能自动识别；两个产品同开则返回 `MULTI_PRODUCT`——**不猜**。详见 [docs/progid-selection.md](docs/progid-selection.md)。
+同一台机器装多个产品时，**无版本 ProgID `ZWCAD.Application` 会被"最后启动的产品"改写**，所以同族多版本时建议显式给 `-ProgId`。默认的 `-App any` 会按"谁在跑 / 谁开着这份图"自动判定；只有当**两个产品族都在跑、目标图又不在其中一边**时才返回 `AMBIGUOUS_PRODUCT`——**不猜**。详见 [docs/progid-selection.md](docs/progid-selection.md) 与 [docs/autocad-2021-acceptance.md](docs/autocad-2021-acceptance.md)。
 
 ## 五个真实任务示例
 

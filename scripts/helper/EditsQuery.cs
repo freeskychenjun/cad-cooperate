@@ -18,7 +18,7 @@ namespace ZwcHelper
         // ------------------------------------------------------------------ query
         public static JMap QueryCmd(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Commands.AppKindOf(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, Commands.DocArgOf(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(Commands.DocArgOf(req, args), args.Bool("allowActive", false), ctx, out matchedBy);
@@ -304,7 +304,7 @@ namespace ZwcHelper
 
         public static JMap SnapshotCmd(JMap req, JMap args, Ctx ctx)
         {
-            Cad cad = Cad.Attach(Commands.AppKindOf(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, Commands.DocArgOf(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(Commands.DocArgOf(req, args), args.Bool("allowActive", false), ctx, out matchedBy);
@@ -361,7 +361,7 @@ namespace ZwcHelper
             }
             if (!File.Exists(since)) throw new ZwcError("BAD_ARGS", "snapshot file not found: " + since, null, null);
 
-            Cad cad = Cad.Attach(Commands.AppKindOf(req, args), false, ctx, Cad.ExplicitProgId(req, args));
+            Cad cad = Cad.AttachFor(req, args, ctx, Commands.DocArgOf(req, args));
             ctx.AppMap = cad.AppInfo();
             string matchedBy;
             object doc = cad.ResolveDoc(Commands.DocArgOf(req, args), args.Bool("allowActive", false), ctx, out matchedBy);
