@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static partial class Commands
     {

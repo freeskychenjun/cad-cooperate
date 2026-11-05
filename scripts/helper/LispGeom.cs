@@ -34,7 +34,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static class LispGeom
     {

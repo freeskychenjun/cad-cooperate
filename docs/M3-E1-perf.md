@@ -1,4 +1,4 @@
-# M3-E1 性能底座：常驻 daemon + ZwcClient.exe + read 分级/分页/失败降级
+# M3-E1 性能底座：常驻 daemon + CadClient.exe + read 分级/分页/失败降级
 
 > 2026-11-04 14:14–14:55，core-cad（task-13）。目标：把「每命令 4.0 s 地板价」与「624 实体 read 209 s」压到 `status <600 ms` / `read -Mode handles <1.5 s` / `read -Mode geom <10 s`。
 > 证据：`tmp\evidence-daemon\*`、`tmp\compare-e1\*`；坑台账：`tmp\core-cad-notes.md` 附录 5。
@@ -17,20 +17,20 @@
 ## 二、架构：三层，每层都有明确职责
 
 ```
-zwc.cmd ──► bin\ZwcClient.exe <cmd> [flags]          ~60–100 ms 启动（不再经过 PowerShell）
-                ├─ 1) 连命名管道 zwc-<helper源码sha12>（warm daemon）   ← 常态路径
-                ├─ 2) 管道不可用 → 自起 ZwcHelper.exe --serve <pipe> → 轮询 ≤20 s
-                └─ 3) 仍无应答 → 一次性 ZwcHelper.exe --request/--response（临时文件）
+cad.cmd ──► bin\CadClient.exe <cmd> [flags]          ~60–100 ms 启动（不再经过 PowerShell）
+                ├─ 1) 连命名管道 cad-<helper源码sha12>（warm daemon）   ← 常态路径
+                ├─ 2) 管道不可用 → 自起 CadHelper.exe --serve <pipe> → 轮询 ≤20 s
+                └─ 3) 仍无应答 → 一次性 CadHelper.exe --request/--response（临时文件）
                         ↑ 每一步都有有界超时，客户端永不挂死
 
-scripts\zwc.ps1 <cmd> [flags]   ← 兼容入口（复杂参数构造/错误兜底）+ serve 生命周期 + --build-client
+scripts\cad.ps1 <cmd> [flags]   ← 兼容入口（复杂参数构造/错误兜底）+ serve 生命周期 + --build-client
 ```
 
 - **管道协议**（与 WPS 版同构）：**4 字节小端长度 + UTF-8 JSON**，一请求一连接，严格串行；`NamedPipeServerStream(maxInstances:1)`；管道名 = helper 源码哈希（改源码自动换管道，旧 daemon 自己闲置退出）。
 - **daemon 与一次性模式收同一份 request/response JSON**：两者都走 `Program.HandleRequestText()`，只是传输不同（可逐字节 A/B）。
 - **会话状态**：daemon 常驻 `[STAThread]` 主线程，COM 对象只在该线程使用；每请求仍按 `FullName`/`Name` 重解析文档并用 `HWND` 校验 app 引用，发现实例换了就重附着。
-- **生命周期**：`zwc.ps1 serve -Action start|status|stop|reset`（client 会把 `serve` 转交 zwc.ps1）；闲置 20 min 自灭（`--idle-ms` 可调）；`reset` 只杀**本版本 exe 全路径**的 helper，绝不按映像名。
-- **`--build-client`**：client/helper 的 csc 编译缓存仍按源码哈希；`zwc.cmd` 首次运行发现 `bin\ZwcClient.exe` 缺失会自动 bootstrap，失败则回退 PowerShell 入口。
+- **生命周期**：`cad.ps1 serve -Action start|status|stop|reset`（client 会把 `serve` 转交 cad.ps1）；闲置 20 min 自灭（`--idle-ms` 可调）；`reset` 只杀**本版本 exe 全路径**的 helper，绝不按映像名。
+- **`--build-client`**：client/helper 的 csc 编译缓存仍按源码哈希；`cad.cmd` 首次运行发现 `bin\CadClient.exe` 缺失会自动 bootstrap，失败则回退 PowerShell 入口。
 
 ## 三、read 分级 / 分页 / 失败策略
 
@@ -67,7 +67,7 @@ scripts\zwc.ps1 <cmd> [flags]   ← 兼容入口（复杂参数构造/错误兜�
 
 1. **daemon 里的 `WaitForPipeDrain()` 会死锁**：客户端只写不读时，daemon 停在 drain 上，`maxInstances:1` 让它拒绝之后所有连接（"stop 了但没停、后面的命令全挂"）。已彻底移除 drain。
 2. **一次性回退读子进程 stdout 未排空 = 4 KB 缓冲死锁**：helper 把整段响应打到 stdout 再写文件，client 若 `RedirectStandardOutput=true` 却等 `WaitForExit` → 双方互等。改为 `BeginOutputReadLine/BeginErrorReadLine` 异步排空。
-3. `zwc.cmd` 改用 client 后，`serve`/`--build-client` 这类**管理层命令不是 helper 命令**：client 里显式转交 `zwc.ps1`（否则 helper 回 `BAD_ARGS unknown cmd 'serve'`）。
+3. `cad.cmd` 改用 client 后，`serve`/`--build-client` 这类**管理层命令不是 helper 命令**：client 里显式转交 `cad.ps1`（否则 helper 回 `BAD_ARGS unknown cmd 'serve'`）。
 4. 测试脚本坑：PowerShell 里把函数命名成 `Cli` 会撞上 `Clear-Item` 的内置别名（报"找不到路径 …\open"）。
 5. `read` 默认档从 geom 变 summary 是**接口变更**：audit-dev 的 E4 基线已改用显式 `-Mode geom`（旧 helper 会忽略未知参数，所以两边都能跑）。
 
@@ -76,19 +76,19 @@ scripts\zwc.ps1 <cmd> [flags]   ← 兼容入口（复杂参数构造/错误兜�
 ```powershell
 cd <repo>
 # 1) 起 daemon（首次会自动编译 helper/client）
-.\bin\ZwcClient.exe serve -Action start
+.\bin\CadClient.exe serve -Action start
 # 2) 目标三项（先开一张图；下面用 624 实体真实图）
 $dw='<big-map-dir>\<示例大图>.dwg'
-.\bin\ZwcClient.exe open -Launch -New -ProgId ZWCAD.Application.16
-.\bin\ZwcClient.exe open -ProgId ZWCAD.Application.16 -Doc $dw -ReadOnly -NoHint
-Measure-Command { .\bin\ZwcClient.exe status -ProgId ZWCAD.Application.16 }
-Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw -Mode handles }
-Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw -Mode geom }
+.\bin\CadClient.exe open -Launch -New -ProgId ZWCAD.Application.16
+.\bin\CadClient.exe open -ProgId ZWCAD.Application.16 -Doc $dw -ReadOnly -NoHint
+Measure-Command { .\bin\CadClient.exe status -ProgId ZWCAD.Application.16 }
+Measure-Command { .\bin\CadClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw -Mode handles }
+Measure-Command { .\bin\CadClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw -Mode geom }
 # 3) 收尾
-.\bin\ZwcClient.exe finish -Quit -ProgId ZWCAD.Application.16
-.\bin\ZwcClient.exe serve -Action stop
+.\bin\CadClient.exe finish -Quit -ProgId ZWCAD.Application.16
+.\bin\CadClient.exe serve -Action stop
 ```
-> 兼容入口仍在：`scripts\zwc.ps1 <cmd>`（复杂参数、错误兜底）；M3 之后 agent 默认走 `zwc.cmd` / `bin\ZwcClient.exe`。
+> 兼容入口仍在：`scripts\cad.ps1 <cmd>`（复杂参数、错误兜底）；M3 之后 agent 默认走 `cad.cmd` / `bin\CadClient.exe`。
 
 ## 八、未做 / 后续
 
@@ -96,28 +96,28 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 2. `summary` 的 bbox 对 TEXT 是"插入点 + 高度估算"，不是精确外框（精确外框需 font metrics 或 GetBoundingBox，Classic 不可用）。
 3. `handles` 在 2025/AutoCAD 上仍是 COM 逐实体（无 LISP 桥），624 实体实测可接受；超大图（>5k）建议 `-Limit` 分页。
 4. client 的 `-RequestFile` 直通已实现但未在回归中覆盖；`serve -Action reset` 只按 exe 全路径杀（安全），未做"孤儿 daemon"自动清理。
-5. `zwc.ps1` 仍保留完整一次性路径（作为兜底与复杂参数入口），未删。
+5. `cad.ps1` 仍保留完整一次性路径（作为兜底与复杂参数入口），未删。
 
 ## 九、入口对照表与 cold start 稳定性（Lead 复核后的修复，2026-11-04 15:05–15:50）
 
-### 9.1 背景：E1 一度把 `zwc.ps1` 入口拖慢（反向回归）
+### 9.1 背景：E1 一度把 `cad.ps1` 入口拖慢（反向回归）
 
-`zwc.ps1` 仍走"自己起 helper + 文件往返"的旧路径，即使 daemon 是热的，每条命令也要 **5.4–7.8 s**（PS 启动 1.9 s + 旧 wrapper 开销），把 daemon 的收益全吃掉。
-**修法**：`zwc.ps1` 现在只做两件事——**参数/兼容性兜底** + **把 helper 命令原样转交 `bin\ZwcClient.exe`**（`serve` / `--build-client` 仍留在 PS 里，client 会把这两个转交回来，避免递归）。转交前先检查"当前源码哈希对应的 helper exe 是否存在"，不存在则走旧路径（编译后执行），所以首次使用仍然自洽。
+`cad.ps1` 仍走"自己起 helper + 文件往返"的旧路径，即使 daemon 是热的，每条命令也要 **5.4–7.8 s**（PS 启动 1.9 s + 旧 wrapper 开销），把 daemon 的收益全吃掉。
+**修法**：`cad.ps1` 现在只做两件事——**参数/兼容性兜底** + **把 helper 命令原样转交 `bin\CadClient.exe`**（`serve` / `--build-client` 仍留在 PS 里，client 会把这两个转交回来，避免递归）。转交前先检查"当前源码哈希对应的 helper exe 是否存在"，不存在则走旧路径（编译后执行），所以首次使用仍然自洽。
 
 ### 9.2 三个入口实测（同一台机、同一时刻，warm daemon + Classic 16 已附着）
 
 | 入口 | ×5 实测 | 中位 | 备注 |
 |---|---|---|---|
-| `bin\ZwcClient.exe status` | 110, 108, 102, 90, 134 ms | **108 ms** | 最优入口 |
-| `cmd /c scripts\zwc.cmd status` | 135, 131, 218, 110, 600 ms | **135 ms** | cmd→exe，多一次进程创建 |
-| `powershell -File scripts\zwc.ps1 status` | 2448, 2462, 2480, 20350*, 2621 ms | **2480 ms** | 纯 PS 启动 ~1.9–2.0 s + client ~0.1 s；*一次 20 s 为机器瞬时负载，非代码问题 |
+| `bin\CadClient.exe status` | 110, 108, 102, 90, 134 ms | **108 ms** | 最优入口 |
+| `cmd /c scripts\cad.cmd status` | 135, 131, 218, 110, 600 ms | **135 ms** | cmd→exe，多一次进程创建 |
+| `powershell -File scripts\cad.ps1 status` | 2448, 2462, 2480, 20350*, 2621 ms | **2480 ms** | 纯 PS 启动 ~1.9–2.0 s + client ~0.1 s；*一次 20 s 为机器瞬时负载，非代码问题 |
 
-> **结论：agent 一律用 `zwc.cmd`（或直接 `bin\ZwcClient.exe`）**；`zwc.ps1` 只作为"复杂参数构造 / 兼容入口 / 兜底"，目标 ≤2.5 s 已达成（原 5.4–7.8 s）。
+> **结论：agent 一律用 `cad.cmd`（或直接 `bin\CadClient.exe`）**；`cad.ps1` 只作为"复杂参数构造 / 兼容入口 / 兜底"，目标 ≤2.5 s 已达成（原 5.4–7.8 s）。
 
 ### 9.3 cold start 挂死（P0）与修复
 
-**现象**：无 warm daemon 时，`$x = & bin\ZwcClient.exe doctor ... 2>&1 | Out-String` **永不返回**（>300 s，Lead 复现两次、我复现两次）。
+**现象**：无 warm daemon 时，`$x = & bin\CadClient.exe doctor ... 2>&1 | Out-String` **永不返回**（>300 s，Lead 复现两次、我复现两次）。
 **根因**：client 自起 daemon 时用 `UseShellExecute=false` 创建子进程。Windows 的 `CreateProcess` 会在 `bInheritHandles=TRUE` 时让子进程继承父进程的**全部可继承句柄**（包括调用方的 stdout 管道写端），而 daemon 是长活进程 ⇒ 外层 PowerShell 的管道**永远等不到 EOF** ⇒ 挂死。给子进程单独 `RedirectStandardOutput` 并不能阻止"其它可继承句柄"被继承。
 **修复**：daemon 改用 **`UseShellExecute=true` + `ProcessWindowStyle.Hidden`** 启动（ShellExecuteEx 不继承句柄），彻底与调用方的管道链解耦；client 侧保留"PingPipe 就绪探测（≤1 s/次）×30 + 请求本身 30 s 上限"，daemon 半初始化时不会占满请求超时。
 **cold start 回归（每次先杀 daemon 再跑，捕获输出形式）**：
@@ -128,7 +128,7 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 | 2 | **3,580 ms** | 同 |
 | 3 | **4,365 ms** | 同 |
 
-`cmd /c scripts\zwc.cmd doctor`（cold）= **3,721 ms**；`powershell -File scripts\zwc.ps1 doctor`（cold）= **5,729 ms**（PS 1.9 s + cold daemon 3.7 s）——均**正常返回**，不再挂死。
+`cmd /c scripts\cad.cmd doctor`（cold）= **3,721 ms**；`powershell -File scripts\cad.ps1 doctor`（cold）= **5,729 ms**（PS 1.9 s + cold daemon 3.7 s）——均**正常返回**，不再挂死。
 
 ### 9.4 顺带修掉的一个产品 bug（audit-dev 的 W4）
 
@@ -146,16 +146,16 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 
 ### 9.7 client 在"有源码无缓存"环境自编译 helper（frozen 快照坑）→ 已修
 
-**现象**（audit-dev 的 `-Freeze` 快照）：`-Freeze` 复制 zwc.ps1/helper 源码/ZwcClient 到输出目录后，client 与 daemon 自行定位 `bin\cache\<sha>\ZwcHelper.exe` 会**间歇**报 `CLIENT_FAILED: helper binary missing`（同一快照下部分任务能跑、部分报缺 exe）。
-**修法**：client 新增 `EnsureHelper()`：缓存缺失时按**与 zwc.ps1 相同的源码哈希规则**自调用 `csc` 编译 `scripts\helper\*.cs` 到 `bin\cache\<sha>\ZwcHelper.exe`（找不到 csc 才回退报错）。两个入口现在都能独立 bootstrap。
+**现象**（audit-dev 的 `-Freeze` 快照）：`-Freeze` 复制 cad.ps1/helper 源码/CadClient 到输出目录后，client 与 daemon 自行定位 `bin\cache\<sha>\CadHelper.exe` 会**间歇**报 `CLIENT_FAILED: helper binary missing`（同一快照下部分任务能跑、部分报缺 exe）。
+**修法**：client 新增 `EnsureHelper()`：缓存缺失时按**与 cad.ps1 相同的源码哈希规则**自调用 `csc` 编译 `scripts\helper\*.cs` 到 `bin\cache\<sha>\CadHelper.exe`（找不到 csc 才回退报错）。两个入口现在都能独立 bootstrap。
 **实测**：删掉当前哈希的 cache 目录后冷跑 client → **3,765 ms** 返回（`transport:"daemon-started"`，`rebuilt=true`），不再 `CLIENT_FAILED`。
-> 提示给基准：全量对比用 live 源码（先跑一次 `zwc.ps1` 预热缓存）最稳；frozen 快照现在是"能自愈"，但哈希必须与快照内源码一致。
+> 提示给基准：全量对比用 live 源码（先跑一次 `cad.ps1` 预热缓存）最稳；frozen 快照现在是"能自愈"，但哈希必须与快照内源码一致。
 
 ## 十、2026-11-05 增补：运行时工程化四件（正确性 + 卫生）
 
 ### 10.1 退出码判据：从"全文搜子串"改为"只看顶层字段"
-**旧实现**（`ZwcClient.cs`）：靠在整个响应文本里搜 `"ok":true` 与 `VERIFY_FAILED`/`BAD_DATA`/… 判 0/2/3 ⇒ helper 只要在 `message`/`detail` 里合法提到门禁词（例如报错信息里引用 `BAD_DATA`），客户端就把一次**成功**的命令判成 exit 3。`zwc.ps1` 的 legacy 路径本来是按 `$obj.error.code` 判的，两条路径口径还不一致。
-**新实现**：手写顶层 JSON 扫描（`TopLevelBool` / `TopLevelErrorCode`，不引第三方库）：`ok===true ⇒ 0`；否则取**顶层** `error.code`，∈ 7 个门禁码 ⇒ 3；其余 ⇒ 2。判据可用 `bin\ZwcClient.exe --selftest-exitcode <sample.json>` 单测（stdin 亦可），不开 daemon、不碰 CAD。
+**旧实现**（`CadClient.cs`）：靠在整个响应文本里搜 `"ok":true` 与 `VERIFY_FAILED`/`BAD_DATA`/… 判 0/2/3 ⇒ helper 只要在 `message`/`detail` 里合法提到门禁词（例如报错信息里引用 `BAD_DATA`），客户端就把一次**成功**的命令判成 exit 3。`cad.ps1` 的 legacy 路径本来是按 `$obj.error.code` 判的，两条路径口径还不一致。
+**新实现**：手写顶层 JSON 扫描（`TopLevelBool` / `TopLevelErrorCode`，不引第三方库）：`ok===true ⇒ 0`；否则取**顶层** `error.code`，∈ 7 个门禁码 ⇒ 3；其余 ⇒ 2。判据可用 `bin\CadClient.exe --selftest-exitcode <sample.json>` 单测（stdin 亦可），不开 daemon、不碰 CAD。
 **验证**：`{"ok":true,"result":{"note":"BAD_DATA appeared in text"}}` → **0**（旧实现会错判 3）；`VERIFY_FAILED` → 3；`UNEXPECTED` → 2；`{"ok":false,"result":{"ok":true}}`（嵌套）→ 2；非 JSON → 2。
 
 ### 10.2 daemon 按顶层 `cmd` 分派，不再对整包做文本匹配
@@ -164,25 +164,25 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 **验证**（沙箱 daemon，真实 helper 源码 + 改 hash 独立 pipe，全程不碰 CAD）：`{"cmd":"query","args":{"text":"ping"}}` → 正常分派（`BAD_ARGS` 而非 ping 响应）；含 `daemon-stop` 的普通请求不再停 daemon；`{"cmd":"ping"}` / `{"cmd":"daemon-stop"}` 响应逐字节一致。
 
 ### 10.3 哈希配方 4 处 → 1 处 + 双侧自检
-**问题**：同一配方（`文件数|最新mtime ticks|排序sizes → SHA256 前 12 位`）在 `ZwcClient.HelperHash`、`zwc.ps1` 的 delegate 热路径、`Get-RepoLayout`、主编译块**四处**各自实现，靠注释约定同步；只改一处 ⇒ client 与 daemon 的 pipe 名/缓存目录分叉（表现为连不上 daemon + 重复编译）。
-**改法**：`zwc.ps1` 三处合并为 `Get-HelperSha12`（12 处调用点复用；比旧内联快 3×：40 次中位 0.69 ms vs 2.15 ms）；client 新增 `hash` 子命令输出 `{helperSha,key}`；`serve -Action status` 同时给出 `helperSha`（ps1 算）、`clientSha`（调 client）、`recipeMatch`，不一致 ⇒ `ok:false` + `HASH_RECIPE_MISMATCH`。
+**问题**：同一配方（`文件数|最新mtime ticks|排序sizes → SHA256 前 12 位`）在 `CadClient.HelperHash`、`cad.ps1` 的 delegate 热路径、`Get-RepoLayout`、主编译块**四处**各自实现，靠注释约定同步；只改一处 ⇒ client 与 daemon 的 pipe 名/缓存目录分叉（表现为连不上 daemon + 重复编译）。
+**改法**：`cad.ps1` 三处合并为 `Get-HelperSha12`（12 处调用点复用；比旧内联快 3×：40 次中位 0.69 ms vs 2.15 ms）；client 新增 `hash` 子命令输出 `{helperSha,key}`；`serve -Action status` 同时给出 `helperSha`（ps1 算）、`clientSha`（调 client）、`recipeMatch`，不一致 ⇒ `ok:false` + `HASH_RECIPE_MISMATCH`。
 
 ### 10.4 `bin\cache` 编译缓存淘汰（P1-4.3）
 **问题**：源码每改一次永久 +127 KB；`EnsureHelper` 先 `CreateDirectory` 后编译，**编译失败不回滚** ⇒ 实测残留 **33 个空目录**；总量 140 目录 / 107 个 exe / 13.39 MB。
-**改法**：`PruneCache`（client 侧）只动 `bin\cache\<12位hex>` 目录：保留集合 = 最近 **10 个非空**目录 ∪ 当前 sha ∪ **运行中目录**（按 `Get-Process ZwcHelper` 的 `MainModule.FileName` 反推，不是靠"删除失败吞掉"）；空目录 mtime >5 min 才删（避免和并发 csc 抢"刚建还空"的目录）；删除失败进 `failedDirs[]` 不静默。触发点：client 成功拉起新 daemon 后一次、`serve -Action start|status`、手动 `serve -Action prune`；失败编译回滚本次新建的空目录与 `build-<pid>.exe`。
+**改法**：`PruneCache`（client 侧）只动 `bin\cache\<12位hex>` 目录：保留集合 = 最近 **10 个非空**目录 ∪ 当前 sha ∪ **运行中目录**（按 `Get-Process CadHelper` 的 `MainModule.FileName` 反推，不是靠"删除失败吞掉"）；空目录 mtime >5 min 才删（避免和并发 csc 抢"刚建还空"的目录）；删除失败进 `failedDirs[]` 不静默。触发点：client 成功拉起新 daemon 后一次、`serve -Action start|status`、手动 `serve -Action prune`；失败编译回滚本次新建的空目录与 `build-<pid>.exe`。
 **实测**：141 → **9** 个目录、空目录 33 → **0**、释放 **12.00 MB**、`failed=0`；运行中目录 `skippedRunning` 正确保护（受控实验：手工起一个旧 hash daemon，prune 后目录存活且 daemon 未受影响）；立即重跑 `removed=0`（幂等）。
 
 ### 10.5 helper 巨石第一步拆分：Json / PipeIo 成可离线测的纯逻辑单元（P2-5.1）
-`ZwcHelper.cs`（4,371 行）里的自研 **JSON writer/parser** 与 **命名管道 framing** 两个自包含类整体搬到 `scripts/helper/Json.cs`（262 行）与 `PipeIo.cs`（51 行）：`git diff --numstat` = **0 insertions / 271 deletions**，两个类体逐字节相等（`Json` 9,552 字符 / `PipeIo` 1,087 字符，字符串/注释感知的括号 walker 独立复核 IDENTICAL），方法体、错误文案、数字格式、管道长度前缀协议全部不变。
+`CadHelper.cs`（4,371 行）里的自研 **JSON writer/parser** 与 **命名管道 framing** 两个自包含类整体搬到 `scripts/helper/Json.cs`（262 行）与 `PipeIo.cs`（51 行）：`git diff --numstat` = **0 insertions / 271 deletions**，两个类体逐字节相等（`Json` 9,552 字符 / `PipeIo` 1,087 字符，字符串/注释感知的括号 walker 独立复核 IDENTICAL），方法体、错误文案、数字格式、管道长度前缀协议全部不变。
 新增 `tests/jsonself/JsonTests.cs`（**132 断言**）：转义（`\\ \" \n \r \t \b \f \uXXXX`/`\u0000`）、bool/null、int/long(min,max)/double（`2.0`→`2`、`1e20`→`1E+20`、`1e-7`→`1E-07`、NaN/Inf→null）、空/嵌套 JMap+List、键序与重复键、中文 UTF-8 往返；parser 侧整数保持 long、BOM/空白容忍、50 层嵌套、15 个非法输入不崩溃；`Write→UTF8→Parse→Write` 字节相等。**这套测试是 5.1 的收益证据：JSON 层从此能在没有 CAD 的机器上被 CI 回归**（`tests\selftest_lisp.ps1` 的 4 套之一）。
-> 编码约定（本次查证）：request 文件写侧统一 **UTF-8 无 BOM**（`zwc.ps1` / `ZwcClient.cs` / helper 回写均 `UTF8Encoding(false)`）；读侧 `Json.ParseFile` 与 helper one-shot 用 `File.ReadAllText(path, new UTF8Encoding(false))` + `Parse` 再剥首部 U+FEFF ⇒ UTF-8 有/无 BOM 都吃、连带 BOM 的 UTF-16LE/BE 也能靠 StreamReader 嗅探解码；**但 GBK/ANSI 不会被拒绝**，非法字节静默变 U+FFFD（乱码），所以调用方绝不能拿 ANSI 写 request 文件。
+> 编码约定（本次查证）：request 文件写侧统一 **UTF-8 无 BOM**（`cad.ps1` / `CadClient.cs` / helper 回写均 `UTF8Encoding(false)`）；读侧 `Json.ParseFile` 与 helper one-shot 用 `File.ReadAllText(path, new UTF8Encoding(false))` + `Parse` 再剥首部 U+FEFF ⇒ UTF-8 有/无 BOM 都吃、连带 BOM 的 UTF-16LE/BE 也能靠 StreamReader 嗅探解码；**但 GBK/ANSI 不会被拒绝**，非法字节静默变 U+FFFD（乱码），所以调用方绝不能拿 ANSI 写 request 文件。
 
-### 10.6 helper 巨石第二步：逐类拆到 22 个 .cs，`ZwcHelper.cs` 只剩入口
-上一节拆出 `Json`/`PipeIo` 后，`ZwcHelper.cs` 仍有 4,100 行、13 个类型。第二步继续按"纯搬移"拆完：
+### 10.6 helper 巨石第二步：逐类拆到 22 个 .cs，`CadHelper.cs` 只剩入口
+上一节拆出 `Json`/`PipeIo` 后，`CadHelper.cs` 仍有 4,100 行、13 个类型。第二步继续按"纯搬移"拆完：
 
 | 新文件 | 搬出的类型 | 行数 |
 |---|---|---|
-| `Core.cs` | JMap / ZwcError / Ctx | 130 |
+| `Core.cs` | JMap / CadError / Ctx | 130 |
 | `ComInterop.cs` | IOleMessageFilter / MessageFilter | 64 |
 | `Com.cs` | Com / Coll | 269 |
 | `Procs.cs` | Procs | 124 |
@@ -194,7 +194,7 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 
 > **5.1 第三批（同日）**：`CommandsRead.cs` 的 1,382 行再拆成三个 partial：`CommandsRead.cs`（read 家族，**456 行 / 7 成员**：ReadState/Read/LispBridgeAvailable/KindOf/DescribeEntity/TryBBoxFromEntity/LispDumpHandles）、`CommandsSection.cs`（section+写图，**670 行 / 14 成员**：SectionCmd + plan meta/roles/waters/types/layers + CreateEntity/EnsureLayer/EnsureTextStyle/EnsureLinetype/Rollback/WaitIdle/UndoCmd）、`CommandsVerify.cs`（verify，**287 行 / 4 成员**：VerifySection/Extend/AddIssue/TypeMatches）。仍是**纯搬移 + partial**：crossref 实测 `AddPlanMeta`…`Rollback` 的引用者只有 `SectionCmd`，read/verify 各自闭合成簇，零成员跨文件重复、零可见性/调用点改动；24 个 `.cs` 编译 0 error，`selftest_lisp` 6 套 644 与 python 五套不变。
 
-`ZwcHelper.cs` **4,100 → 2,321 → 173 行**（只剩 `Program.HandleRequestText` + `Main`）；`scripts\helper` 22 个 `.cs`，**csc / `zwc.ps1` 的 `*.cs` 通配与测试源清单零改动**。
+`CadHelper.cs` **4,100 → 2,321 → 173 行**（只剩 `Program.HandleRequestText` + `Main`）；`scripts\helper` 22 个 `.cs`，**csc / `cad.ps1` 的 `*.cs` 通配与测试源清单零改动**。
 
 "纯搬移"自证（脚本在 `tmp/helper-split2/`）：
 1. 8 个搬移块在搬移前 baseline 字节流中各唯一出现、互不重叠（纯字节偏移定位）；
@@ -202,5 +202,5 @@ Measure-Command { .\bin\ZwcClient.exe read -ProgId ZWCAD.Application.16 -Doc $dw
 3. 第 6 步成员级：baseline `Commands` 类体 2,100 成员行**每行恰好属于一个成员一次**，46 个成员在两个 partial 文件中**各出现且仅一次**、顺序是 baseline 序的子序列；
 4. Lead 独立复核（不复用对方脚本）：按成员名+成员体比对 → `missing/extra/跨文件重复/成员体差异` 全为 none；`HEAD − Commands 块` 与当前文件 diff **只剩 −9 行 using/空行、+0 行**。
 
-明确标注的 3 处非搬移偏差：① 两个 partial 文件类声明插入 `partial `；② 原文件 12 处"相邻成员无空行"在新文件中以单空行分隔（空行不属于成员）；③ `ZwcHelper.cs` 删除 8 条已无用的 `using`（编译器可证）。
+明确标注的 3 处非搬移偏差：① 两个 partial 文件类声明插入 `partial `；② 原文件 12 处"相邻成员无空行"在新文件中以单空行分隔（空行不属于成员）；③ `CadHelper.cs` 删除 8 条已无用的 `using`（编译器可证）。
 > 收益：入口文件从 4,100 行降到 173 行；`Core`/`Com`/`State`/`Cmd` 成为可离线单测的独立单元（配套测试见 `tests\coreself\`），`Commands` 的 read/section 家族与会话诊断家族不再混在一个 2,135 行的类里。**未做**：`JMap` 头注释里"writer + parser"的过时文案、以及 `Doctor` 的 `deepMatched` 死变量等，按"纯搬移"纪律原样保留，留待专门清理。

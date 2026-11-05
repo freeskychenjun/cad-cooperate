@@ -1,19 +1,19 @@
-// ZwcClient.cs - M3-E1 fast client: the piece that removes the PowerShell startup tax.
+// CadClient.cs - M3-E1 fast client: the piece that removes the PowerShell startup tax.
 //
-//   bin\ZwcClient.exe <command> [flags...]        (zwc.cmd calls this)
-//   bin\ZwcClient.exe -RequestFile <req.json>     (verbatim request, no parsing)
+//   bin\CadClient.exe <command> [flags...]        (cad.cmd calls this)
+//   bin\CadClient.exe -RequestFile <req.json>     (verbatim request, no parsing)
 //
 // Why this exists: measured on this machine, `powershell -Command exit` alone costs ~1856 ms and
-// `powershell -File zwc.ps1 doctor` ~4165 ms, while the helper itself needs 25-50 ms. A resident
+// `powershell -File cad.ps1 doctor` ~4165 ms, while the helper itself needs 25-50 ms. A resident
 // daemon cannot fix that - the process that LAUNCHES the request is the bottleneck. A native
 // console exe starts in ~60-100 ms and speaks the same named-pipe JSON protocol, so the whole
 // command fits in the sub-600 ms budget.
 //
 // Fallback chain (every step bounded, nothing can hang):
 //   1. connect to the daemon pipe (name derived from the helper source hash) and send the request;
-//   2. no daemon -> start `ZwcHelper.exe --serve <pipe>` hidden, poll up to 20 s, then send;
+//   2. no daemon -> start `CadHelper.exe --serve <pipe>` hidden, poll up to 20 s, then send;
 //   3. still no answer -> one-shot helper (--request/--response temp files), same protocol.
-// Anything unexpected prints exactly one JSON envelope on stdout and exits 0/2/3 like zwc.ps1.
+// Anything unexpected prints exactly one JSON envelope on stdout and exits 0/2/3 like cad.ps1.
 
 using System;
 using System.Collections.Generic;
@@ -26,7 +26,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 
-namespace ZwcClient
+namespace CadClient
 {
     internal static class Program
     {
@@ -48,9 +48,9 @@ namespace ZwcClient
             return Directory.GetCurrentDirectory();
         }
 
-        /// <summary>Same source-hash recipe as scripts\zwc.ps1 so client, daemon pipe name and the
+        /// <summary>Same source-hash recipe as scripts\cad.ps1 so client, daemon pipe name and the
         /// cached helper exe always agree: file count | newest mtime ticks | sorted sizes.
-        /// <paramref name="key"/> returns the raw recipe string: `ZwcClient.exe hash` prints it so the
+        /// <paramref name="key"/> returns the raw recipe string: `CadClient.exe hash` prints it so the
         /// wrapper can compare both implementations of this recipe instead of trusting a comment
         /// (P2-5.2: the recipe used to be copy-pasted in four places).</summary>
         private static string HelperHash(string root, out string key)
@@ -92,7 +92,7 @@ namespace ZwcClient
         //   top-level ok === true                          -> 0
         //   else top-level error.code in the gate set      -> 3
         //   else                                          -> 2
-        // The gate set mirrors the legacy PowerShell path (scripts\zwc.ps1, $gate list) on purpose:
+        // The gate set mirrors the legacy PowerShell path (scripts\cad.ps1, $gate list) on purpose:
         // both entry points must classify a response identically.
         private static readonly string[] GateCodes = new string[]
         {
@@ -303,7 +303,7 @@ namespace ZwcClient
 
             if (args.Length == 0)
             {
-                Console.Out.Write("{\"ok\":false,\"cmd\":\"\",\"error\":{\"code\":\"BAD_ARGS\",\"message\":\"usage: ZwcClient.exe <command> [flags...] | -RequestFile <json>\"}}");
+                Console.Out.Write("{\"ok\":false,\"cmd\":\"\",\"error\":{\"code\":\"BAD_ARGS\",\"message\":\"usage: CadClient.exe <command> [flags...] | -RequestFile <json>\"}}");
                 return 2;
             }
 
@@ -332,7 +332,7 @@ namespace ZwcClient
             }
 
             // hash: print this build's view of the helper source hash recipe (pure computation).
-            // `scripts\zwc.ps1 serve -Action status` compares it with its own implementation and
+            // `scripts\cad.ps1 serve -Action status` compares it with its own implementation and
             // reports recipeMatch, so a one-sided recipe edit can no longer split the two paths.
             if (admin == "hash" || admin == "--hash")
             {
@@ -388,13 +388,13 @@ namespace ZwcClient
             }
 
             // serve / --build-client are wrapper-level admin commands, not helper commands: hand
-            // them back to zwc.ps1 (rare, and the PowerShell cost is irrelevant for them)
+            // them back to cad.ps1 (rare, and the PowerShell cost is irrelevant for them)
             if (admin == "serve" || admin == "--build-client" || admin == "buildclient")
             {
                 try
                 {
                     ProcessStartInfo psi = new ProcessStartInfo("powershell",
-                        "-NoProfile -ExecutionPolicy Bypass -File \"" + Path.Combine(Path.Combine(root, "scripts"), "zwc.ps1") + "\" " + JoinArgs(args));
+                        "-NoProfile -ExecutionPolicy Bypass -File \"" + Path.Combine(Path.Combine(root, "scripts"), "cad.ps1") + "\" " + JoinArgs(args));
                     psi.UseShellExecute = false;
                     Process p = Process.Start(psi);
                     p.WaitForExit();
@@ -428,9 +428,9 @@ namespace ZwcClient
             // on demand instead of failing with CLIENT_FAILED (measured by audit-dev on a frozen
             // snapshot: some tasks worked, others reported missing helper binary).
             EnsureHelper(root, sha);
-            string pipeName = "zwc-" + sha;
+            string pipeName = "cad-" + sha;
             string helperExe = Path.Combine(Path.Combine(Path.Combine(root, "bin"), "cache"), sha);
-            helperExe = Path.Combine(helperExe, "ZwcHelper.exe");
+            helperExe = Path.Combine(helperExe, "CadHelper.exe");
 
             string response = null;
             string transport = null;
@@ -445,7 +445,7 @@ namespace ZwcClient
             if (response == null && File.Exists(helperExe))
             {
                 System.Diagnostics.Stopwatch startSw = System.Diagnostics.Stopwatch.StartNew();
-                Mutex startLock = new Mutex(false, "Local\\zwc-start-" + sha);
+                Mutex startLock = new Mutex(false, "Local\\cad-start-" + sha);
                 bool haveStartLock = false;
                 try { haveStartLock = startLock.WaitOne(8000); } catch (Exception) { }
                 try
@@ -500,7 +500,7 @@ namespace ZwcClient
             {
                 string msg = File.Exists(helperExe)
                     ? "neither the resident daemon nor the one-shot helper answered"
-                    : "helper binary missing: " + helperExe + " (run scripts\\zwc.ps1 once to compile it)";
+                    : "helper binary missing: " + helperExe + " (run scripts\\cad.ps1 once to compile it)";
                 Console.Out.Write("{\"ok\":false,\"cmd\":\"" + JsonEscape(command)
                     + "\",\"error\":{\"code\":\"CLIENT_FAILED\",\"message\":\"" + JsonEscape(msg) + "\"}}");
                 return 2;
@@ -549,7 +549,7 @@ namespace ZwcClient
                     // finish without -Doc: stop every tray state file we own (one per drawing)
                     try
                     {
-                        string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "zwcad-cooperate");
+                        string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "cad-cooperate");
                         if (Directory.Exists(dir))
                         {
                             foreach (string f in Directory.GetFiles(dir, "tray-*.json"))
@@ -644,9 +644,9 @@ namespace ZwcClient
             finally { if (pipe != null) { try { pipe.Dispose(); } catch (Exception) { } } }
         }
 
-        /// <summary>Compile scripts\helper\*.cs into bin\cache\&lt;sha&gt;\ZwcHelper.exe when the cached
+        /// <summary>Compile scripts\helper\*.cs into bin\cache\&lt;sha&gt;\CadHelper.exe when the cached
         /// binary for the current source hash is absent (frozen snapshot / fresh clone / cache purge).
-        /// Mirrors scripts\zwc.ps1 so both entries can bootstrap independently.
+        /// Mirrors scripts\cad.ps1 so both entries can bootstrap independently.
         /// P1-4.3: a failed compile used to leave the freshly created bin\cache\&lt;sha&gt; directory
         /// behind (33 empty directories / 13 MB of dead cache on this machine). Everything this call
         /// creates is now rolled back on failure - and only what it created: an existing binary,
@@ -655,7 +655,7 @@ namespace ZwcClient
         private static bool EnsureHelper(string root, string sha)
         {
             string cacheDir = Path.Combine(Path.Combine(Path.Combine(root, "bin"), "cache"), sha);
-            string exe = Path.Combine(cacheDir, "ZwcHelper.exe");
+            string exe = Path.Combine(cacheDir, "CadHelper.exe");
             if (File.Exists(exe)) return true;
             string[] cscCandidates = new string[]
             {
@@ -729,14 +729,14 @@ namespace ZwcClient
         }
 
         // ------------------------------------------------------------------ compile-cache eviction
-        // P1-4.3: every source edit creates a new bin\cache\<sha12>\ZwcHelper.exe (~127 KB) and
+        // P1-4.3: every source edit creates a new bin\cache\<sha12>\CadHelper.exe (~127 KB) and
         // nothing ever removed the old ones. PruneCache keeps the N most recently used entries
         // (directory mtime) plus the entry for the CURRENT source hash, and always removes empty
         // directories - which is where the 33 failed-compile leftovers came from. Deleting a
         // directory that a live daemon runs from fails (the exe is locked) and is reported under
         // "failed" instead of breaking the daemon, so pruning while a daemon serves is safe.
         private const int PruneKeep = 10;
-        // Only touch directories whose name is exactly 12 hex chars: bin\ZwcClient.exe, bin\tray and
+        // Only touch directories whose name is exactly 12 hex chars: bin\CadClient.exe, bin\tray and
         // anything a human put in bin\cache stay untouched.
         private static readonly Regex ShaDirName = new Regex("^[0-9a-f]{12}$", RegexOptions.CultureInvariant);
         // A directory created by a compile that is still running is empty for a moment; never judge
@@ -771,7 +771,7 @@ namespace ZwcClient
                     e.Name = name;
                     e.Path = dir;
                     e.MTimeUtc = Directory.GetLastWriteTimeUtc(dir);
-                    string exe = System.IO.Path.Combine(dir, "ZwcHelper.exe");
+                    string exe = System.IO.Path.Combine(dir, "CadHelper.exe");
                     e.HasExe = File.Exists(exe);
                     string[] files = Directory.GetFiles(dir);
                     e.IsEmpty = files.Length == 0 && Directory.GetDirectories(dir).Length == 0;
@@ -912,7 +912,7 @@ namespace ZwcClient
             sb.Append(']');
         }
 
-        /// <summary>Names of the bin\cache\&lt;sha12&gt; directories that live ZwcHelper processes are
+        /// <summary>Names of the bin\cache\&lt;sha12&gt; directories that live CadHelper processes are
         /// running from. Reading MainModule can fail across bitness/permissions - that only means the
         /// entry may be attempted for deletion and reported under failedDirs instead of
         /// skippedRunning, never that a live daemon gets hurt.</summary>
@@ -920,7 +920,7 @@ namespace ZwcClient
         {
             HashSet<string> running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             Process[] procs;
-            try { procs = Process.GetProcessesByName("ZwcHelper"); }
+            try { procs = Process.GetProcessesByName("CadHelper"); }
             catch (Exception) { return running; }
             foreach (Process p in procs)
             {
@@ -946,7 +946,7 @@ namespace ZwcClient
 
         private static string OneShot(string helperExe, string requestJson, int timeoutSec)
         {
-            string work = Path.Combine(Path.GetTempPath(), "zwcad-cooperate\\client-" + Guid.NewGuid().ToString("N"));
+            string work = Path.Combine(Path.GetTempPath(), "cad-cooperate\\client-" + Guid.NewGuid().ToString("N"));
             try
             {
                 Directory.CreateDirectory(work);

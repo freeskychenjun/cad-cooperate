@@ -11,7 +11,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static class Query
     {
@@ -58,7 +58,7 @@ namespace ZwcHelper
                 try { re = new Regex(textRe, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant); }
                 catch (Exception e)
                 {
-                    throw new ZwcError("BAD_ARGS", "-Text is not a valid regex: " + e.Message, "use a plain substring or a valid .NET regex", null);
+                    throw new CadError("BAD_ARGS", "-Text is not a valid regex: " + e.Message, "use a plain substring or a valid .NET regex", null);
                 }
             }
             string xdataApp = null, xdataValue = null;
@@ -134,7 +134,7 @@ namespace ZwcHelper
                     lispMeta = meta;
                     readPath = "lisp-file";
                 }
-                catch (ZwcError ze)
+                catch (CadError ze)
                 {
                     if (ze.Code == "LISP_TRUST_BLOCKED")
                         ctx.Warn("LISP_TRUST_BLOCKED", "AutoCAD SECURELOAD would prompt for the LISP query fast path; this query used the slower COM sweep instead (fix: trust -Action addTemp)");
@@ -284,12 +284,12 @@ namespace ZwcHelper
         {
             if (string.IsNullOrEmpty(s)) return null;
             string[] parts = s.Split(',');
-            if (parts.Length < 4) throw new ZwcError("BAD_ARGS", "-BBox needs x0,y0,x1,y1", null, null);
+            if (parts.Length < 4) throw new CadError("BAD_ARGS", "-BBox needs x0,y0,x1,y1", null, null);
             double[] b = new double[4];
             for (int i = 0; i < 4; i++)
             {
                 if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out b[i]))
-                    throw new ZwcError("BAD_ARGS", "-BBox values must be numbers", null, null);
+                    throw new CadError("BAD_ARGS", "-BBox values must be numbers", null, null);
             }
             return b;
         }
@@ -356,10 +356,10 @@ namespace ZwcHelper
                 JMap st = State.Load();
                 since = st.Str("lastSnapshot", null);
                 if (string.IsNullOrEmpty(since))
-                    throw new ZwcError("NO_BASELINE", "no previous snapshot: run `snapshot` first (or pass -Since <file>)",
+                    throw new CadError("NO_BASELINE", "no previous snapshot: run `snapshot` first (or pass -Since <file>)",
                         "snapshot then diff is the supported way to see what changed", null);
             }
-            if (!File.Exists(since)) throw new ZwcError("BAD_ARGS", "snapshot file not found: " + since, null, null);
+            if (!File.Exists(since)) throw new CadError("BAD_ARGS", "snapshot file not found: " + since, null, null);
 
             Cad cad = Cad.AttachFor(req, args, ctx, Commands.DocArgOf(req, args));
             ctx.AppMap = cad.AppInfo();
@@ -369,7 +369,7 @@ namespace ZwcHelper
             JMap current = Edits.SnapshotOf(doc, args.Bool("paper", true), ctx);
 
             JMap old = Json.ParseFile(since) as JMap;
-            if (old == null) throw new ZwcError("BAD_ARGS", "snapshot file is not a JSON object: " + since, null, null);
+            if (old == null) throw new CadError("BAD_ARGS", "snapshot file is not a JSON object: " + since, null, null);
             List<object> oldItems = old.List("items");
             List<object> newItems = current.List("items");
             Dictionary<string, JMap> oldByHandle = Index(oldItems);

@@ -1,7 +1,7 @@
 // Procs.cs - process enumeration (the finish command reports it; acceptance requires that
 // no CAD process is left behind after a run).
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). The class
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). The class
 // body, its filters and its messages are byte-identical to the pre-split file.
 
 using System;
@@ -10,7 +10,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Management;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // Process enumeration (finish reports it; acceptance requires 0 zwcad left behind)

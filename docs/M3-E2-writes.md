@@ -8,7 +8,7 @@
 ### 1. `entity`（写原语）
 
 ```
-zwc entity -ProgId X -Doc D -Items <items.json> [-Mode plan|-DryRun] [-Continue] [-Tol 1e-6]
+cad entity -ProgId X -Doc D -Items <items.json> [-Mode plan|-DryRun] [-Continue] [-Tol 1e-6]
 ```
 `items.json` = `{"items":[{op:"add|update|delete|move|copy", ...}]}`；也支持 `-RequestFile <完整请求>`。
 
@@ -30,7 +30,7 @@ zwc entity -ProgId X -Doc D -Items <items.json> [-Mode plan|-DryRun] [-Continue]
 ### 2. `query`（查询原语）
 
 ```
-zwc query -ProgId X -Doc D [-Layer L] [-Type text,line,polyline,circle,...] [-Text <regex>] \
+cad query -ProgId X -Doc D [-Layer L] [-Type text,line,polyline,circle,...] [-Text <regex>] \
           [-BBox x0,y0,x1,y1] [-Space model|paper|all] [-XData "APP:VALUE"|APP] [-Limit N] [-Cursor C] \
           [-Mode handles|summary|geom]
 → result{items[{handle,type,kind,layer,space,text?,bbox?,xdata?,xdataPresent?}], total, returned, nextCursor, truncated, mode, readMode}
@@ -42,10 +42,10 @@ zwc query -ProgId X -Doc D [-Layer L] [-Type text,line,polyline,circle,...] [-Te
 ### 3. `snapshot` / `diff`
 
 ```
-zwc snapshot -ProgId X -Doc D [-Out <file>]      → result{path,count,items[]}
-zwc diff -ProgId X -Doc D [-Since <file>|last]   → result{added[],removed[],changed[{handle,type,layer,fields{before,after}}],same,counts}
+cad snapshot -ProgId X -Doc D [-Out <file>]      → result{path,count,items[]}
+cad diff -ProgId X -Doc D [-Since <file>|last]   → result{added[],removed[],changed[{handle,type,layer,fields{before,after}}],same,counts}
 ```
-- snapshot **强制写 `%TEMP%\zwcad-cooperate\snap\`**（给图纸目录会被重定向并 warning）；同时记 `state.lastSnapshot`，所以 `-Since last` 即可。
+- snapshot **强制写 `%TEMP%\cad-cooperate\snap\`**（给图纸目录会被重定向并 warning）；同时记 `state.lastSnapshot`，所以 `-Since last` 即可。
 - diff 按 handle 对齐，比较 type/layer/text/bbox（1e-6）；人改的和 agent 改的都看得见。
 
 ## 二、本轮修掉的问题（都在冒烟里暴露过）

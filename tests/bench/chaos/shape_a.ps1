@@ -229,7 +229,7 @@ try {
             # fresh daemon + instance for the next round
             try {
                 $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-                $null = Invoke-Bounded $psExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script:ZwcPs1, 'serve', '-Action', 'stop') 60
+                $null = Invoke-Bounded $psExe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script:CadPs1, 'serve', '-Action', 'stop') 60
             } catch { }
             $hy = Stop-OwnCad $ProgId $cad.pid $TimeoutSec
             Write-Chaos ('round ' + $r + ': fresh teardown remaining=' + $hy.remaining)

@@ -11,7 +11,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static partial class Commands
     {
@@ -54,7 +54,7 @@ namespace ZwcHelper
             if (mode == "fast" || mode == "handle" || mode == "handles") mode = "handles";
             else if (mode == "summary" || mode == "info") mode = "summary";
             else if (mode == "geom" || mode == "full" || mode == "geometry" || mode == "detail") mode = "geom";
-            else throw new ZwcError("BAD_ARGS", "unknown read mode '" + args.Str("mode", "?") + "'",
+            else throw new CadError("BAD_ARGS", "unknown read mode '" + args.Str("mode", "?") + "'",
                 "use -Mode handles|summary|geom", null);
 
             bool strict = args.Bool("strict", false);
@@ -129,7 +129,7 @@ namespace ZwcHelper
                     lispPathUsed = true;
                     ctx.LispMeta = lispMeta;
                 }
-                catch (ZwcError ze)
+                catch (CadError ze)
                 {
                     // Two very different reasons to fall back: a real failure, and the AutoCAD
                     // SECURELOAD gate refusing to load the .lsp at all (see Trust.cs).
@@ -155,7 +155,7 @@ namespace ZwcHelper
             {
                 string h = scope.Substring("handle:".Length).Trim();
                 object e = Com.EntityByHandle(doc, h);
-                if (e == null) throw new ZwcError("ENTITY_NOT_FOUND", "HandleToObject(" + h + ") returned nothing", null, null);
+                if (e == null) throw new CadError("ENTITY_NOT_FOUND", "HandleToObject(" + h + ") returned nothing", null, null);
                 entities.Add(DescribeEntity(e, "model", mode, ctx, state));
                 readPath = "com";
                 total = 1;
@@ -288,7 +288,7 @@ namespace ZwcHelper
         /// DISP_E_UNKNOWNNAME, which means the whole LISP-variable channel is absent.</summary>
         internal static bool LispBridgeAvailable(object doc)
         {
-            try { Com.Call(doc, "GetLispVariable", "ZWC_PROBE_BRIDGE"); return true; }
+            try { Com.Call(doc, "GetLispVariable", "CAD_PROBE_BRIDGE"); return true; }
             catch (Exception) { return false; }
         }
 
@@ -532,10 +532,10 @@ namespace ZwcHelper
         private static string LispDumpHandles(object doc, Ctx ctx)
         {
             string expr =
-                "(progn (setq ZWC_OUT \"\" e (entnext) n 0)"
+                "(progn (setq CAD_OUT \"\" e (entnext) n 0)"
                 + " (while e"
-                + " (setq d (entget e) ZWC_OUT (strcat ZWC_OUT (cdr (assoc 5 d)) \"|\" (cdr (assoc 0 d)) \"|\" (cdr (assoc 8 d)) \"|\" (if (equal 1 (cdr (assoc 67 d))) \"paper\" \"model\") \";\")"
-                + " n (1+ n) e (entnext e))) (setq ZWC_N n))";
+                + " (setq d (entget e) CAD_OUT (strcat CAD_OUT (cdr (assoc 5 d)) \"|\" (cdr (assoc 0 d)) \"|\" (cdr (assoc 8 d)) \"|\" (if (equal 1 (cdr (assoc 67 d))) \"paper\" \"model\") \";\")"
+                + " n (1+ n) e (entnext e))) (setq CAD_N n))";
             string dump = Cmd.EvalLisp(doc, expr, ctx, "read/lisp-dump", 20000);
             return dump;
         }

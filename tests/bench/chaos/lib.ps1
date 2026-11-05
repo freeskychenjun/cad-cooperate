@@ -17,8 +17,8 @@ function Get-ChaosRoot {
 }
 
 $script:ChaosRoot = Get-ChaosRoot
-$script:ClientExe = Join-Path $script:ChaosRoot 'bin\ZwcClient.exe'
-$script:ZwcPs1 = Join-Path $script:ChaosRoot 'scripts\zwc.ps1'
+$script:ClientExe = Join-Path $script:ChaosRoot 'bin\CadClient.exe'
+$script:CadPs1 = Join-Path $script:ChaosRoot 'scripts\cad.ps1'
 $script:Fixtures = Join-Path $script:ChaosRoot 'tests\bench\fixtures'
 $script:PyExe = 'python'
 if (-not (Test-Path -LiteralPath $script:PyExe)) { $script:PyExe = 'python' }
@@ -31,7 +31,7 @@ function Get-QuietWindowState([double]$MaxCpuPercent = 25, [double]$MinFreeMemGB
                               [int]$OwnPid = 0, [string[]]$IgnoreImages = @()) {
     $reasons = @()
     $cad = @(Get-Process ZWCAD, acad -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $OwnPid })
-    $helpers = @(Get-Process ZwcHelper, ZwHelp -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $OwnPid })
+    $helpers = @(Get-Process CadHelper, ZwHelp -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $OwnPid })
     $officeNames = @('wps', 'et', 'WINWORD', 'EXCEL', 'wpp') + @($IgnoreImages)
     $office = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $officeNames -contains $_.ProcessName })
     $cpu = $null
@@ -144,7 +144,7 @@ function Invoke-Bounded([string]$exe, [string[]]$argv, [int]$timeoutSec) {
         text = $text; watchdog = $watchdog; parsed = (ConvertFrom-JsonText $out) }
 }
 
-# One CAD command through the E1 client (fallback: zwc.ps1 -File). Returns exit/wall/parsed.
+# One CAD command through the E1 client (fallback: cad.ps1 -File). Returns exit/wall/parsed.
 function Invoke-Cad([string[]]$argv, [int]$timeoutSec, [string]$progId) {
     $full = @($argv)
     if ($progId) { $full = @($argv[0], '-ProgId', $progId) + @($argv | Select-Object -Skip 1) }
@@ -152,7 +152,7 @@ function Invoke-Cad([string[]]$argv, [int]$timeoutSec, [string]$progId) {
         return (Invoke-Bounded $script:ClientExe $full $timeoutSec)
     }
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $psArgv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script:ZwcPs1) + $full
+    $psArgv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script:CadPs1) + $full
     return (Invoke-Bounded $psExe $psArgv $timeoutSec)
 }
 
@@ -160,7 +160,7 @@ function Invoke-Cad([string[]]$argv, [int]$timeoutSec, [string]$progId) {
 function Start-CadAsync([string[]]$argv, [string]$progId, [string]$stdoutPath, [string]$stderrPath) {
     $full = @($argv)
     if ($progId) { $full = @($argv[0], '-ProgId', $progId) + @($argv | Select-Object -Skip 1) }
-    if (-not (Test-Path -LiteralPath $script:ClientExe)) { throw 'ZwcClient.exe not found (concurrency needs the client entry)' }
+    if (-not (Test-Path -LiteralPath $script:ClientExe)) { throw 'CadClient.exe not found (concurrency needs the client entry)' }
     $argLine = (($full | ForEach-Object {
         $a = [string]$_
         if ($a -match '[\s"]') { '"' + ($a -replace '"', '\"') + '"' } else { $a }
@@ -214,13 +214,13 @@ function Get-TargetProcs([string]$progId) {
     return @($hits)
 }
 
-# The E1 client refuses to run when bin\cache\<sha>\ZwcHelper.exe is missing for the CURRENT
+# The E1 client refuses to run when bin\cache\<sha>\CadHelper.exe is missing for the CURRENT
 # helper sources (it does not compile for live code). Chaos must therefore warm the helper
-# compile cache through zwc.ps1 once before any client call.
+# compile cache through cad.ps1 once before any client call.
 function Initialize-Helper([string]$progId, [int]$timeoutSec) {
-    if (-not (Test-Path -LiteralPath $script:ZwcPs1)) { return $null }
+    if (-not (Test-Path -LiteralPath $script:CadPs1)) { return $null }
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $argv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script:ZwcPs1,
+    $argv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script:CadPs1,
               'status', '-ProgId', $progId, '-TimeoutSec', '90')
     $r = Invoke-Bounded $psExe $argv $timeoutSec
     Write-Chaos ('helper warmup: exit=' + $r.exit + ' ' + [int]$r.wallMs + ' ms')
@@ -229,7 +229,7 @@ function Initialize-Helper([string]$progId, [int]$timeoutSec) {
 
 
 # ---------------------------------------------------------------- frozen product snapshot
-# Copy scripts\zwc.ps1 + scripts\helper\*.cs + bin\ZwcClient.exe into a private mirror, then
+# Copy scripts\cad.ps1 + scripts\helper\*.cs + bin\CadClient.exe into a private mirror, then
 # point all CAD calls at the mirror. The helper/daemon then live under that mirror with their own
 # hash: a running teammate edit cannot change our hash mid-run, and C5's daemon kill is provably
 # our own process.
@@ -241,22 +241,22 @@ function New-FrozenProduct([string]$baseDir) {
     $fzBin = Join-Path $frozen 'bin'
     New-Item -ItemType Directory -Force -Path $fzHelper | Out-Null
     New-Item -ItemType Directory -Force -Path $fzBin | Out-Null
-    Copy-Item -LiteralPath $script:ZwcPs1 -Destination (Join-Path $fzScripts 'zwc.ps1') -Force
+    Copy-Item -LiteralPath $script:CadPs1 -Destination (Join-Path $fzScripts 'cad.ps1') -Force
     Copy-Item -Path (Join-Path (Join-Path $script:ChaosRoot 'scripts') 'helper\*.cs') -Destination $fzHelper -Force
-    $liveClient = Join-Path $script:ChaosRoot 'bin\ZwcClient.exe'
-    if (Test-Path -LiteralPath $liveClient) { Copy-Item -LiteralPath $liveClient -Destination (Join-Path $fzBin 'ZwcClient.exe') -Force }
+    $liveClient = Join-Path $script:ChaosRoot 'bin\CadClient.exe'
+    if (Test-Path -LiteralPath $liveClient) { Copy-Item -LiteralPath $liveClient -Destination (Join-Path $fzBin 'CadClient.exe') -Force }
 
     $hashes = [ordered]@{}
     $files = @()
-    if (Test-Path -LiteralPath (Join-Path $fzScripts 'zwc.ps1')) { $files += (Join-Path $fzScripts 'zwc.ps1') }
+    if (Test-Path -LiteralPath (Join-Path $fzScripts 'cad.ps1')) { $files += (Join-Path $fzScripts 'cad.ps1') }
     $files += @(Get-ChildItem -LiteralPath $fzHelper -Filter *.cs -File | ForEach-Object { $_.FullName })
-    if (Test-Path -LiteralPath (Join-Path $fzBin 'ZwcClient.exe')) { $files += (Join-Path $fzBin 'ZwcClient.exe') }
+    if (Test-Path -LiteralPath (Join-Path $fzBin 'CadClient.exe')) { $files += (Join-Path $fzBin 'CadClient.exe') }
     foreach ($f in $files) {
         $rel = $f.Substring($frozen.Length + 1)
         $hashes[$rel] = (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLower()
     }
-    $script:ZwcPs1 = Join-Path $fzScripts 'zwc.ps1'
-    $script:ClientExe = Join-Path $fzBin 'ZwcClient.exe'
+    $script:CadPs1 = Join-Path $fzScripts 'cad.ps1'
+    $script:ClientExe = Join-Path $fzBin 'CadClient.exe'
     Write-Chaos ('frozen product snapshot: ' + $frozen)
     return [pscustomobject]@{ root = $frozen; hashes = $hashes }
 }

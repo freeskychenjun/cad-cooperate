@@ -1,9 +1,9 @@
-// ZwcTray.cs - system-tray "AI" badge for zwcad-cooperate.
+// CadTray.cs - system-tray "AI" badge for cad-cooperate.
 //
 // Why a separate process: the helper owns COM/STA work and must never run a WinForms
 // message loop; the tray is pure UI and reads a small JSON state file (no COM at all).
 //
-//   ZwcTray.exe --state <state.json>
+//   CadTray.exe --state <state.json>
 //
 // State file contract (written by the wrapper, never by the tray):
 //   { "doc": "<drawing name>", "step": "<what AI is doing>", "hwnd": 123, "pid": 456,
@@ -28,7 +28,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-namespace ZwcTray
+namespace CadTray
 {
     internal static class Program
     {
@@ -49,14 +49,14 @@ namespace ZwcTray
 
             if (string.IsNullOrEmpty(StatePath) || !File.Exists(StatePath))
             {
-                Console.Error.WriteLine("usage: ZwcTray.exe --state <state.json>");
+                Console.Error.WriteLine("usage: CadTray.exe --state <state.json>");
                 return 2;
             }
 
             var st = ReadState();
             if (st == null) return 2;
 
-            string key = "Local\\zwc-tray-" + Sha8(st.doc);
+            string key = "Local\\cad-tray-" + Sha8(st.doc);
             bool created;
             Guard = new Mutex(true, key, out created);
             if (!created) { Console.Error.WriteLine("tray already running for this drawing"); return 0; }

@@ -7,11 +7,11 @@
 
 ### 1. 文档级锁 + 排队
 
-- 锁名 `Local\zwc-doc-<sha16(小写 fullName)>`（跨进程 `Mutex`）；写命令（`entity` / `section` / `undo`）先取锁，读命令不取锁（锁被持有时仍可读，但可能读到中间态）。
+- 锁名 `Local\cad-doc-<sha16(小写 fullName)>`（跨进程 `Mutex`）；写命令（`entity` / `section` / `undo`）先取锁，读命令不取锁（锁被持有时仍可读，但可能读到中间态）。
 - `-LockTimeout <ms>`（默认 10 s）：超时 → `ok:false / error.code=DOC_LOCKED`，`error.detail={holder{pid,progId,startedAt,purpose}, waitedMs, lock}`；成功但等过 → `result.lock{acquired, waitedMs, name}`。
-- **holder 旁路文件只在真的等待过时写**（`%TEMP%\zwcad-cooperate\locks\<sha16>.json`）——无竞争时不产生任何文件 I/O（这一条把每条命令的固定开销砍掉约 150 ms）。
+- **holder 旁路文件只在真的等待过时写**（`%TEMP%\cad-cooperate\locks\<sha16>.json`）——无竞争时不产生任何文件 I/O（这一条把每条命令的固定开销砍掉约 150 ms）。
 - daemon 内部本身就是单请求串行（4 字节长度 + JSON 管道，一请求一连接），跨进程竞争主要靠上面的命名锁。
-- **关键修复：daemon 启动去重**。多个 client 同时冷启动时，以前各自 spawn 一个 helper → 一个抢到管道、其余空转重试 → 20 s 级尖峰。现在 `ZwcClient` 用 `Local\zwc-start-<sha>` 互斥量让**只有一个 client 真正 spawn daemon**，其余等锁后直接连管道；抢不到管道的 daemon 2 s 内自行退出。
+- **关键修复：daemon 启动去重**。多个 client 同时冷启动时，以前各自 spawn 一个 helper → 一个抢到管道、其余空转重试 → 20 s 级尖峰。现在 `CadClient` 用 `Local\cad-start-<sha>` 互斥量让**只有一个 client 真正 spawn daemon**，其余等锁后直接连管道；抢不到管道的 daemon 2 s 内自行退出。
 
 ### 2. 忙态检测与可恢复
 
@@ -58,9 +58,9 @@
 ```powershell
 cd <repo>
 .\tmp\e3_final.ps1          # 顺序地板 + 3 会话并发 + doctor -Deep，证据写到 tmp\evidence-e3\concurrency.json
-.\bin\ZwcClient.exe doctor -Deep -ProgId ZWCAD.Application.16
-.\bin\ZwcClient.exe serve -Action recover
-.\bin\ZwcClient.exe serve -Action reset      # 只杀本版本 daemon
+.\bin\CadClient.exe doctor -Deep -ProgId ZWCAD.Application.16
+.\bin\CadClient.exe serve -Action recover
+.\bin\CadClient.exe serve -Action reset      # 只杀本版本 daemon
 ```
 
 ## 五、收口结果（lead 复核轮，2026-11-04 18:10–18:45）
@@ -125,7 +125,7 @@ cd <repo>
 | 告警 | 实测 |
 |---|---|
 | 字段存在 | 正常写响应含 `result.stability{attachMs:96,lockMs:78,busyMs:5,fingerprintMs:42,bodyMs:253,totalMs:474}`、`lock{acquired:true,waitedMs:0,name}`、`busy{waitedMs,promptCleared,retries}` |
-| `LOCK_WAITED` | 外部持 `Local\zwc-doc-<sha>` 1.6 s 后放行 → 写命令 `lock.waitedMs=1266`、`warnings=[LOCK_WAITED]` ✅ |
+| `LOCK_WAITED` | 外部持 `Local\cad-doc-<sha>` 1.6 s 后放行 → 写命令 `lock.waitedMs=1266`、`warnings=[LOCK_WAITED]` ✅ |
 | `BUSY_RETRIED` | `-FaultInject busy-recover` → `ok:true` + `BUSY_RETRIED`（含模拟 MS）✅ |
 | `BUSY_TIMEOUT` | `-FaultInject busy -BusyTimeout 600` → `ok:false / BUSY_TIMEOUT`（detail 带 `injected:busy`）✅ |
 | `DAEMON_START_WAIT` | 冷启动时 `client` 把 `transport` 标为 `daemon-started(wait=Nms)`（仅当等待 ≥1.5 s；本机冷启动约 1–3 s 时可见）|
@@ -145,7 +145,7 @@ cd <repo>
 | 2 | **AppInfo 缓存** | `Cad.AppInfo()` 第一次调用后缓存在 Cad 实例内（version/name/fullName/caption 等 5 次 COM 读只发生一次） | **~30–60 ms** |
 | 3 | **DocInfo 短 TTL 缓存** | 每命令的 `ctx.DocMap` 6 次 COM 读改为 800 ms TTL + 每写后显式失效 | **~20–40 ms** |
 | 4 | **写前指纹按需** | 同一进程、同一文档、上一次写 <800 ms 且本次锁等待=0 → 复用上次指纹（外部写入必然要先拿锁，因此复用是安全的）；否则全量取。`DOC_CHANGED_OUTSIDE` 检测保留 | **20–45 ms**（指纹 34–45 → 0） |
-| 5 | **client NGen 原生映像** | `ngen install bin\ZwcClient.exe`（本机成功），并把"首次自动 ngen"做进 `zwc.ps1 --build-client` 的编译后步骤（失败静默） | **~30–40 ms**（client 启动 70 → ~35 ms）|
+| 5 | **client NGen 原生映像** | `ngen install bin\CadClient.exe`（本机成功），并把"首次自动 ngen"做进 `cad.ps1 --build-client` 的编译后步骤（失败静默） | **~30–40 ms**（client 启动 70 → ~35 ms）|
 | 6 | 锁旁路 | 无竞争时不写 holder 旁路文件（此前每条命令 2 次 %TEMP% 文件 I/O） | 已含在上一轮 |
 
 **最终数字（`tmp\evidence-e3\lateny-opt\shape-a.json`，Classic 16，client 入口）**
@@ -285,7 +285,7 @@ powershell -NoProfile -File tmp\shapeA_v2.ps1 -Product zwcad16  -Rounds 2 -Sessi
 ## 5.14 Lead 独立仲裁测量（2026-11-04 20:0x，中立 harness）
 
 core-cad（2025 中位 380.5 / Classic 326）与 audit-dev（2025 中位 453 / Classic 424）口径不一致，Lead 用**第三套最小 harness** 仲裁：
-- 计时点：每个会话进程内 & bin\ZwcClient.exe entity ... 的外部 Stopwatch（不额外包 JSON 解析/写盘；仅读一次 ok 判成功）；每会话 1 warmup + 10 采样；hot 排除首条；**每轮 fresh CAD + 私有夹具副本**；3 次独立 fresh 跑，取每次 hot p50 的中位数。
+- 计时点：每个会话进程内 & bin\CadClient.exe entity ... 的外部 Stopwatch（不额外包 JSON 解析/写盘；仅读一次 ok 判成功）；每会话 1 warmup + 10 采样；hot 排除首条；**每轮 fresh CAD + 私有夹具副本**；3 次独立 fresh 跑，取每次 hot p50 的中位数。
 - 脚本：	mp\lead-tiebreak-shapeA.ps1（+ 	mp\lead-tiebreak-session.ps1），证据：%TEMP%\lead-tiebreak-*\tiebreak-result.json。
 
 | 产品 | 三次 fresh 的 hot p50 | 中位 | min/max | 判定 |
@@ -352,7 +352,7 @@ min **281** / max **375**；口径 A **351.5**；口径 B **343.5**；errors 0�
 ## 5.16 Lead 中立 harness v2（wall + helper 双口径，2026-11-04 20:4x）
 
 为摆脱"负载/计时点"争议，Lead 用第二套中立脚本同时记录两口径：
-- **wall**：会话进程内 & bin\ZwcClient.exe entity ... 外部 Stopwatch（用户实际等待时间）；
+- **wall**：会话进程内 & bin\CadClient.exe entity ... 外部 Stopwatch（用户实际等待时间）；
 - **helper**：响应里的 esult.stability.totalMs（产品侧耗时，排除 client 进程启动与 OS 调度）；
 - 3 会话 × (1 warmup + 10 采样)，每轮 fresh CAD + 私有夹具；3 次独立 fresh。
 - 脚本：	mp\lead-measure2.ps1（+ -session.ps1）；证据：%TEMP%\lead-measure2-*\measure2-result.json。

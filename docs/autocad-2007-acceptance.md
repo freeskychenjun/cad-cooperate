@@ -22,7 +22,7 @@
 | 维度 | 中望 Classic 16 / 2025 | AutoCAD 2007 | 处理 |
 |---|---|---|---|
 | ProgID | `ZWCAD.Application.16`（Classic）/ `.Application`（2025 抢注） | `AutoCAD.Application.17` 已注册；**`AutoCAD.Application` 在 64/32 位视图都未注册** | helper 候选顺序 `AutoCAD.Application.17 → .Application`，`.17` 命中 |
-| 位宽与 COM 注册 | CLSID 注册在 64 位视图（2025） | **`LocalServer32` 只在 32 位视图（WOW6432Node）**，64 位视图为空 | **64 位 helper 实测可直接 CreateObject 成功**（CLSID 映射在 64 位视图存在，LocalServer32 走 WOW64 回退）；⇒ **不需要 x86 构建**，zwc.ps1 未加第二份 exe |
+| 位宽与 COM 注册 | CLSID 注册在 64 位视图（2025） | **`LocalServer32` 只在 32 位视图（WOW6432Node）**，64 位视图为空 | **64 位 helper 实测可直接 CreateObject 成功**（CLSID 映射在 64 位视图存在，LocalServer32 走 WOW64 回退）；⇒ **不需要 x86 构建**，cad.ps1 未加第二份 exe |
 | 版本字符串 | `2015.11.10(17516)` / `2025` | `17.0s (LMS Tech)`；`ACADVER=17.0s` | 只作诊断输出，不参与分支 |
 | 集合下标 | **0 基**（`ModelSpace.Item(0)`=首实体） | **1 基** | `Coll.DetectBase()` 逐集合探测（先试 `Item(0)`）：AutoCAD 上 read 回读 67 实体含首条地面线，证明 1 基路径正确 |
 | 撤销组打开方法 | `StartUndoMark` | **`BeginUndoMark`** | helper 改 `TryInvoke("BeginUndoMark") \|\| TryInvoke("StartUndoMark")`；实测 AutoCAD `undoGroups:1` 一次 `_.U` 回退 67 |
@@ -68,18 +68,18 @@ cd <repo>
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -DryRunOnly
 
 # 1) 起 AutoCAD 2007（冷启动 ~132 s，务必给足超时）并新开一张空图
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 open -Launch -New -App autocad -TimeoutSec 260
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 open -Launch -New -App autocad -TimeoutSec 260
 
 # 2) 画断面（fixture 30 点 → 67 实体）
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 section -App autocad -Doc Drawing2.dwg -Data tmp\section-30.model.json
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 section -App autocad -Doc Drawing2.dwg -Data tmp\section-30.model.json
 
 # 3) 回读 + 独立复核（应为 268 PASS / 0 FAIL）
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 read -App autocad -Doc Drawing2.dwg | Out-File -Encoding utf8 tmp\evidence-acad\read-final.json
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 read -App autocad -Doc Drawing2.dwg | Out-File -Encoding utf8 tmp\evidence-acad\read-final.json
 python tests\verify_section.py --model tmp\evidence-acad\read-final.json --expected tests\fixtures\section-30.expected.json
 
 # 4) 一步撤销 + 干净收尾（应 0 残留）
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 undo -App autocad -Doc Drawing2.dwg -Token <undoToken>
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 finish -Quit -App autocad -TimeoutSec 120
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 undo -App autocad -Doc Drawing2.dwg -Token <undoToken>
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 finish -Quit -App autocad -TimeoutSec 120
 Get-Process acad*   # 期望：没有输出
 ```
 

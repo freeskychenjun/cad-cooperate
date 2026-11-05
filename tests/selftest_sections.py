@@ -83,7 +83,7 @@ def env(extra=None):
     e = os.environ.copy()
     e['PYTHONUTF8'] = '1'
     e['PYTHONIOENCODING'] = 'utf-8'
-    e.pop('ZWC_SECTION_TIMING', None)
+    e.pop('CAD_SECTION_TIMING', None)
     if extra:
         e.update(extra)
     return e
@@ -156,9 +156,9 @@ def contours_doc():
 
 
 def write_case(name, files):
-    """Write a <root>/zwcad-cooperate/ input dir; returns its tmp-dir root."""
+    """Write a <root>/cad-cooperate/ input dir; returns its tmp-dir root."""
     root = os.path.join(TMP, 'cases', name)
-    zw = os.path.join(root, 'zwcad-cooperate')
+    zw = os.path.join(root, 'cad-cooperate')
     if os.path.isdir(root):
         shutil.rmtree(root)
     os.makedirs(zw)
@@ -531,7 +531,7 @@ def assert_no_output(outdir, label):
 
 def t_bad_inputs():
     empty = os.path.join(TMP, 'cases', 'empty')
-    os.makedirs(os.path.join(empty, 'zwcad-cooperate'), exist_ok=True)
+    os.makedirs(os.path.join(empty, 'cad-cooperate'), exist_ok=True)
 
     # --- gcd: no input file
     outdir = fresh_dir('bad-gcd-noinput')

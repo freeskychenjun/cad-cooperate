@@ -35,7 +35,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static class LispTemplate
     {
@@ -163,15 +163,15 @@ namespace ZwcHelper
         }
         internal static void WriteScript(string path, string src)
         {
-            if (!IsAscii(src)) throw new ZwcError("LISP_TEMPLATE_NOT_ASCII",
+            if (!IsAscii(src)) throw new CadError("LISP_TEMPLATE_NOT_ASCII",
                 "the generated LISP script contains non-ASCII characters",
                 "keep non-ASCII out of the script; Chinese text belongs to the dumped data", null);
             string err = BalanceError(src);
-            if (err != null) throw new ZwcError("LISP_TEMPLATE_UNBALANCED",
+            if (err != null) throw new CadError("LISP_TEMPLATE_UNBALANCED",
                 "the generated LISP script is not balanced: " + err,
                 "fix the template generator; nothing was injected", null);
             string unsafeErr = SafetyError(src);
-            if (unsafeErr != null) throw new ZwcError("LISP_TEMPLATE_UNSAFE",
+            if (unsafeErr != null) throw new CadError("LISP_TEMPLATE_UNSAFE",
                 "the generated LISP script failed the read-only safety gate: " + unsafeErr,
                 "only ssget/entget/assoc/open/write-line/close/... are allowed; never command/entdel/SelectionSets/Delete", null);
             File.WriteAllText(path, src, new ASCIIEncoding());   // no preamble => no BOM
@@ -181,13 +181,13 @@ namespace ZwcHelper
         /// variable: LISP has no cheap string library here, so the loop is inlined per field.</summary>
         private static void AppendEscape(StringBuilder sb, string srcVar, string dstVar)
         {
-            sb.Append("(setq " + dstVar + " \"\" _zwc_j 1) ");
-            sb.Append("(while (<= _zwc_j (strlen " + srcVar + ")) ");
-            sb.Append("(setq _zwc_c (substr " + srcVar + " _zwc_j 1)) ");
-            sb.Append("(if (or (= _zwc_c (chr 13)) (= _zwc_c (chr 10))) (setq _zwc_c \" \")) ");
-            sb.Append("(if (= _zwc_c \"|\") (setq _zwc_c \"\\\\|\")) ");
-            sb.Append("(setq " + dstVar + " (strcat " + dstVar + " _zwc_c)) ");
-            sb.Append("(setq _zwc_j (1+ _zwc_j))) ");
+            sb.Append("(setq " + dstVar + " \"\" _cad_j 1) ");
+            sb.Append("(while (<= _cad_j (strlen " + srcVar + ")) ");
+            sb.Append("(setq _cad_c (substr " + srcVar + " _cad_j 1)) ");
+            sb.Append("(if (or (= _cad_c (chr 13)) (= _cad_c (chr 10))) (setq _cad_c \" \")) ");
+            sb.Append("(if (= _cad_c \"|\") (setq _cad_c \"\\\\|\")) ");
+            sb.Append("(setq " + dstVar + " (strcat " + dstVar + " _cad_c)) ");
+            sb.Append("(setq _cad_j (1+ _cad_j))) ");
         }
 
         internal static string PathForLisp(string path)
@@ -212,95 +212,95 @@ namespace ZwcHelper
             sb.Append("(progn ");
             // --- P1-4.1: save CMDECHO + the previous *error* handler, then install one that restores
             // both. *error* is a symbol assignment, not a call; the safety gate skips the parameter list.
-            sb.Append("(setq _zwc_echo (getvar \"CMDECHO\")) ");
-            sb.Append("(setq _zwc_olderr *error*) ");
+            sb.Append("(setq _cad_echo (getvar \"CMDECHO\")) ");
+            sb.Append("(setq _cad_olderr *error*) ");
             sb.Append("(defun *error* (msg) ");
-            sb.Append("(if _zwc_f (close _zwc_f)) ");
-            sb.Append("(if _zwc_fs (close _zwc_fs)) ");
-            sb.Append("(if _zwc_echo (setvar \"CMDECHO\" _zwc_echo)) ");
-            sb.Append("(setq *error* _zwc_olderr) ");
+            sb.Append("(if _cad_f (close _cad_f)) ");
+            sb.Append("(if _cad_fs (close _cad_fs)) ");
+            sb.Append("(if _cad_echo (setvar \"CMDECHO\" _cad_echo)) ");
+            sb.Append("(setq *error* _cad_olderr) ");
             sb.Append("(princ)) ");
             // --- two-phase sentinel: __START__ lands in its own .start file before the dump begins
             if (!string.IsNullOrEmpty(startPath))
             {
-                sb.Append("(setq _zwc_fs (open \"").Append(PathForLisp(startPath)).Append("\" \"w\")) ");
-                sb.Append("(write-line \"__START__\" _zwc_fs) ");
-                sb.Append("(close _zwc_fs) ");
-                sb.Append("(setq _zwc_fs nil) ");
+                sb.Append("(setq _cad_fs (open \"").Append(PathForLisp(startPath)).Append("\" \"w\")) ");
+                sb.Append("(write-line \"__START__\" _cad_fs) ");
+                sb.Append("(close _cad_fs) ");
+                sb.Append("(setq _cad_fs nil) ");
             }
             sb.Append("(setvar \"CMDECHO\" 0) ");
-            sb.Append("(setq _zwc_f (open \"").Append(PathForLisp(txtPath)).Append("\" \"w\")) ");
-            sb.Append("(setq _zwc_ss (ssget \"X\"").Append(string.IsNullOrEmpty(ssFilter) ? "" : (" " + ssFilter)).Append(")) ");
-            sb.Append("(setq _zwc_n (if _zwc_ss (sslength _zwc_ss) 0)) ");
-            sb.Append("(setq _zwc_i 0) ");
-            sb.Append("(setq _zwc_cnt 0) ");
-            sb.Append("(while (< _zwc_i _zwc_n) ");
-            sb.Append("(setq _zwc_e (ssname _zwc_ss _zwc_i)) ");
-            sb.Append("(setq _zwc_d (entget _zwc_e)) ");
-            sb.Append("(setq _zwc_h (cdr (assoc 5 _zwc_d))) ");
-            sb.Append("(setq _zwc_t (cdr (assoc 0 _zwc_d))) ");
-            sb.Append("(setq _zwc_l (cdr (assoc 8 _zwc_d))) ");
-            sb.Append("(if (= _zwc_h nil) (setq _zwc_h \"\")) ");
-            sb.Append("(if (= _zwc_t nil) (setq _zwc_t \"\")) ");
-            sb.Append("(if (= _zwc_l nil) (setq _zwc_l \"\")) ");
+            sb.Append("(setq _cad_f (open \"").Append(PathForLisp(txtPath)).Append("\" \"w\")) ");
+            sb.Append("(setq _cad_ss (ssget \"X\"").Append(string.IsNullOrEmpty(ssFilter) ? "" : (" " + ssFilter)).Append(")) ");
+            sb.Append("(setq _cad_n (if _cad_ss (sslength _cad_ss) 0)) ");
+            sb.Append("(setq _cad_i 0) ");
+            sb.Append("(setq _cad_cnt 0) ");
+            sb.Append("(while (< _cad_i _cad_n) ");
+            sb.Append("(setq _cad_e (ssname _cad_ss _cad_i)) ");
+            sb.Append("(setq _cad_d (entget _cad_e)) ");
+            sb.Append("(setq _cad_h (cdr (assoc 5 _cad_d))) ");
+            sb.Append("(setq _cad_t (cdr (assoc 0 _cad_d))) ");
+            sb.Append("(setq _cad_l (cdr (assoc 8 _cad_d))) ");
+            sb.Append("(if (= _cad_h nil) (setq _cad_h \"\")) ");
+            sb.Append("(if (= _cad_t nil) (setq _cad_t \"\")) ");
+            sb.Append("(if (= _cad_l nil) (setq _cad_l \"\")) ");
             // sanitize text: CR/LF -> space, '|' -> '\|' (basic substring loop; no vl-* needed)
-            sb.Append("(setq _zwc_x (cdr (assoc 1 _zwc_d))) ");
-            sb.Append("(if (= _zwc_x nil) (setq _zwc_x \"\")) ");
-            sb.Append("(setq _zwc_xx \"\" _zwc_j 1) ");
-            sb.Append("(while (<= _zwc_j (strlen _zwc_x)) ");
-            sb.Append("(setq _zwc_c (substr _zwc_x _zwc_j 1)) ");
-            sb.Append("(if (or (= _zwc_c (chr 13)) (= _zwc_c (chr 10))) (setq _zwc_c \" \")) ");
-            sb.Append("(if (= _zwc_c \"|\") (setq _zwc_c \"\\\\|\")) ");
-            sb.Append("(setq _zwc_xx (strcat _zwc_xx _zwc_c)) ");
-            sb.Append("(setq _zwc_j (1+ _zwc_j))) ");
-            sb.Append("(setq _zwc_x _zwc_xx) ");
+            sb.Append("(setq _cad_x (cdr (assoc 1 _cad_d))) ");
+            sb.Append("(if (= _cad_x nil) (setq _cad_x \"\")) ");
+            sb.Append("(setq _cad_xx \"\" _cad_j 1) ");
+            sb.Append("(while (<= _cad_j (strlen _cad_x)) ");
+            sb.Append("(setq _cad_c (substr _cad_x _cad_j 1)) ");
+            sb.Append("(if (or (= _cad_c (chr 13)) (= _cad_c (chr 10))) (setq _cad_c \" \")) ");
+            sb.Append("(if (= _cad_c \"|\") (setq _cad_c \"\\\\|\")) ");
+            sb.Append("(setq _cad_xx (strcat _cad_xx _cad_c)) ");
+            sb.Append("(setq _cad_j (1+ _cad_j))) ");
+            sb.Append("(setq _cad_x _cad_xx) ");
             // nil-safe coordinate formatting
-            sb.Append("(setq _zwc_p (cdr (assoc 10 _zwc_d))) ");
-            sb.Append("(if (= _zwc_p nil) (setq _zwc_p (list 0.0 0.0 0.0))) ");
-            sb.Append("(setq _zwc_x1 (nth 0 _zwc_p)) (if (= _zwc_x1 nil) (setq _zwc_x1 0.0)) ");
-            sb.Append("(setq _zwc_y1 (nth 1 _zwc_p)) (if (= _zwc_y1 nil) (setq _zwc_y1 0.0)) ");
-            sb.Append("(setq _zwc_z1 (nth 2 _zwc_p)) (if (= _zwc_z1 nil) (setq _zwc_z1 0.0)) ");
-            sb.Append("(setq _zwc_pv (list (rtos _zwc_x1 2 6) (rtos _zwc_y1 2 6) (rtos _zwc_z1 2 6))) ");
+            sb.Append("(setq _cad_p (cdr (assoc 10 _cad_d))) ");
+            sb.Append("(if (= _cad_p nil) (setq _cad_p (list 0.0 0.0 0.0))) ");
+            sb.Append("(setq _cad_x1 (nth 0 _cad_p)) (if (= _cad_x1 nil) (setq _cad_x1 0.0)) ");
+            sb.Append("(setq _cad_y1 (nth 1 _cad_p)) (if (= _cad_y1 nil) (setq _cad_y1 0.0)) ");
+            sb.Append("(setq _cad_z1 (nth 2 _cad_p)) (if (= _cad_z1 nil) (setq _cad_z1 0.0)) ");
+            sb.Append("(setq _cad_pv (list (rtos _cad_x1 2 6) (rtos _cad_y1 2 6) (rtos _cad_z1 2 6))) ");
 
             if (geom)
             {
-                sb.Append("(setq _zwc_vs '()) ");
-                sb.Append("(foreach _zwc_pp _zwc_d (if (= (car _zwc_pp) 10) (setq _zwc_vs (cons (cdr _zwc_pp) _zwc_vs)))) ");
-                sb.Append("(setq _zwc_vs (reverse _zwc_vs)) ");
-                sb.Append("(setq _zwc_nv (length _zwc_vs)) ");
+                sb.Append("(setq _cad_vs '()) ");
+                sb.Append("(foreach _cad_pp _cad_d (if (= (car _cad_pp) 10) (setq _cad_vs (cons (cdr _cad_pp) _cad_vs)))) ");
+                sb.Append("(setq _cad_vs (reverse _cad_vs)) ");
+                sb.Append("(setq _cad_nv (length _cad_vs)) ");
             }
             else
             {
-                sb.Append("(setq _zwc_nv 0) ");
+                sb.Append("(setq _cad_nv 0) ");
             }
-            sb.Append("(write-line (strcat \"E|\" _zwc_h \"|\" _zwc_t \"|\" _zwc_l \"|\" _zwc_x \"|\" (nth 0 _zwc_pv) \"|\" (nth 1 _zwc_pv) \"|\" (nth 2 _zwc_pv) \"|\" (itoa _zwc_nv)) _zwc_f) ");
+            sb.Append("(write-line (strcat \"E|\" _cad_h \"|\" _cad_t \"|\" _cad_l \"|\" _cad_x \"|\" (nth 0 _cad_pv) \"|\" (nth 1 _cad_pv) \"|\" (nth 2 _cad_pv) \"|\" (itoa _cad_nv)) _cad_f) ");
 
             if (geom)
             {
                 // Old-style POLYLINE has exactly one (10 . point) group - (0,0,elevation) - and its real
                 // vertices are VERTEX sub-entities dumped further down. Emitting that placeholder as a
                 // vertex produced a bogus index 0 plus a duplicate index 0 from the walk.
-                sb.Append("(if (not (equal _zwc_t \"POLYLINE\")) (progn ");
-                sb.Append("(setq _zwc_ii 0) ");
-                sb.Append("(foreach _zwc_pp _zwc_vs ");
-                sb.Append("(setq _zwc_px (nth 0 _zwc_pp)) (if (= _zwc_px nil) (setq _zwc_px 0.0)) ");
-                sb.Append("(setq _zwc_py (nth 1 _zwc_pp)) (if (= _zwc_py nil) (setq _zwc_py 0.0)) ");
-                sb.Append("(setq _zwc_pz (nth 2 _zwc_pp)) (if (= _zwc_pz nil) (setq _zwc_pz 0.0)) ");
-                sb.Append("(write-line (strcat \"V|\" _zwc_h \"|\" (itoa _zwc_ii) \"|\" (rtos _zwc_px 2 6) \"|\" (rtos _zwc_py 2 6) \"|\" (rtos _zwc_pz 2 6)) _zwc_f) ");
-                sb.Append("(setq _zwc_ii (1+ _zwc_ii))) ");   // closes setq + foreach
+                sb.Append("(if (not (equal _cad_t \"POLYLINE\")) (progn ");
+                sb.Append("(setq _cad_ii 0) ");
+                sb.Append("(foreach _cad_pp _cad_vs ");
+                sb.Append("(setq _cad_px (nth 0 _cad_pp)) (if (= _cad_px nil) (setq _cad_px 0.0)) ");
+                sb.Append("(setq _cad_py (nth 1 _cad_pp)) (if (= _cad_py nil) (setq _cad_py 0.0)) ");
+                sb.Append("(setq _cad_pz (nth 2 _cad_pp)) (if (= _cad_pz nil) (setq _cad_pz 0.0)) ");
+                sb.Append("(write-line (strcat \"V|\" _cad_h \"|\" (itoa _cad_ii) \"|\" (rtos _cad_px 2 6) \"|\" (rtos _cad_py 2 6) \"|\" (rtos _cad_pz 2 6)) _cad_f) ");
+                sb.Append("(setq _cad_ii (1+ _cad_ii))) ");   // closes setq + foreach
                 sb.Append(")) ");                            // closes (progn ...) + (if (not ...) ...)
-                sb.Append("(setq _zwc_p2 (cdr (assoc 11 _zwc_d))) ");
-                sb.Append("(if (/= _zwc_p2 nil) (progn ");
-                sb.Append("(setq _zwc_p2x (nth 0 _zwc_p2)) (if (= _zwc_p2x nil) (setq _zwc_p2x 0.0)) ");
-                sb.Append("(setq _zwc_p2y (nth 1 _zwc_p2)) (if (= _zwc_p2y nil) (setq _zwc_p2y 0.0)) ");
-                sb.Append("(setq _zwc_p2z (nth 2 _zwc_p2)) (if (= _zwc_p2z nil) (setq _zwc_p2z 0.0)) ");
-                sb.Append("(write-line (strcat \"P2|\" _zwc_h \"|\" (rtos _zwc_p2x 2 6) \"|\" (rtos _zwc_p2y 2 6) \"|\" (rtos _zwc_p2z 2 6)) _zwc_f))) ");
-                sb.Append("(setq _zwc_el (cdr (assoc 38 _zwc_d))) ");
-                sb.Append("(if (/= _zwc_el nil) (write-line (strcat \"ELEV|\" _zwc_h \"|\" (rtos _zwc_el 2 6)) _zwc_f)) ");
-                sb.Append("(setq _zwc_hh (cdr (assoc 40 _zwc_d))) ");
-                sb.Append("(if (and (/= _zwc_hh nil) (or (= _zwc_t \"TEXT\") (= _zwc_t \"MTEXT\"))) (write-line (strcat \"H|\" _zwc_h \"|\" (rtos _zwc_hh 2 6)) _zwc_f)) ");
-                sb.Append("(if (or (= _zwc_t \"CIRCLE\") (= _zwc_t \"ARC\")) (if (/= _zwc_hh nil) (write-line (strcat \"R|\" _zwc_h \"|\" (rtos _zwc_hh 2 6)) _zwc_f))) ");
-                sb.Append("(if (or (= _zwc_t \"LWPOLYLINE\") (= _zwc_t \"POLYLINE\")) (progn (setq _zwc_fl (cdr (assoc 70 _zwc_d))) (if (/= _zwc_fl nil) (write-line (strcat \"CL|\" _zwc_h \"|\" (itoa _zwc_fl)) _zwc_f)))) ");
+                sb.Append("(setq _cad_p2 (cdr (assoc 11 _cad_d))) ");
+                sb.Append("(if (/= _cad_p2 nil) (progn ");
+                sb.Append("(setq _cad_p2x (nth 0 _cad_p2)) (if (= _cad_p2x nil) (setq _cad_p2x 0.0)) ");
+                sb.Append("(setq _cad_p2y (nth 1 _cad_p2)) (if (= _cad_p2y nil) (setq _cad_p2y 0.0)) ");
+                sb.Append("(setq _cad_p2z (nth 2 _cad_p2)) (if (= _cad_p2z nil) (setq _cad_p2z 0.0)) ");
+                sb.Append("(write-line (strcat \"P2|\" _cad_h \"|\" (rtos _cad_p2x 2 6) \"|\" (rtos _cad_p2y 2 6) \"|\" (rtos _cad_p2z 2 6)) _cad_f))) ");
+                sb.Append("(setq _cad_el (cdr (assoc 38 _cad_d))) ");
+                sb.Append("(if (/= _cad_el nil) (write-line (strcat \"ELEV|\" _cad_h \"|\" (rtos _cad_el 2 6)) _cad_f)) ");
+                sb.Append("(setq _cad_hh (cdr (assoc 40 _cad_d))) ");
+                sb.Append("(if (and (/= _cad_hh nil) (or (= _cad_t \"TEXT\") (= _cad_t \"MTEXT\"))) (write-line (strcat \"H|\" _cad_h \"|\" (rtos _cad_hh 2 6)) _cad_f)) ");
+                sb.Append("(if (or (= _cad_t \"CIRCLE\") (= _cad_t \"ARC\")) (if (/= _cad_hh nil) (write-line (strcat \"R|\" _cad_h \"|\" (rtos _cad_hh 2 6)) _cad_f))) ");
+                sb.Append("(if (or (= _cad_t \"LWPOLYLINE\") (= _cad_t \"POLYLINE\")) (progn (setq _cad_fl (cdr (assoc 70 _cad_d))) (if (/= _cad_fl nil) (write-line (strcat \"CL|\" _cad_h \"|\" (itoa _cad_fl)) _cad_f)))) ");
                 // Old-style 2D/3D POLYLINE: the group-10 sweep above only sees the placeholder
                 // (0,0,elevation) because the real vertices are separate VERTEX sub-entities. Walking
                 // them with (entnext) was measured WRONG on AutoCAD 2021: the chain crosses SEQEND and
@@ -308,38 +308,38 @@ namespace ZwcHelper
                 // and it is slow (~2 ms per entget, 141k vertices took 12.5 minutes). So the LISP dump
                 // only reports the elevation here and LispGeom fills the vertices through COM
                 // (AcadPolyline.Coordinates returns the whole triple array in ONE call).
-                sb.Append("(setq _zwc_af (cdr (assoc 66 _zwc_d))) ");
-                sb.Append("(if (= _zwc_t \"POLYLINE\") (if (/= _zwc_z1 nil) (write-line (strcat \"ELEV|\" _zwc_h \"|\" (rtos _zwc_z1 2 6)) _zwc_f))) ");
+                sb.Append("(setq _cad_af (cdr (assoc 66 _cad_d))) ");
+                sb.Append("(if (= _cad_t \"POLYLINE\") (if (/= _cad_z1 nil) (write-line (strcat \"ELEV|\" _cad_h \"|\" (rtos _cad_z1 2 6)) _cad_f))) ");
                 // Block attributes are sub-entities too (ATTRIB ... SEQEND) and are gated the same way.
                 // Without them a drawing whose elevation labels live inside elevation-point blocks
                 // reads as "no text at all".
-                sb.Append("(if (and (= _zwc_t \"INSERT\") _zwc_af (= _zwc_af 1)) (progn ");
-                sb.Append("(setq _zwc_sub (entnext _zwc_e) _zwc_lim 0) ");
-                sb.Append("(while (and _zwc_sub (< _zwc_lim 200000) (setq _zwc_sd (entget _zwc_sub)) (equal (cdr (assoc 0 _zwc_sd)) \"ATTRIB\")) ");
-                sb.Append("(setq _zwc_lim (1+ _zwc_lim)) ");
-                sb.Append("(if (equal (cdr (assoc 0 _zwc_sd)) \"ATTRIB\") (progn ");
-                sb.Append("(setq _zwc_tag (cdr (assoc 2 _zwc_sd))) (if (= _zwc_tag nil) (setq _zwc_tag \"\")) ");
-                sb.Append("(setq _zwc_val (cdr (assoc 1 _zwc_sd))) (if (= _zwc_val nil) (setq _zwc_val \"\")) ");
-                AppendEscape(sb, "_zwc_tag", "_zwc_te");
-                AppendEscape(sb, "_zwc_val", "_zwc_ve");
-                sb.Append("(setq _zwc_sp (cdr (assoc 10 _zwc_sd))) ");
-                sb.Append("(setq _zwc_sx (nth 0 _zwc_sp)) (if (= _zwc_sx nil) (setq _zwc_sx 0.0)) ");
-                sb.Append("(setq _zwc_sy (nth 1 _zwc_sp)) (if (= _zwc_sy nil) (setq _zwc_sy 0.0)) ");
-                sb.Append("(setq _zwc_sz (nth 2 _zwc_sp)) (if (= _zwc_sz nil) (setq _zwc_sz 0.0)) ");
-                sb.Append("(write-line (strcat \"A|\" _zwc_h \"|\" _zwc_te \"|\" _zwc_ve \"|\" (rtos _zwc_sx 2 6) \"|\" (rtos _zwc_sy 2 6) \"|\" (rtos _zwc_sz 2 6)) _zwc_f))) ");
-                sb.Append("(setq _zwc_sub (entnext _zwc_sub))))) ");
+                sb.Append("(if (and (= _cad_t \"INSERT\") _cad_af (= _cad_af 1)) (progn ");
+                sb.Append("(setq _cad_sub (entnext _cad_e) _cad_lim 0) ");
+                sb.Append("(while (and _cad_sub (< _cad_lim 200000) (setq _cad_sd (entget _cad_sub)) (equal (cdr (assoc 0 _cad_sd)) \"ATTRIB\")) ");
+                sb.Append("(setq _cad_lim (1+ _cad_lim)) ");
+                sb.Append("(if (equal (cdr (assoc 0 _cad_sd)) \"ATTRIB\") (progn ");
+                sb.Append("(setq _cad_tag (cdr (assoc 2 _cad_sd))) (if (= _cad_tag nil) (setq _cad_tag \"\")) ");
+                sb.Append("(setq _cad_val (cdr (assoc 1 _cad_sd))) (if (= _cad_val nil) (setq _cad_val \"\")) ");
+                AppendEscape(sb, "_cad_tag", "_cad_te");
+                AppendEscape(sb, "_cad_val", "_cad_ve");
+                sb.Append("(setq _cad_sp (cdr (assoc 10 _cad_sd))) ");
+                sb.Append("(setq _cad_sx (nth 0 _cad_sp)) (if (= _cad_sx nil) (setq _cad_sx 0.0)) ");
+                sb.Append("(setq _cad_sy (nth 1 _cad_sp)) (if (= _cad_sy nil) (setq _cad_sy 0.0)) ");
+                sb.Append("(setq _cad_sz (nth 2 _cad_sp)) (if (= _cad_sz nil) (setq _cad_sz 0.0)) ");
+                sb.Append("(write-line (strcat \"A|\" _cad_h \"|\" _cad_te \"|\" _cad_ve \"|\" (rtos _cad_sx 2 6) \"|\" (rtos _cad_sy 2 6) \"|\" (rtos _cad_sz 2 6)) _cad_f))) ");
+                sb.Append("(setq _cad_sub (entnext _cad_sub))))) ");
             }
 
-            sb.Append("(setq _zwc_cnt (1+ _zwc_cnt)) ");
-            sb.Append("(setq _zwc_i (1+ _zwc_i))) ");
-            sb.Append("(close _zwc_f) ");
-            sb.Append("(setq _zwc_f nil) ");
-            sb.Append("(setq _zwc_fs (open \"").Append(PathForLisp(donePath)).Append("\" \"w\")) ");
-            sb.Append("(write-line (strcat \"__DONE__|\" (itoa _zwc_cnt)) _zwc_fs) ");
-            sb.Append("(close _zwc_fs) ");
-            sb.Append("(setq _zwc_fs nil) ");
-            sb.Append("(setvar \"CMDECHO\" _zwc_echo) ");
-            sb.Append("(setq *error* _zwc_olderr) ");
+            sb.Append("(setq _cad_cnt (1+ _cad_cnt)) ");
+            sb.Append("(setq _cad_i (1+ _cad_i))) ");
+            sb.Append("(close _cad_f) ");
+            sb.Append("(setq _cad_f nil) ");
+            sb.Append("(setq _cad_fs (open \"").Append(PathForLisp(donePath)).Append("\" \"w\")) ");
+            sb.Append("(write-line (strcat \"__DONE__|\" (itoa _cad_cnt)) _cad_fs) ");
+            sb.Append("(close _cad_fs) ");
+            sb.Append("(setq _cad_fs nil) ");
+            sb.Append("(setvar \"CMDECHO\" _cad_echo) ");
+            sb.Append("(setq *error* _cad_olderr) ");
             sb.Append("(princ))");
             return sb.ToString();
         }

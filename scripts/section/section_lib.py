@@ -144,14 +144,14 @@ def openpyxl_api():
 
 
 # ---------------------------------------------------------------------------
-# lightweight timing (opt-in: ZWC_SECTION_TIMING=1 -> one stderr line, stdout untouched)
+# lightweight timing (opt-in: CAD_SECTION_TIMING=1 -> one stderr line, stdout untouched)
 # ---------------------------------------------------------------------------
 class Timer(object):
-    """阶段计时；默认静默，设 ZWC_SECTION_TIMING=1 时在结束时往 stderr 打一行。"""
+    """阶段计时；默认静默，设 CAD_SECTION_TIMING=1 时在结束时往 stderr 打一行。"""
 
     def __init__(self, enabled=None):
         if enabled is None:
-            enabled = os.environ.get('ZWC_SECTION_TIMING') == '1'
+            enabled = os.environ.get('CAD_SECTION_TIMING') == '1'
         self.enabled = enabled
         self.t0 = time.perf_counter()
         self.marks = []
@@ -525,7 +525,7 @@ BLOCK_TOL = 0.50     # block-to-line tolerance (m); in practice the blocks sit e
 
 
 def _load_gcd(tmp):
-    src = os.path.join(tmp, 'zwcad-cooperate', 'sections-src.json')
+    src = os.path.join(tmp, 'cad-cooperate', 'sections-src.json')
     if not os.path.exists(src):
         raise BuildError('NO_INPUT', 'missing input: %s' % src)
     d = validate_sections_src(load_json(src, 'sections-src.json'))
@@ -663,8 +663,8 @@ POINT_TOL = 0.50     # spot height considered "on" the section line (m)
 
 
 def _load_dmx(tmp):
-    gj = os.path.join(tmp, 'zwcad-cooperate', 'geom-com.json')
-    cj = os.path.join(tmp, 'zwcad-cooperate', 'contours.json')
+    gj = os.path.join(tmp, 'cad-cooperate', 'geom-com.json')
+    cj = os.path.join(tmp, 'cad-cooperate', 'contours.json')
     for f in (gj, cj):
         if not os.path.exists(f):
             raise BuildError('NO_INPUT', 'missing input: %s' % f)
@@ -1015,7 +1015,7 @@ VARIANTS = {
         'default_name': '断面数据-东总干渠-修正版',
         'description': '从 CAD 导出的 sections-src.json 生成断面数据工作簿（GCD 块插入点高程）',
         'tmp_help': 'CAD 导出 JSON 的临时根目录（默认 tempfile.gettempdir()，'
-                    '输入读 <tmp-dir>\\zwcad-cooperate\\sections-src.json）',
+                    '输入读 <tmp-dir>\\cad-cooperate\\sections-src.json）',
         'name_help': '输出文件基名（默认 %s）' % '断面数据-东总干渠-修正版',
         'load': _load_gcd,
         'build': _build_gcd,
@@ -1052,7 +1052,7 @@ VARIANTS = {
         'default_name': '断面数据-东总干渠',
         'description': '从 CAD 导出的 geom-com.json + contours.json 生成断面数据工作簿',
         'tmp_help': 'CAD 导出 JSON 的临时根目录（默认 tempfile.gettempdir()，'
-                    '输入读 <tmp-dir>\\zwcad-cooperate\\*.json）',
+                    '输入读 <tmp-dir>\\cad-cooperate\\*.json）',
         'name_help': '输出文件基名（默认 %s，生成 <name>.xlsx/.csv）' % '断面数据-东总干渠',
         'load': _load_dmx,
         'build': _build_dmx,

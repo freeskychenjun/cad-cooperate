@@ -20,16 +20,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$zwc = Join-Path $root 'scripts\zwc.ps1'
+$cad = Join-Path $root 'scripts\cad.ps1'
 $capture = Join-Path $root 'tmp\capture-section.ps1'
 
 if (-not (Test-Path -LiteralPath $Model)) { throw "model not found: $Model" }
 $OutDir = Join-Path $root $OutDir
 if (-not (Test-Path -LiteralPath $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
 
-function Invoke-Zwc {
+function Invoke-Cad {
     param([string[]]$Arguments)
-    $raw = & powershell -NoProfile -ExecutionPolicy Bypass -File $zwc @Arguments 2>&1 | Out-String
+    $raw = & powershell -NoProfile -ExecutionPolicy Bypass -File $cad @Arguments 2>&1 | Out-String
     $exit = $LASTEXITCODE
     $obj = $null
     try { $obj = $raw | ConvertFrom-Json } catch { }
@@ -63,7 +63,7 @@ foreach ($t in $targets) {
     }
 
     # 1) launch a fresh drawing and attach
-    $o = Invoke-Zwc (@('open', '-Launch', '-New') + $appArgs + @('-TimeoutSec', [string]$t.openTimeout))
+    $o = Invoke-Cad (@('open', '-Launch', '-New') + $appArgs + @('-TimeoutSec', [string]$t.openTimeout))
     Save-Text (Join-Path $dir 'open.json') $o.text
     if (-not ($o.json -and $o.json.ok)) {
         $row.error = 'OPEN_FAILED: ' + ($o.json.error.code, $o.json.error.message -join ' ')
@@ -77,11 +77,11 @@ foreach ($t in $targets) {
     Write-Output ("  open ok  version=" + $row.version + "  pid=" + $row.pid + "  wallMs=" + $row.openMs)
 
     # 2) draw the section
-    $s = Invoke-Zwc (@('section', '-Data', $Model) + $appArgs + @('-TimeoutSec', [string]$SectionTimeoutSec))
+    $s = Invoke-Cad (@('section', '-Data', $Model) + $appArgs + @('-TimeoutSec', [string]$SectionTimeoutSec))
     Save-Text (Join-Path $dir 'section.json') $s.text
     if (-not ($s.json -and $s.json.ok)) {
         $row.error = 'SECTION_FAILED: ' + ($s.json.error.code, $s.json.error.message -join ' ')
-        Invoke-Zwc (@('finish', '-Quit') + $appArgs + @('-TimeoutSec', '120')) | Out-Null
+        Invoke-Cad (@('finish', '-Quit') + $appArgs + @('-TimeoutSec', '120')) | Out-Null
         $summary.Add([pscustomobject]$row) | Out-Null
         Write-Output ("  section FAILED: " + $row.error)
         continue
@@ -93,7 +93,7 @@ foreach ($t in $targets) {
     Write-Output ("  section ok  created=" + $row.created + "  verify=" + $row.verify + "  ms=" + $row.sectionMs)
 
     # 3) read back
-    $r = Invoke-Zwc (@('read') + $appArgs + @('-Max', [string]$MaxEntities))
+    $r = Invoke-Cad (@('read') + $appArgs + @('-Max', [string]$MaxEntities))
     Save-Text (Join-Path $dir 'read.json') $r.text
     if ($r.json -and $r.json.ok) {
         $row.readMs = $r.json.elapsedMs
@@ -121,7 +121,7 @@ foreach ($t in $targets) {
 
     # 5) one-step undo
     if ($token) {
-        $u = Invoke-Zwc (@('undo', '-Token', $token) + $appArgs)
+        $u = Invoke-Cad (@('undo', '-Token', $token) + $appArgs)
         Save-Text (Join-Path $dir 'undo.json') $u.text
         if ($u.json -and $u.json.ok) {
             $row.undoMs = $u.json.elapsedMs
@@ -134,7 +134,7 @@ foreach ($t in $targets) {
     }
 
     # 6) clean shutdown (only instances this tool started)
-    $f = Invoke-Zwc (@('finish', '-Quit') + $appArgs + @('-TimeoutSec', '180'))
+    $f = Invoke-Cad (@('finish', '-Quit') + $appArgs + @('-TimeoutSec', '180'))
     Save-Text (Join-Path $dir 'finish.json') $f.text
     if ($f.json -and $f.json.ok) {
         $left = @($f.json.result.processes).Count

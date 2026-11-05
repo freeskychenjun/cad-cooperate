@@ -25,7 +25,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal sealed class SecWater
     {
@@ -213,21 +213,21 @@ namespace ZwcHelper
         public static SecModel Load(string path, JMap args, Ctx ctx)
         {
             if (string.IsNullOrEmpty(path))
-                throw new ZwcError("BAD_ARGS", "section needs -Data <section.model.json>",
+                throw new CadError("BAD_ARGS", "section needs -Data <section.model.json>",
                     "run scripts\\section\\prepare.py first (it turns the xlsx into the model JSON)", null);
             if (!File.Exists(path))
-                throw new ZwcError("BAD_ARGS", "section model file not found: " + path, null, null);
+                throw new CadError("BAD_ARGS", "section model file not found: " + path, null, null);
 
             object parsed;
             try { parsed = Json.ParseFile(path); }
             catch (Exception e)
             {
-                throw new ZwcError("BAD_DATA", "section model file is not valid JSON: " + e.Message, null, path);
+                throw new CadError("BAD_DATA", "section model file is not valid JSON: " + e.Message, null, path);
             }
             JMap root = parsed as JMap;
-            if (root == null) throw new ZwcError("BAD_DATA", "section model root must be a JSON object", null, null);
+            if (root == null) throw new CadError("BAD_DATA", "section model root must be a JSON object", null, null);
             if (!root.Bool("ok", true))
-                throw new ZwcError("BAD_DATA", "the section model reports ok:false (" + root.Str("error", "no detail") + ")",
+                throw new CadError("BAD_DATA", "the section model reports ok:false (" + root.Str("error", "no detail") + ")",
                     "fix the data side first (prepare.py output)", null);
 
             SecModel m = new SecModel();
@@ -266,7 +266,7 @@ namespace ZwcHelper
                     if (sp == null) sp = sm.Get("pointsDetail");
                     List<double[]> sps = ParsePoints(sp);
                     if (sps.Count < 3)
-                        throw new ZwcError("BAD_DATA", "series '" + s.Id + "' has fewer than 3 points (" + sps.Count + ")",
+                        throw new CadError("BAD_DATA", "series '" + s.Id + "' has fewer than 3 points (" + sps.Count + ")",
                             "every series needs at least 3 [offset,elev] points", null);
                     s.Points = sps;
                     JMap style = sm.Map("style");
@@ -283,7 +283,7 @@ namespace ZwcHelper
                     m.Series.Add(s);
                 }
                 if (m.Series.Count == 0)
-                    throw new ZwcError("BAD_DATA", "series[] is present but contains no usable series object", null, null);
+                    throw new CadError("BAD_DATA", "series[] is present but contains no usable series object", null, null);
                 // keep the legacy view pointing at the primary series
                 m.Points = m.Series[0].Points;
             }
@@ -474,12 +474,12 @@ namespace ZwcHelper
         private static List<double[]> Normalize(List<double[]> pts, string label, Ctx ctx)
         {
             if (pts.Count < 3)
-                throw new ZwcError("BAD_DATA", "series '" + label + "' needs at least 3 points, got " + pts.Count,
+                throw new CadError("BAD_DATA", "series '" + label + "' needs at least 3 points, got " + pts.Count,
                     "fix the source data", null);
             foreach (double[] pt in pts)
             {
                 if (double.IsNaN(pt[0]) || double.IsNaN(pt[1]) || double.IsInfinity(pt[0]) || double.IsInfinity(pt[1]))
-                    throw new ZwcError("BAD_DATA", "series '" + label + "' has an empty or non-numeric offset/elevation",
+                    throw new CadError("BAD_DATA", "series '" + label + "' has an empty or non-numeric offset/elevation",
                         "fix the source data (header row included by mistake?)", null);
             }
             bool asc = true, desc = true;
@@ -535,7 +535,7 @@ namespace ZwcHelper
             p.Pts = p.Primary.Pts;
             p.OffMin = offMin; p.OffMax = offMax; p.ElevMin = elevMin; p.ElevMax = elevMax;
             if (Math.Abs(elevMax - elevMin) < 1e-9)
-                throw new ZwcError("BAD_DATA", "all elevations are identical (" + F2(elevMin) + " m) - that is not a cross section", null, null);
+                throw new CadError("BAD_DATA", "all elevations are identical (" + F2(elevMin) + " m) - that is not a cross section", null, null);
 
             p.VScale = m.VScale > 0 ? m.VScale : 50;
             p.OriginX = m.OriginX;
@@ -565,7 +565,7 @@ namespace ZwcHelper
                 if (p.W <= usableW + 1e-9 && p.H <= usableH + 1e-9) { chosen = p.HScale; break; }
             }
             if (chosen < 0)
-                throw new ZwcError("TOO_WIDE",
+                throw new CadError("TOO_WIDE",
                     "the section does not fit the " + m.Paper + " usable area (" + usableW.ToString("0.#", CultureInfo.InvariantCulture)
                     + " x " + usableH.ToString("0.#", CultureInfo.InvariantCulture) + " mm) with hScale=" + m.HScale
                     + (m.NoAutoScale ? " and -NoAutoScale is set" : " nor any ladder step (500/1000/2000)"),

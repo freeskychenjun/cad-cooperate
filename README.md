@@ -1,4 +1,4 @@
-# zwcad-cooperate
+# cad-cooperate
 
 **在你已经打开的那张 CAD 图纸里，和 AI 一起改图。**
 
@@ -83,13 +83,13 @@ CAD 里的 AI 助手通常只有两条路：**离线改文件**（ezdxf/ODA：�
                  agent / 脚本 / 人
                         │  一次性 4–5 s？不，约 0.1–0.4 s
                         ▼
-        bin\ZwcClient.exe <cmd> [flags]          原生 60–100 ms 启动（cmd/PS 薄壳等价可用）
+        bin\CadClient.exe <cmd> [flags]          原生 60–100 ms 启动（cmd/PS 薄壳等价可用）
                         │  命名管道，一段 JSON 进 / 一段 JSON 出
                         ▼
               常驻 daemon（按版本隔离、可自愈、可 reset）
-                        │  文档级锁 Local\zwc-doc-<sha16(全路径)>，同图命令串行
+                        │  文档级锁 Local\cad-doc-<sha16(全路径)>，同图命令串行
                         ▼
-        ZwcHelper.exe（按 helper 源码哈希编译缓存，命中只花几次 stat）
+        CadHelper.exe（按 helper 源码哈希编译缓存，命中只花几次 stat）
                         │  COM 晚绑定 CreateObject / GetActiveObject
                         ▼
          ZWCAD Classic 16 · ZWCAD 2025 · AutoCAD 2021 · AutoCAD 2007（注册表自动发现其它版本）
@@ -98,7 +98,7 @@ CAD 里的 AI 助手通常只有两条路：**离线改文件**（ezdxf/ODA：�
                          （目标产品没有 LISP 变量桥时自动启用，失败回退 COM）
 ```
 
-- 入口三选一：`bin\ZwcClient.exe`（首选）/ `scripts\zwc.cmd`（等价薄壳，且负责首次编译）/ `powershell -File scripts\zwc.ps1`（复杂参数、`serve` 管理命令、兜底）。
+- 入口三选一：`bin\CadClient.exe`（首选）/ `scripts\cad.cmd`（等价薄壳，且负责首次编译）/ `powershell -File scripts\cad.ps1`（复杂参数、`serve` 管理命令、兜底）。
 - **stdout 永远是一段 JSON**，顶层 `ok` 是唯一判据。退出码：`0` 成功、`2` 命令失败、`3` 门禁类失败（`VERIFY_FAILED` / `BAD_DATA` / `TOO_WIDE`）、`4` 引擎/输入错误。
 - 中文、几何、大 `-Items` 一律**走文件**（`-RequestFile` / `-Items <file>`），命令行只传 ASCII 短参数——PowerShell 5.1 会按 ANSI 读无 BOM 的 `.ps1`，`cmd` 会吃掉 `^` `=` `%`。
 
@@ -114,15 +114,15 @@ CAD 里的 AI 助手通常只有两条路：**离线改文件**（ezdxf/ODA：�
 ### 拉下来跑第一条命令
 
 ```powershell
-git clone https://github.com/freeskychenjun/zwcad-cooperate.git
-cd zwcad-cooperate
+git clone https://github.com/freeskychenjun/cad-cooperate.git
+cd cad-cooperate
 
 # 环境自检：没开 CAD 也应正常返回一段 JSON（ok:false + NO_INSTANCE），而不是崩或弹窗
-.\scripts\zwc.cmd doctor
+.\scripts\cad.cmd doctor
 
 # 首次运行会自动用 csc 编译 client 与 helper（约 2–4 s，仓库里不带任何 exe），
 # 于是全新克隆的第一条命令约 7 s；之后每条命令 0.1–0.4 s。
-.\scripts\zwc.cmd doctor -Deep          # 再做管道 / COM / 窗口 ping
+.\scripts\cad.cmd doctor -Deep          # 再做管道 / COM / 窗口 ping
 ```
 
 ### 作为 agent skill 安装
@@ -131,8 +131,8 @@ cd zwcad-cooperate
 
 ```powershell
 .\publish.ps1 -WhatIf    # 干跑：列出会复制哪些文件（不碰磁盘）
-.\publish.ps1            # 部署到 %USERPROFILE%\.agents\skills\zwcad-cooperate
-.\publish.ps1 -Target <临时目录>\zwcad-cooperate -Force   # 或任意目录
+.\publish.ps1            # 部署到 %USERPROFILE%\.agents\skills\cad-cooperate
+.\publish.ps1 -Target <临时目录>\cad-cooperate -Force   # 或任意目录
 ```
 
 部署是"staging + 原子切换"，中途失败不会留下半更新的安装；目标目录必须形如 `...\skills\<name>`（脚本会清理包里不存在的文件，`-Force` 显式放行）。装好后 DSH / Claude Code 等按 skills 目录约定自动识别，`SKILL.md` 里的 `description` 决定它在什么时候被触发。
@@ -142,13 +142,13 @@ cd zwcad-cooperate
 **默认 `-App any`：你不需要告诉它用中望还是 AutoCAD。** 只开着一个产品时自动用它（AutoCAD 靠运行进程区分 2007/2021…）；两个产品都在跑时，`-Doc` 指向的**那份图在谁那里开着就用谁**（不会在另一个 CAD 里再开一份）；只有当两族都在跑、目标图又不在其中一边时，才报 `AMBIGUOUS_PRODUCT` 让你选。
 
 ```powershell
-.\scripts\zwc.cmd status                                     # 自动：单族在跑就用它
-.\scripts\zwc.cmd open -Doc "D:\某图.dwg"                     # 自动：谁开着这份图就附着谁
-.\scripts\zwc.cmd status -App zwcad                          # 强制产品族（同族多版本再给 -ProgId）
-.\scripts\zwc.cmd status -ProgId ZWCAD.Application.16        # 中望 Classic 16
-.\scripts\zwc.cmd status -ProgId ZWCAD.Application.2025      # 中望 2025
-.\scripts\zwc.cmd status -ProgId AutoCAD.Application.24      # AutoCAD 2021
-.\scripts\zwc.cmd status -ProgId AutoCAD.Application.17      # AutoCAD 2007
+.\scripts\cad.cmd status                                     # 自动：单族在跑就用它
+.\scripts\cad.cmd open -Doc "D:\某图.dwg"                     # 自动：谁开着这份图就附着谁
+.\scripts\cad.cmd status -App zwcad                          # 强制产品族（同族多版本再给 -ProgId）
+.\scripts\cad.cmd status -ProgId ZWCAD.Application.16        # 中望 Classic 16
+.\scripts\cad.cmd status -ProgId ZWCAD.Application.2025      # 中望 2025
+.\scripts\cad.cmd status -ProgId AutoCAD.Application.24      # AutoCAD 2021
+.\scripts\cad.cmd status -ProgId AutoCAD.Application.17      # AutoCAD 2007
 ```
 
 同一台机器装多个产品时，**无版本 ProgID `ZWCAD.Application` 会被"最后启动的产品"改写**，所以同族多版本时建议显式给 `-ProgId`。默认的 `-App any` 会按"谁在跑 / 谁开着这份图"自动判定；只有当**两个产品族都在跑、目标图又不在其中一边**时才返回 `AMBIGUOUS_PRODUCT`——**不猜**。详见 [docs/progid-selection.md](docs/progid-selection.md) 与 [docs/autocad-2021-acceptance.md](docs/autocad-2021-acceptance.md)。
@@ -164,10 +164,10 @@ python scripts\section\prepare.py --data tests\fixtures\section-30.xlsx --out %T
 # 或直接读本机水情数据库（cross_section 表；库路径 `--db` 显式指定，或环境变量 HYDRO_DB——调用期读取）
 python scripts\section\prepare.py --from-db <站码> --last 4 --out %TEMP%\m.json
 
-.\scripts\zwc.cmd open  -Doc "<你的图纸>.dwg" -ProgId ZWCAD.Application.16
-.\scripts\zwc.cmd section -Data %TEMP%\m.json    -ProgId ZWCAD.Application.16
-.\scripts\zwc.cmd undo  -Token <上一步返回的 undoToken> -ProgId ZWCAD.Application.16
-.\scripts\zwc.cmd finish -Quit                   -ProgId ZWCAD.Application.16
+.\scripts\cad.cmd open  -Doc "<你的图纸>.dwg" -ProgId ZWCAD.Application.16
+.\scripts\cad.cmd section -Data %TEMP%\m.json    -ProgId ZWCAD.Application.16
+.\scripts\cad.cmd undo  -Token <上一步返回的 undoToken> -ProgId ZWCAD.Application.16
+.\scripts\cad.cmd finish -Quit                   -ProgId ZWCAD.Application.16
 ```
 
 `section` 会按图幅/比例尺建层（`AI-SEC-*`）、画地面线、水位虚线、点号与高程标注、深泓标记、可选比例尺；多序列时每序列独立图层+颜色+图例，标注密度按"点位间距 / 字高"自动降级（`labelPolicy`）。画完**回读校验**，不符整体回滚。
@@ -186,9 +186,9 @@ python scripts\section\prepare.py --from-db <站码> --last 4 --out %TEMP%\m.jso
 ```
 
 ```powershell
-.\scripts\zwc.cmd query  -Text "设计水位" -ProgId ZWCAD.Application.16   # 先拿句柄
-.\scripts\zwc.cmd entity -Items items.json -DryRun -ProgId ZWCAD.Application.16   # 只看 plan
-.\scripts\zwc.cmd entity -Items items.json        -ProgId ZWCAD.Application.16   # 真正写
+.\scripts\cad.cmd query  -Text "设计水位" -ProgId ZWCAD.Application.16   # 先拿句柄
+.\scripts\cad.cmd entity -Items items.json -DryRun -ProgId ZWCAD.Application.16   # 只看 plan
+.\scripts\cad.cmd entity -Items items.json        -ProgId ZWCAD.Application.16   # 真正写
 ```
 
 语义是**三趟**：Pass1 只要有一条 `expect` 不符 → **整批一条不改**（`ANCHOR_MISSING`，带字段级 detail）；Pass2 一个撤销组内写入；Pass3 逐条回读，不符 → `VERIFIED_FAILED` + `rolledBack:true`。锚点句柄消失但指纹唯一匹配时自动重定位（`relocated:true`）。
@@ -206,8 +206,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\audit\run.ps1 -ProgI
 ### 4. 大图读侧（几万实体也不卡）
 
 ```powershell
-.\scripts\zwc.cmd read  -Mode handles -ProgId ZWCAD.Application.2025   # 36,558 实体 ≈ 0.7 s
-.\scripts\zwc.cmd query -Type text     -ProgId ZWCAD.Application.2025   # 命中 10,293 ≈ 0.4 s
+.\scripts\cad.cmd read  -Mode handles -ProgId ZWCAD.Application.2025   # 36,558 实体 ≈ 0.7 s
+.\scripts\cad.cmd query -Type text     -ProgId ZWCAD.Application.2025   # 命中 10,293 ≈ 0.4 s
 ```
 
 `read` 分三级：`handles`（句柄/类型/图层，最快）→ `summary`（默认，+包围盒）→ `geom`（+顶点/文字/半径）。实体数超过阈值且目标产品没有 LISP 变量桥时，自动改走"LISP 写 `%TEMP%` + `__DONE__` 哨兵 + 读回"的快路径（响应里 `readPath:"lisp-file"`），失败回退 COM 并给 `LISP_FILE_FALLBACK`。
@@ -215,7 +215,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\audit\run.ps1 -ProgI
 ### 5. 让用户看得见"AI 正在接管"
 
 ```powershell
-.\scripts\zwc.cmd hint -Text "正在画示例站断面图" -Tray -ProgId ZWCAD.Application.16
+.\scripts\cad.cmd hint -Text "正在画示例站断面图" -Tray -ProgId ZWCAD.Application.16
 ```
 
 橙色 **AI** 圆标常驻通知区，悬停显示 `〔AI 接管中〕<图名> - <当前步骤>`，右键可"打开 CAD 窗口 / 复制接管信息 / 结束接管"；`hint -Clear` 与 `finish` 会移除，CAD 退出或 4 小时后自退。
@@ -250,7 +250,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\audit\run.ps1 -ProgI
 3. **写必须带锚点 + 回读。** 锚点是 `handle` + 期望字段指纹，不是"第 N 个实体"；Pass3 回读不符就**整批回滚**，不会出现"报成功其实没落上"。
 4. **一批 = 一个撤销组。** 用户一次 `Ctrl+Z`（或 `undo -Token`）回到动手之前，不需要逐条拒。
 5. **中间文件不落你的图纸目录。** 快照/导出/模型 JSON 一律写 `%TEMP%`（单位透明加密软件会拦截特定路径与扩展名，详见能力边界）。
-6. **同图串行。** 文档级锁 `Local\zwc-doc-<sha16>`；并发 agent 抢同一张图会排队并如实返回 `DOC_LOCKED{holder, waitedMs}`，不会互相踩。
+6. **同图串行。** 文档级锁 `Local\cad-doc-<sha16>`；并发 agent 抢同一张图会排队并如实返回 `DOC_LOCKED{holder, waitedMs}`，不会互相踩。
 7. **写前重锚定。** 两条命令之间用户改过图，会返回 `DOC_CHANGED_OUTSIDE` + `diffSummary`，而不是照旧句柄乱写。
 
 ## 已验证环境与实测数据
@@ -285,7 +285,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\audit\run.ps1 -ProgI
 | **中望 2025** | 无 LISP 变量桥（`Get/SetLispVariable`、`EvaluateLispExpression` 全 `DISP_E_UNKNOWNNAME`）⇒ 小图读侧只能 COM。 |
 | **中望 Classic 16** | 所有实体都不实现 `GetBoundingBox` ⇒ `read -Mode summary` 的包围盒覆盖约 97%，其余标 `BBOX_UNAVAILABLE_FOR_TYPE`。 |
 | **AutoCAD 2007** | 冷启动约 **135 s**（唯一硬伤；实战靠"附着用户已开实例"规避）；`finish -Quit` 需 `-TimeoutSec 180`。 |
-| **AutoCAD 2021+（SECURELOAD）** | `SECURELOAD=1` 时 LISP 文件加载（LSP/FAS/VLX/MNL）受管：未信任的 `%TEMP%` 目录会弹**模态**安全框并把 CAD 卡住。工具默认跳过注入、降级 COM 并告警 `LISP_TRUST_BLOCKED`；一次性修：`zwc.cmd trust -Action addTemp`（写 TRUSTEDPATHS）。详见 [docs/autocad-2021-acceptance.md](docs/autocad-2021-acceptance.md)。 |
+| **AutoCAD 2021+（SECURELOAD）** | `SECURELOAD=1` 时 LISP 文件加载（LSP/FAS/VLX/MNL）受管：未信任的 `%TEMP%` 目录会弹**模态**安全框并把 CAD 卡住。工具默认跳过注入、降级 COM 并告警 `LISP_TRUST_BLOCKED`；一次性修：`cad.cmd trust -Action addTemp`（写 TRUSTEDPATHS）。详见 [docs/autocad-2021-acceptance.md](docs/autocad-2021-acceptance.md)。 |
 | **老式 2D/3D 多段线** | `AcadPolyline.Coordinates` 是 (x,y,z) 三元组（LWPOLYLINE 才是二元组）；顶点由 COM 一次调用补齐，LISP 只出 `elevation`。 |
 | **表格 / 动态块** | COM 面缺 `AddTable`（v16）、动态块属性读写不可靠 ⇒ 表类任务建议 LISP 原生命令兜底或标记为人工。 |
 | **只碰模型空间** | 锁定/冻结图层、外部参照内实体、只读图纸一律拒绝（`READONLY_*` / `XREF_SKIPPED`）。 |
@@ -302,10 +302,10 @@ SKILL.md                  权威说明（命令语义/铁律/错误码/能力边
 DESIGN-M1.md              M1 设计：命令行契约、JSON schema、断面图契约与验收口径
 publish.ps1               打包部署（staging + 原子切换 + 干跑 + 安全门）
 scripts\
-  zwc.ps1 / zwc.cmd       入口（兼容包装 + 管理命令 + 首次编译 bootstrap）
-  client\ZwcClient.cs     原生客户端（→ bin\ZwcClient.exe，命名管道）
-  helper\ZwcHelper.cs     入口与调度（**只剩 173 行**：`Program.HandleRequestText` + `Main`；C#5，按源码哈希编译缓存）
-  helper\{Core,ComInterop,Com,Procs,Cad,State,Cmd,Daemon}.cs   核心数据模型(JMap/ZwcError/Ctx) / OLE 消息过滤器 / COM 晚绑定 / 进程探测 / 产品选择 / 会话状态 / 命令行守卫 / 常驻 daemon
+  cad.ps1 / cad.cmd       入口（兼容包装 + 管理命令 + 首次编译 bootstrap）
+  client\CadClient.cs     原生客户端（→ bin\CadClient.exe，命名管道）
+  helper\CadHelper.cs     入口与调度（**只剩 173 行**：`Program.HandleRequestText` + `Main`；C#5，按源码哈希编译缓存）
+  helper\{Core,ComInterop,Com,Procs,Cad,State,Cmd,Daemon}.cs   核心数据模型(JMap/CadError/Ctx) / OLE 消息过滤器 / COM 晚绑定 / 进程探测 / 产品选择 / 会话状态 / 命令行守卫 / 常驻 daemon
   helper\{Commands,CommandsRead,CommandsSection,CommandsVerify}.cs   **四个 partial**：共享参数 helper + 会话诊断（doctor/status/open/info/caption/cmdecho/finish） / read（Read·DescribeEntity·bbox·句柄） / section·写图·rollback·undo / 回读 verify
   helper\{Edits,EditsQuery,SectionOverlay,Stability}.cs   写原语 / 查询 / 断面绘制 / 稳定性
   helper\{LispTemplate,LispScan,LispWire,LispFile,LispGeom}.cs   LISP 快路径：模板+三重校验、注入管道单一实现、文本线解析、E5 canvas / E6 几何 dump 薄入口
@@ -323,7 +323,7 @@ docs\                     全部深入文档与实测截图（见下）
 research\                 立项前的可行性研究（COM 探针、API 面、同类模式）
 ```
 
-**构建**：无需构建系统——`scripts\zwc.cmd` 首次运行会用系统 `csc.exe` 编译 client（`bin\ZwcClient.exe`）与 helper（`bin\cache\<sha12>\ZwcHelper.exe`，按"源码数 + 最大 mtime + 各文件大小"哈希），源码一改自动重编。托盘 exe 同理（`scripts\tray.ps1` 首次缺 exe 时编译）。
+**构建**：无需构建系统——`scripts\cad.cmd` 首次运行会用系统 `csc.exe` 编译 client（`bin\CadClient.exe`）与 helper（`bin\cache\<sha12>\CadHelper.exe`，按"源码数 + 最大 mtime + 各文件大小"哈希），源码一改自动重编。托盘 exe 同理（`scripts\tray.ps1` 首次缺 exe 时编译）。
 
 **回归与基准**：
 
@@ -344,7 +344,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bench\run_bench.ps1 
 python tests\cross_app_diff.py --read a=tmp\compare\zwcad16\read.json --read b=tmp\compare\zwcad2025\read.json
 ```
 
-以上离线层已接进 `.github\workflows\offline-ci.yml`（push/PR 自动跑；**在线 CAD 部分永远不在 CI 里跑**，领域固有约束）。**首次实跑全绿**（[run 41943999965](https://github.com/freeskychenjun/zwcad-cooperate/actions/runs/41943999965)），当前工作流 **12 步**：python 3.9 语法门（安装的解释器是 3.11，"3.9+" 由 `tests\check_py39_syntax.py` 的 `ast.parse(feature_version=(3,9))` 把关）→ 数据侧 41 → 体检 89·0·3 → 检查器负例 → 断面提取 85 → **compare-source 71** → 端到端 dry-run（**无 CAD 时 8·0·4**：其中 2 步按设计 SKIP；有 CAD 时 10·0·2）→ C# 6 套 644 → 证据 artifact。测试与基准的产物一律写 `tmp\`（已在 `.gitignore`，按需再生）。数据侧依赖统一见 [`requirements.txt`](requirements.txt)（本机开发环境里另有离线兜底库 `tools\py-libs`，不入库）。
+以上离线层已接进 `.github\workflows\offline-ci.yml`（push/PR 自动跑；**在线 CAD 部分永远不在 CI 里跑**，领域固有约束）。**首次实跑全绿**（[run 41943999965](https://github.com/freeskychenjun/cad-cooperate/actions/runs/41943999965)），当前工作流 **12 步**：python 3.9 语法门（安装的解释器是 3.11，"3.9+" 由 `tests\check_py39_syntax.py` 的 `ast.parse(feature_version=(3,9))` 把关）→ 数据侧 41 → 体检 89·0·3 → 检查器负例 → 断面提取 85 → **compare-source 71** → 端到端 dry-run（**无 CAD 时 8·0·4**：其中 2 步按设计 SKIP；有 CAD 时 10·0·2）→ C# 6 套 644 → 证据 artifact。测试与基准的产物一律写 `tmp\`（已在 `.gitignore`，按需再生）。数据侧依赖统一见 [`requirements.txt`](requirements.txt)（本机开发环境里另有离线兜底库 `tools\py-libs`，不入库）。
 
 ## 深入文档
 

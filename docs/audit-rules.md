@@ -1,6 +1,6 @@
 # 图纸体检 audit（规则引擎 + 报告 + 门禁）
 
-> 只读审计层：**不碰 CAD COM**，只消费 `scripts\zwc.ps1 info/read` 已经产出的 JSON，按机械规则出一份「问题清单 + 人读报告」。
+> 只读审计层：**不碰 CAD COM**，只消费 `scripts\cad.ps1 info/read` 已经产出的 JSON，按机械规则出一份「问题清单 + 人读报告」。
 > 面向场景：水利规划院既有图纸出图前体检（图层/线型/文字/重复/越界/单位），**不做图框、会签栏、标题栏规则**（用户明确不需要）。
 > 交付物：`scripts\audit\audit.py`（规则引擎）、`scripts\audit\run.ps1`（串联 + 门禁）、本文件、`tests\audit\**`（夹具/自测/真机验证）。
 > 2026-11-04 实测：**17 条规则**；真机（ZWCAD 2025 / Classic 16 / AutoCAD 2007 读回）验证 4 份数据，**干净图 0 误报**，真实水系图 624 实体 3 条命中全部真报；问题夹具 21 条命中里仅 1 条启发式误报（原因见 §9.4）。
@@ -10,10 +10,10 @@
 ## 1. 定位与数据流
 
 ```
-zwc.ps1 info ──┐                      ┌─ report.json（机器可读，含每条问题 rule/severity/handle/layer/sample/suggest）
+cad.ps1 info ──┐                      ┌─ report.json（机器可读，含每条问题 rule/severity/handle/layer/sample/suggest）
                ├─> info.json ──┐      │
                │               ├─> audit.py ─┼─ report.md （人读：结论 / 按规则统计 / 问题清单 / 未执行项 / 阈值）
-zwc.ps1 read ──┘               │      │
+cad.ps1 read ──┘               │      │
                └─> read.json ──┘      └─ stdout    （ASCII 一行摘要 + 每规则计数，GBK 控制台不乱码）
 ```
 
@@ -53,7 +53,7 @@ python scripts\audit\audit.py --read read.json --rules duplicate_entity,text_emp
 | 退出码 | 含义 |
 |---|---|
 | 0 | 审计跑完且**无 blocker**（有 major/minor 仍是 0，只是报告里有清单） |
-| 2 | 输入/流程失败：JSON 缺失、`ok:false`、`zwc.ps1` 返回非 0（含 read 超时） |
+| 2 | 输入/流程失败：JSON 缺失、`ok:false`、`cad.ps1` 返回非 0（含 read 超时） |
 | 3 | **存在 blocker**，且调用时带了 `-ExitCode` / `--exit-code`（门禁失败） |
 | 4 | `audit.py` 自身失败（run.ps1 包装层；直接调 audit.py 时是参数错 2 / 内部错 1） |
 
@@ -232,7 +232,7 @@ med = 同层样本 >= 8 时用层中位数，否则用全图中位数
 
 ```json
 {
-  "ok": true, "tool": "zwcad-cooperate/audit", "schema": "zwcad-audit/1", "generatedAt": "...",
+  "ok": true, "tool": "cad-cooperate/audit", "schema": "cad-audit/1", "generatedAt": "...",
   "inputs": {"info": "...", "read": "..."},
   "source": {"progId": "ZWCAD.Application.2025", "product": "ZWCAD 2025", "pid": 50424,
              "doc": "...dwg", "scope": "model", "readPath": "com", "truncated": false,
@@ -377,7 +377,7 @@ med = 同层样本 >= 8 时用层中位数，否则用全图中位数
 `run.ps1` 自己也做了容错：带 `-Doc` 但该图纸没打开时，`info` 会拿到 `DOC_NOT_FOUND`，此时它会自动补一次 `open -Doc -ReadOnly` 再重试（冷启动再加 `-Launch`）。
 
 **11.2 大图 read 的耗时与超时（必看）**
-`zwc.ps1 read` 的 helper 默认超时 60 s，按 **≈100 ms/实体**（Classic 16，COM 路径）估算，600 实体就撞墙。
+`cad.ps1 read` 的 helper 默认超时 60 s，按 **≈100 ms/实体**（Classic 16，COM 路径）估算，600 实体就撞墙。
 实测：624 实体在 **ZWCAD 2025（无 LISP 桥，全 COM）** 耗时 **224 s（≈0.36 s/实体，比 Classic 的 COM 路径更慢）**；Classic 16 走 LISP 快速路径时只回句柄（不做几何审计），AutoCAD 2007 读数见 `tmp\compare-real`（87 实体，约 0.2~1.6 s）。
 规避：`-TimeoutSec` 显式放大（run.ps1 已透传给 info/read 两个调用）—— **>500 实体给 300，走 ZWCAD 2025 给 600**；再大用 `-Max` 分批（报告会标 `READ_TRUNCATED`，结论只覆盖前 N 个实体）。默认 60 s 不够时会拿到 `ok:false / TIMEOUT`（run.ps1 退出码 2）。
 `run.ps1` 的 `-TimeoutSec` 默认 180 —— 大图务必显式给。
@@ -421,7 +421,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\audit\run-real-validat
 | 文件 | 作用 |
 |---|---|
 | `scripts\audit\audit.py` | 规则引擎（17 条 + JSON/MD 报告 + 退出码） |
-| `scripts\audit\run.ps1` | 串联 zwc.ps1 info/read → audit.py，打印摘要，`-ExitCode` 门禁 |
+| `scripts\audit\run.ps1` | 串联 cad.ps1 info/read → audit.py，打印摘要，`-ExitCode` 门禁 |
 | `tests\audit\make_fixtures.py` | 生成 `problem-rich.dxf` + 三套 JSON 夹具（离线确定性） |
 | `tests\audit\make_clean_dxf.py` | 生成"零问题"干净图 `clean.dxf` |
 | `tests\audit\test_audit.py` | 98 项离线断言（含真机快照回归预算） |

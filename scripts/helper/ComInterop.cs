@@ -1,6 +1,6 @@
 // ComInterop.cs - OLE message filter installed while the CAD application is busy.
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). Without
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). Without
 // this filter an incoming COM call is rejected outright while CAD is mid-command or shows
 // a modal dialog; with it OLE retries every 150 ms for up to 6 s (same policy as the WPS
 // helper). No logic, no visibility and no constant was changed.
@@ -8,7 +8,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // OLE message filter - busy retry (port of the WPS helper, policy from dsh-office).

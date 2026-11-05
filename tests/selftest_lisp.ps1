@@ -7,16 +7,16 @@
 #
 # What it does (no CAD, no COM server, no drawing is touched, nothing is injected):
 #   1. compile tests\lispwire\LispWireTests.cs + scripts\helper\LispWire.cs             -> tmp\lispwire\
-#   2. compile tests\lispwire\LispTemplateTests.cs + tests\lispwire\ZwcErrorStub.cs
+#   2. compile tests\lispwire\LispTemplateTests.cs + tests\lispwire\CadErrorStub.cs
 #      + scripts\helper\LispTemplate.cs + scripts\helper\LispWire.cs                    -> tmp\lispwire\
 #   3. compile tests\jsonself\JsonTests.cs + scripts\helper\{Json,Core}.cs
 #      (the real JMap from Core.cs, no stand-in)                                        -> tmp\lispwire\
 #   4. compile tests\lispwire\LispScanTests.cs + tests\lispwire\LispScanStubs.cs
-#      + tests\lispwire\ZwcErrorStub.cs + scripts\helper\{LispScan,LispWire,LispTemplate}.cs
+#      + tests\lispwire\CadErrorStub.cs + scripts\helper\{LispScan,LispWire,LispTemplate}.cs
 #      (the injection pipeline: ssget filter, temp paths, load command, sentinel count, GBK
 #       decode, phase classification, cleanup decision - all pure functions, no CAD)      -> tmp\lispwire\
 #   5. compile tests\coreself\CoreTests.cs + scripts\helper\{Core,Json,State}.cs        -> tmp\lispwire\
-#      (JMap/ZwcError/Ctx, Json round-trip, State's in-memory session/token helpers)
+#      (JMap/CadError/Ctx, Json round-trip, State's in-memory session/token helpers)
 #   6. compile tests\coreself\ComCmdTests.cs + scripts\helper\{Core,Com,Cmd}.cs         -> tmp\lispwire\
 #      (COM late-binding via reflection on POCOs, retry policy, Cmd's prompt/bracket guards)
 #   7. run all suites, forward their PASS/FAIL lines, exit 1 when a suite fails to compile or
@@ -85,7 +85,7 @@ $suites = @(
         Exe     = (Join-Path $outDir 'LispTemplateTests.exe')
         Sources = @(
             (Join-Path $lispTests 'LispTemplateTests.cs'),
-            (Join-Path $lispTests 'ZwcErrorStub.cs'),
+            (Join-Path $lispTests 'CadErrorStub.cs'),
             (Join-Path $helperDir 'LispTemplate.cs'),
             (Join-Path $helperDir 'LispWire.cs')
         )
@@ -105,7 +105,7 @@ $suites = @(
         Sources = @(
             (Join-Path $lispTests 'LispScanTests.cs'),
             (Join-Path $lispTests 'LispScanStubs.cs'),
-            (Join-Path $lispTests 'ZwcErrorStub.cs'),
+            (Join-Path $lispTests 'CadErrorStub.cs'),
             (Join-Path $helperDir 'LispScan.cs'),
             (Join-Path $helperDir 'LispWire.cs'),
             (Join-Path $helperDir 'LispTemplate.cs')

@@ -28,7 +28,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     /// <summary>One installed AutoCAD build: the COM identity plus the information needed to talk
     /// about it to the user.</summary>

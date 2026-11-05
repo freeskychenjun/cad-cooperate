@@ -1,9 +1,9 @@
-// PipeIo.cs - named-pipe message framing for the resident daemon (zwc serve / daemon).
+// PipeIo.cs - named-pipe message framing for the resident daemon (cad serve / daemon).
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 1: Json + PipeIo extraction). The class body
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 1: Json + PipeIo extraction). The class body
 // is a pure move: the wire format and the size guard must not change.
 //
-// Wire format that must not change (scripts\client\ZwcClient.cs and scripts\zwc.ps1 rely on it):
+// Wire format that must not change (scripts\client\CadClient.cs and scripts\cad.ps1 rely on it):
 //   * 4-byte little-endian length prefix (BitConverter / x86 layout),
 //   * then exactly `len` bytes of UTF-8 JSON,
 //   * a length <= 0 or > 64 MiB, a short header or a short payload means "no message" (null).
@@ -12,7 +12,7 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static class PipeIo
     {

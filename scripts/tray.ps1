@@ -1,4 +1,4 @@
-# tray.ps1 - start / stop / inspect the system-tray "AI" badge for zwcad-cooperate.
+# tray.ps1 - start / stop / inspect the system-tray "AI" badge for cad-cooperate.
 #
 #   tray.ps1 -Start -Doc "<drawing name>" -Step "<what AI is doing>" [-Hwnd N] [-CadPid N]
 #   tray.ps1 -Stop  -Doc "<drawing name>"
@@ -23,9 +23,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot   # this file lives in <root>\scripts
 $trayDir = Join-Path $root 'scripts\tray'
-$exe = Join-Path $root 'bin\tray\ZwcTray.exe'
+$exe = Join-Path $root 'bin\tray\CadTray.exe'
 $uiPath = Join-Path $trayDir 'ui.json'
-$stateRoot = Join-Path $env:TEMP 'zwcad-cooperate'
+$stateRoot = Join-Path $env:TEMP 'cad-cooperate'
 if (-not (Test-Path $stateRoot)) { New-Item -ItemType Directory -Force -Path $stateRoot | Out-Null }
 
 function Write-Json($obj) {
@@ -50,7 +50,7 @@ function Ensure-TrayExe {
     if (-not $csc) { return $false }
     $dir = Split-Path -Parent $exe
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    $src = Join-Path $trayDir 'ZwcTray.cs'
+    $src = Join-Path $trayDir 'CadTray.cs'
     $log = & $csc /nologo /target:winexe ('/out:' + $exe) /r:System.Windows.Forms.dll /r:System.Drawing.dll /optimize+ $src 2>&1 | Out-String
     if (-not (Test-Path $exe)) { Write-Host $log; return $false }
     return $true
@@ -64,7 +64,7 @@ if ($Status) {
         if ($j.pid -gt 0) { $alive = [bool](Get-Process -Id $j.pid -ErrorAction SilentlyContinue) }
         $states += [pscustomobject]@{ file = $_.Name; doc = $j.doc; step = $j.step; pid = $j.pid; pidAlive = $alive }
     }
-    $procs = @(Get-Process -Name ZwcTray -ErrorAction SilentlyContinue | Select-Object Id, StartTime)
+    $procs = @(Get-Process -Name CadTray -ErrorAction SilentlyContinue | Select-Object Id, StartTime)
     Write-Json ([ordered]@{ ok = $true; cmd = 'tray'; action = 'status'; states = $states; trayProcesses = $procs; exe = $exe; exeExists = (Test-Path $exe) })
     exit 0
 }

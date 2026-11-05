@@ -92,18 +92,18 @@
 ```powershell
 cd <repo>
 # 场景 1：只开 2025，然后不带 -ProgId 验证附着对象
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 open -Launch -New -ProgId ZWCAD.Application.2025 -TimeoutSec 200
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 status      # app.product 应为 ZWCAD 2025
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 doctor      # 看 mappedBy / unversionedProgIdPointsTo
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 finish -Quit
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 open -Launch -New -ProgId ZWCAD.Application.2025 -TimeoutSec 200
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 status      # app.product 应为 ZWCAD 2025
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 doctor      # 看 mappedBy / unversionedProgIdPointsTo
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 finish -Quit
 
 # 场景 3：两个都开 → 应返回 MULTI_PRODUCT（exit 2）
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 open -Launch -New -ProgId ZWCAD.Application.16 -TimeoutSec 200
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 open -Launch -New -ProgId ZWCAD.Application.2025 -TimeoutSec 200
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 status          # MULTI_PRODUCT
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 status -ProgId ZWCAD.Application.2025
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 finish -Quit -ProgId ZWCAD.Application.2025
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 finish -Quit -ProgId ZWCAD.Application.16
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 open -Launch -New -ProgId ZWCAD.Application.16 -TimeoutSec 200
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 open -Launch -New -ProgId ZWCAD.Application.2025 -TimeoutSec 200
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 status          # MULTI_PRODUCT
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 status -ProgId ZWCAD.Application.2025
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 finish -Quit -ProgId ZWCAD.Application.2025
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 finish -Quit -ProgId ZWCAD.Application.16
 ```
 
 ## 九、建议（写给 SKILL/后续版本）

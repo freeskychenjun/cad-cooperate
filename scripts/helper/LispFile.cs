@@ -7,7 +7,7 @@
 // Protocol (the injection pipeline itself lives in LispScan.cs - one implementation shared with
 // LispGeom, so the CMDACTIVE guard, the ssget filter, the two-phase sentinel wait, the GBK read-back
 // and the cleanup/orphan decision can no longer drift between the two scans):
-//   1. helper writes  %TEMP%\zwcad-cooperate\scan-<guid>.lsp  (a single top-level (progn ...))
+//   1. helper writes  %TEMP%\cad-cooperate\scan-<guid>.lsp  (a single top-level (progn ...))
 //   2. helper sends  (load "C:/.../scan-<guid>.lsp")  through Document.SendCommand (short command)
 //   3. the LISP walks (ssget "X" <filter>), writes one line per entity:
 //         E|handle|type|layer|text|x|y|z|nverts
@@ -28,7 +28,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static class LispFile
     {

@@ -40,7 +40,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static class LispScan
     {
@@ -195,14 +195,14 @@ namespace ZwcHelper
         }
 
         // ------------------------------------------------------------------ the pipeline
-        /// <summary>Run steps 1-5 for one job. Throws the pre-refactor ZwcError codes
+        /// <summary>Run steps 1-5 for one job. Throws the pre-refactor CadError codes
         /// (BUSY / PROMPT_POLLUTED / BAD_ARGS / LISP_TEMPLATE_* / LISP_NOT_STARTED /
         /// LISP_FILE_TIMEOUT) with the pre-refactor messages, hints and details; "phase" is the
         /// LispSentinelPhase verdict ("completed" when the dump was read back).</summary>
         internal static Result Run(object doc, Ctx ctx, Request req, out JMap meta, out string phase)
         {
             meta = new JMap();
-            if (req == null) throw new ZwcError("BAD_ARGS", "internal: LISP scan request is missing", null, null);
+            if (req == null) throw new CadError("BAD_ARGS", "internal: LISP scan request is missing", null, null);
             phase = LispSentinelPhase.NotStarted;
             string dir = null;
             try { dir = Path.GetDirectoryName(req.TextPath); }
@@ -220,7 +220,7 @@ namespace ZwcHelper
                 {
                     object ca = Com.Call(doc, "GetVariable", "CMDACTIVE");
                     if (Com.I32(ca) != 0)
-                        throw new ZwcError("BUSY", "CAD is busy (CMDACTIVE != 0); " + req.BusyLabel + " not injected",
+                        throw new CadError("BUSY", "CAD is busy (CMDACTIVE != 0); " + req.BusyLabel + " not injected",
                             req.BusyHint, null);
                     object lp = Com.Call(doc, "GetVariable", "LASTPROMPT");
                     string prompt = Com.Str(lp) ?? "";
@@ -232,10 +232,10 @@ namespace ZwcHelper
                         && (prompt.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0
                             || prompt.IndexOf("undefined", StringComparison.OrdinalIgnoreCase) >= 0
                             || prompt.IndexOf("\u9519\u8BEF", StringComparison.Ordinal) >= 0))
-                        throw new ZwcError("PROMPT_POLLUTED", "CAD command prompt is polluted: " + prompt,
+                        throw new CadError("PROMPT_POLLUTED", "CAD command prompt is polluted: " + prompt,
                             req.PollutedHint, null);
                 }
-                catch (ZwcError) { throw; }
+                catch (CadError) { throw; }
                 catch (Exception) { /* probes are best effort */ }
 
                 // ---------------- step 1b: nothing to do here; the AutoCAD SECURELOAD gate and its
@@ -247,7 +247,7 @@ namespace ZwcHelper
                 LispTemplate.WriteScript(req.LspPath, src);   // ASCII/no-BOM + balance + safety gate
 
                 string cmd = ComposeLoadCommand(req.LspPath);
-                if (LoadCommandTooLong(cmd)) throw new ZwcError("BAD_ARGS", "LISP load command too long", null, null);
+                if (LoadCommandTooLong(cmd)) throw new CadError("BAD_ARGS", "LISP load command too long", null, null);
                 Com.Call(doc, "SendCommand", cmd + "\n");
                 res.InjectMs = sw.ElapsedMilliseconds;
 
@@ -278,7 +278,7 @@ namespace ZwcHelper
                 }
                 if (req.AbortProbe != null && req.AbortProbe() && !done)
                 {
-                    throw new ZwcError("LISP_ABORTED",
+                    throw new CadError("LISP_ABORTED",
                         "the injection was aborted by the caller (AutoCAD SECURELOAD prompt or another external condition)",
                         "see LISP_TRUST_BLOCKED / the caller's warning for the one-time fix",
                         null);
@@ -293,13 +293,13 @@ namespace ZwcHelper
                     string detail = "phase=" + phase + "; startSeen=" + (startSeen ? "true" : "false")
                         + "; elapsedMs=" + sw.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture);
                     if (phase == LispSentinelPhase.NotStarted)
-                        throw new ZwcError(LispSentinelPhase.ErrorCodeFor(phase),
+                        throw new CadError(LispSentinelPhase.ErrorCodeFor(phase),
                             "the " + req.BusyLabel + " did not start within " + req.TimeoutMs + " ms (no __START__ sentinel)",
                             "CAD is probably busy or a modal dialog is open; run doctor, clear the command line, then retry",
                             detail);
-                    throw new ZwcError(LispSentinelPhase.ErrorCodeFor(phase),
+                    throw new CadError(LispSentinelPhase.ErrorCodeFor(phase),
                         req.TimeoutLabel + " did not finish within " + req.TimeoutMs + " ms",
-                        "retry with a larger -TimeoutSec; the script is still running inside CAD - its temp files were kept as *.orphan in %TEMP%\\zwcad-cooperate",
+                        "retry with a larger -TimeoutSec; the script is still running inside CAD - its temp files were kept as *.orphan in %TEMP%\\cad-cooperate",
                         detail);
                 }
                 res.StartSeen = startSeen;

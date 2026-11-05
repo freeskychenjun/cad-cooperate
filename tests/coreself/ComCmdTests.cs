@@ -15,7 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using ZwcHelper;
+using CadHelper;
 
 internal static class ComCmdTests
 {
@@ -119,10 +119,10 @@ internal static class ComCmdTests
             "expected=" + expected.ToString("R") + " actual=" + actual.ToString("R"));
     }
 
-    private static void CheckZwcError(string name, string expectedCode, Action a)
+    private static void CheckCadError(string name, string expectedCode, Action a)
     {
         try { a(); Check(name, false, "no exception thrown"); }
-        catch (ZwcError e)
+        catch (CadError e)
         {
             Check(name, string.Equals(e.Code, expectedCode, StringComparison.Ordinal),
                 "expected code=" + expectedCode + " actual=" + e.Code + " msg=" + Show(e.Message));
@@ -201,13 +201,13 @@ internal static class ComCmdTests
         CheckEq("com.get.string", (string)Com.Get(f, "Text"), "hi");
         CheckEq("com.get.readonly.property", (string)Com.Get(f, "ReadOnlyOnly"), "ro");
         CheckThrows("com.get.missing.throws", typeof(MissingMethodException), delegate { Com.Get(f, "Missing"); });
-        CheckZwcError("com.get.null.object.throws", "COM_NULL", delegate { Com.Get(null, "Num"); });
+        CheckCadError("com.get.null.object.throws", "COM_NULL", delegate { Com.Get(null, "Num"); });
 
         object sum = Com.Call(f, "Add", 2, 3);
         Check("com.call.returns.value", sum is int && (int)sum == 5, "sum=" + (sum == null ? "null" : sum.ToString()));
         Check("com.call.void.returns.null", Com.Call(f, "VoidM") == null, "void call returned non-null");
         CheckThrows("com.call.missing.throws", typeof(MissingMethodException), delegate { Com.Call(f, "Nope"); });
-        CheckZwcError("com.call.null.object.throws", "COM_NULL", delegate { Com.Call(null, "Add", 1, 2); });
+        CheckCadError("com.call.null.object.throws", "COM_NULL", delegate { Com.Call(null, "Add", 1, 2); });
 
         Check("com.tryget.readonly", Com.TryGet(f, "ReadOnlyOnly") != null, "TryGet returned null");
         Check("com.tryget.missing.null", Com.TryGet(f, "Missing") == null, "TryGet(missing) not null");
@@ -441,12 +441,12 @@ internal static class ComCmdTests
         Check("cmd.assertclean.ok", NoThrow(delegate { Cmd.AssertClean(doc, "test"); }), "clean prompt threw");
         FakeDoc stuck = new FakeDoc();
         stuck.Prompt = "Missing: point";
-        CheckZwcError("cmd.assertclean.polluted", "CMD_STATE_POLLUTED",
+        CheckCadError("cmd.assertclean.polluted", "CMD_STATE_POLLUTED",
             delegate { Cmd.AssertClean(stuck, "test"); });
 
-        CheckZwcError("cmd.send.null.throws", "BAD_ARGS", delegate { Cmd.Send(doc, null, new Ctx(), "test"); });
-        CheckZwcError("cmd.send.multiline.throws", "BAD_ARGS", delegate { Cmd.Send(doc, "L1\nL2", new Ctx(), "test"); });
-        CheckZwcError("cmd.send.too.long.throws", "SENDCMD_TOO_LONG", delegate { Cmd.Send(doc, new string('a', 2001), new Ctx(), "test"); });
+        CheckCadError("cmd.send.null.throws", "BAD_ARGS", delegate { Cmd.Send(doc, null, new Ctx(), "test"); });
+        CheckCadError("cmd.send.multiline.throws", "BAD_ARGS", delegate { Cmd.Send(doc, "L1\nL2", new Ctx(), "test"); });
+        CheckCadError("cmd.send.too.long.throws", "SENDCMD_TOO_LONG", delegate { Cmd.Send(doc, new string('a', 2001), new Ctx(), "test"); });
         Check("cmd.send.too.long.not.sent", doc.SendCount == 0, "oversized command was sent");
 
         FakeDoc ok = new FakeDoc();
@@ -459,13 +459,13 @@ internal static class ComCmdTests
 
         FakeDoc pollutedFirst = new FakeDoc();
         pollutedFirst.Prompt = "Missing: point";
-        CheckZwcError("cmd.send.polluted.before", "CMD_STATE_POLLUTED",
+        CheckCadError("cmd.send.polluted.before", "CMD_STATE_POLLUTED",
             delegate { Cmd.Send(pollutedFirst, "LINE", new Ctx(), "test"); });
         Check("cmd.send.polluted.before.not.sent", pollutedFirst.SendCount == 0, "command sent into a stuck prompt");
 
         FakeDoc pollutedAfter = new FakeDoc();
         pollutedAfter.PolluteAfterSend = true;
-        CheckZwcError("cmd.send.polluted.after", "CMD_STATE_POLLUTED",
+        CheckCadError("cmd.send.polluted.after", "CMD_STATE_POLLUTED",
             delegate { Cmd.Send(pollutedAfter, "LINE", new Ctx(), "test"); });
         Check("cmd.send.polluted.after.sent.once", pollutedAfter.SendCount == 1, "count=" + pollutedAfter.SendCount);
     }

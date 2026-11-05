@@ -20,7 +20,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal sealed class EditItemResult
     {
@@ -128,12 +128,12 @@ namespace ZwcHelper
             bool readOnly = false;
             object ro = Com.TryGet(doc, "ReadOnly");
             if (ro != null) readOnly = Com.Bool(ro);
-            if (readOnly) throw new ZwcError("READONLY_DOC", "the drawing is read-only; refusing to modify it", "open it writable or work on a copy", null);
+            if (readOnly) throw new CadError("READONLY_DOC", "the drawing is read-only; refusing to modify it", "open it writable or work on a copy", null);
 
             Edits.SafeDoc = doc;
             _layerCache.Clear();
             List<object> raw = LoadItems(args, ctx);
-            if (raw.Count == 0) throw new ZwcError("BAD_ARGS", "entity needs items (use -Items <file> or -RequestFile <full request>)", "see docs/M3-E2-writes.md", null);
+            if (raw.Count == 0) throw new CadError("BAD_ARGS", "entity needs items (use -Items <file> or -RequestFile <full request>)", "see docs/M3-E2-writes.md", null);
 
             string mode = args.Str("mode", args.Bool("dryRun", false) ? "plan" : "apply");
             if (mode == null) mode = "apply";
@@ -169,7 +169,7 @@ namespace ZwcHelper
             if (anchorFailures.Count > 0 && !cont)
             {
                 string detail = Json.Write(anchorFailures);
-                throw new ZwcError("ANCHOR_MISSING",
+                throw new CadError("ANCHOR_MISSING",
                     "anchor validation failed for " + anchorFailures.Count + " item(s); the whole batch was left untouched",
                     "fix the handles/expect values or pass -Continue to isolate failures", detail);
             }
@@ -224,7 +224,7 @@ namespace ZwcHelper
                 if (useUndoMark) Com.TryCall(doc, "EndUndoMark");
             swUndoEnd.Stop();
                 RollbackGroup(doc, countBefore, ctx);
-                throw new ZwcError("APPLY_FAILED", "applying the batch failed: " + Com.Hr(e), "the undo group was rolled back", null);
+                throw new CadError("APPLY_FAILED", "applying the batch failed: " + Com.Hr(e), "the undo group was rolled back", null);
             }
             if (useUndoMark) Com.TryCall(doc, "EndUndoMark");
 
@@ -238,7 +238,7 @@ namespace ZwcHelper
                 result.Add("items", itemResults);
                 result.Add("verify", v);
                 ctx.Result = result;
-                throw new ZwcError("APPLY_FAILED",
+                throw new CadError("APPLY_FAILED",
                     failures.Count + " item(s) failed to apply; the undo group was rolled back",
                     "see result.failed", Json.Write(failures));
             }
@@ -257,7 +257,7 @@ namespace ZwcHelper
                 result.Add("rolledBack", true);
                 result.Add("verify", verify);
                 ctx.Result = result;
-                throw new ZwcError("VERIFY_FAILED",
+                throw new CadError("VERIFY_FAILED",
                     "write succeeded but read-back verification failed; the undo group was rolled back",
                     "see result.verify.issues", Json.Write(verify));
             }
@@ -308,7 +308,7 @@ namespace ZwcHelper
                 if (!string.IsNullOrEmpty(inline) && File.Exists(inline)) file = inline;
             }
             if (string.IsNullOrEmpty(file)) return new List<object>();
-            if (!File.Exists(file)) throw new ZwcError("BAD_ARGS", "items file not found: " + file, null, null);
+            if (!File.Exists(file)) throw new CadError("BAD_ARGS", "items file not found: " + file, null, null);
             object parsed = Json.ParseFile(file);
             JMap root = parsed as JMap;
             if (root != null)
@@ -525,7 +525,7 @@ namespace ZwcHelper
                 {
                     object ms = Com.Get(doc, "ModelSpace");
                     object ent = CreateForAdd(ms, it, ctx);
-                    if (ent == null) throw new ZwcError("ADD_FAILED", "CAD returned no object for add " + i, null, null);
+                    if (ent == null) throw new CadError("ADD_FAILED", "CAD returned no object for add " + i, null, null);
                     string wantLayerAdd = it.Str("layer", null);
                     if (!string.IsNullOrEmpty(wantLayerAdd))
                     {
@@ -552,7 +552,7 @@ namespace ZwcHelper
 
                 string handle = it.Str("handle", null);
                 object e = Com.EntityByHandle(doc, handle);
-                if (e == null) throw new ZwcError("ENTITY_NOT_FOUND", "handle " + handle + " disappeared before apply", null, null);
+                if (e == null) throw new CadError("ENTITY_NOT_FOUND", "handle " + handle + " disappeared before apply", null, null);
                 outMap.Add("handle", handle);
                 if (it.Bool("_relocated", false)) outMap.Add("relocated", true);
                 JMap before = DescribeForResult(e);
@@ -573,7 +573,7 @@ namespace ZwcHelper
                 else if (op == "move" || op == "copy")
                 {
                     double[] delta = Pair(it.Get("delta"));
-                    if (delta == null) throw new ZwcError("BAD_ARGS", "op " + op + " needs delta [dx,dy]", null, null);
+                    if (delta == null) throw new CadError("BAD_ARGS", "op " + op + " needs delta [dx,dy]", null, null);
                     int count = op == "copy" ? Math.Max(1, it.Int("count", 1)) : 1;
                     object target = e;
                     for (int c = 0; c < count; c++)
@@ -581,7 +581,7 @@ namespace ZwcHelper
                         if (op == "copy")
                         {
                             object cp = Com.Call(e, "Copy");
-                            if (cp == null) throw new ZwcError("COPY_FAILED", "Entity.Copy returned nothing", null, null);
+                            if (cp == null) throw new CadError("COPY_FAILED", "Entity.Copy returned nothing", null, null);
                             target = cp;
                             string hc = Com.Str(Com.TryGet(cp, "Handle"));
                             JMap t = new JMap();
@@ -637,15 +637,15 @@ namespace ZwcHelper
             {
                 double[] p1 = Pair(geom.Get("start")); if (p1 == null) p1 = Pair(geom.Get("p1"));
                 double[] p2 = Pair(geom.Get("end")); if (p2 == null) p2 = Pair(geom.Get("p2"));
-                if (p1 == null || p2 == null) throw new ZwcError("BAD_ARGS", "add line needs geom.start and geom.end", null, null);
+                if (p1 == null || p2 == null) throw new CadError("BAD_ARGS", "add line needs geom.start and geom.end", null, null);
                 ent = Com.Call(ms, "AddLine", (object)new double[] { p1[0], p1[1], 0.0 }, (object)new double[] { p2[0], p2[1], 0.0 });
             }
             else if (type == "polyline" || type == "lwpolyline")
             {
                 List<object> pts = geom.List("points");
-                if (pts == null || pts.Count < 2) throw new ZwcError("BAD_ARGS", "add polyline needs geom.points [[x,y],...]", null, null);
+                if (pts == null || pts.Count < 2) throw new CadError("BAD_ARGS", "add polyline needs geom.points [[x,y],...]", null, null);
                 List<double> flat = new List<double>();
-                foreach (object o in pts) { double[] p = Pair(o); if (p == null) throw new ZwcError("BAD_ARGS", "polyline points must be [x,y]", null, null); flat.Add(p[0]); flat.Add(p[1]); }
+                foreach (object o in pts) { double[] p = Pair(o); if (p == null) throw new CadError("BAD_ARGS", "polyline points must be [x,y]", null, null); flat.Add(p[0]); flat.Add(p[1]); }
                 ent = Com.Call(ms, "AddLightWeightPolyline", (object)flat.ToArray());
                 Com.TrySet(ent, "Closed", geom.Bool("closed", false));
             }
@@ -654,7 +654,7 @@ namespace ZwcHelper
                 string text = geom.Str("text", null);
                 if (text == null) text = it.Str("text", "");
                 double[] ins = Pair(geom.Get("insert"));
-                if (ins == null) throw new ZwcError("BAD_ARGS", "add " + type + " needs geom.insert [x,y]", null, null);
+                if (ins == null) throw new CadError("BAD_ARGS", "add " + type + " needs geom.insert [x,y]", null, null);
                 double height = geom.Dbl("height", 2.5);
                 if (type == "mtext") ent = Com.Call(ms, "AddMText", (object)new double[] { ins[0], ins[1], 0.0 }, (object)geom.Dbl("width", 0.0), (object)text);
                 else ent = Com.Call(ms, "AddText", (object)text, (object)new double[] { ins[0], ins[1], 0.0 }, (object)height);
@@ -663,7 +663,7 @@ namespace ZwcHelper
             else if (type == "circle")
             {
                 double[] c = Pair(geom.Get("center"));
-                if (c == null) throw new ZwcError("BAD_ARGS", "add circle needs geom.center [x,y]", null, null);
+                if (c == null) throw new CadError("BAD_ARGS", "add circle needs geom.center [x,y]", null, null);
                 ent = Com.Call(ms, "AddCircle", (object)new double[] { c[0], c[1], 0.0 }, (object)geom.Dbl("radius", 1.0));
             }
             if (ent == null) return null;

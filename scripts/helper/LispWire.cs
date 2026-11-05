@@ -12,7 +12,7 @@
 //         classified it as an ignored aux record and LispGeom had no branch), so the same drawing
 //         read through the LISP path carried no radius while the COM path did.
 //
-// This file is deliberately dependency-free (BCL only: no JMap, no ZwcError, no COM, no CAD), so it
+// This file is deliberately dependency-free (BCL only: no JMap, no CadError, no COM, no CAD), so it
 // can be compiled on its own together with tests\lispwire\*.cs and asserted offline. LispFile.Scan
 // and LispGeom.Scan keep only the pipeline + the LispRecord -> JMap mapping.
 //
@@ -35,7 +35,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     /// <summary>One block attribute read through the LISP dump (A record). Kept BCL-only so the
     /// parser stays testable without COM/JMap.</summary>

@@ -38,10 +38,10 @@ $snap = Join-Path $root ('tmp\bench\e3\cmp-snapshot-' + (Get-Date).ToString('HHm
 New-Item -ItemType Directory -Force -Path (Join-Path $snap 'scripts\helper'),
     (Join-Path $snap 'bin'), (Join-Path $snap 'tests\bench\fixtures'), (Join-Path $snap 'tests\bench\chaos'),
     (Join-Path $snap 'tmp') | Out-Null
-Copy-Item -LiteralPath (Join-Path $root 'scripts\zwc.ps1') -Destination (Join-Path $snap 'scripts\zwc.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $root 'scripts\cad.ps1') -Destination (Join-Path $snap 'scripts\cad.ps1') -Force
 Copy-Item -Path (Join-Path $root 'scripts\helper\*.cs') -Destination (Join-Path $snap 'scripts\helper') -Force
-if (Test-Path -LiteralPath (Join-Path $root 'bin\ZwcClient.exe')) {
-    Copy-Item -LiteralPath (Join-Path $root 'bin\ZwcClient.exe') -Destination (Join-Path $snap 'bin\ZwcClient.exe') -Force
+if (Test-Path -LiteralPath (Join-Path $root 'bin\CadClient.exe')) {
+    Copy-Item -LiteralPath (Join-Path $root 'bin\CadClient.exe') -Destination (Join-Path $snap 'bin\CadClient.exe') -Force
 }
 foreach ($fx in @('design-water.dxf', 'blank.dxf')) {
     $src = Join-Path $root ('tests\bench\fixtures\' + $fx)
@@ -55,15 +55,15 @@ foreach ($f in @('shapeA_v2.ps1', 'shapeA_v2_session.ps1')) {
     if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $snap ('tmp\' + $f)) -Force }
 }
 $buildHashes = [ordered]@{}
-foreach ($f in @('scripts\zwc.ps1', 'scripts\helper\ZwcHelper.cs', 'scripts\helper\Edits.cs',
-                 'scripts\helper\Stability.cs', 'bin\ZwcClient.exe', 'tmp\shapeA_v2.ps1')) {
+foreach ($f in @('scripts\cad.ps1', 'scripts\helper\CadHelper.cs', 'scripts\helper\Edits.cs',
+                 'scripts\helper\Stability.cs', 'bin\CadClient.exe', 'tmp\shapeA_v2.ps1')) {
     $full = Join-Path $snap $f
     if (Test-Path -LiteralPath $full) { $buildHashes[$f] = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLower() }
 }
 try {
     $ngen = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\ngen.exe'
-    if (Test-Path -LiteralPath $ngen -and (Test-Path -LiteralPath (Join-Path $snap 'bin\ZwcClient.exe'))) {
-        $null = Invoke-Bounded $ngen @('install', (Join-Path $snap 'bin\ZwcClient.exe')) 120
+    if (Test-Path -LiteralPath $ngen -and (Test-Path -LiteralPath (Join-Path $snap 'bin\CadClient.exe'))) {
+        $null = Invoke-Bounded $ngen @('install', (Join-Path $snap 'bin\CadClient.exe')) 120
     }
 } catch { }
 

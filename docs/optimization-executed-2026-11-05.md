@@ -20,10 +20,10 @@
 | 4.3 bin/cache 无淘汰（P1） | **采纳** | `PruneCache`（保留 10 个非空 + 当前 sha + **运行中目录**，空目录 5 min 宽限，`deleted[]/skippedRunning[]/failedDirs[]`）；`serve -Action prune`；client 拉起新 daemon 后一次性自动淘汰；编译失败回滚空目录与 `build-<pid>.exe` | **141 → 9** 目录、空目录 **33 → 0**、释放 **12.00 MB**、`failed=0`；受控实验证明运行中目录被保护；二次 `removed=0`（幂等）；现 10 目录 / 0 空 / 1.76 MB |
 | 4.4 Python 性能热点（P1） | **已做（两轮 + 尾巴评估）** | 第一轮 `drop_suspect` 字典/集合索引（**1.6×/4.6×/13.6×**，逐字节等价）；第二轮**断面关联改网格分桶**：候选对 918 万→16.8 万、关联段 1.43→0.14 s（**×10.2**）、端到端 gcd −16% / dmx −26%，golden 逐单元格 0 差异。**尾巴「gcd 宽表逐 cell 写 → append」经实测评估为不值得**（宽表段 9.2→7.5 ms、占端到端 0.5%、端到端配对中位 −4.4 ms 属噪声）⇒ 保留原写法，候选 patch 留档 | 见 §八.1 / §8.8；`tests\selftest_sections.py` **85** 断言 |
 | 4.5 query `-Layer` 下推（P1） | **不采纳** | 计划自身结论即"不建议为纯性能做"；本轮无"只 dump 单层"需求 | — |
-| 5.1 拆 `ZwcHelper.cs` 巨石（P2） | **已做第一批（第二轮）** | `Json`（262 行）+ `PipeIo`（51 行）整体搬出，`ZwcHelper.cs` 4,371→4,100 行（diff = 0 insertions / 271 deletions，类体逐字节相等）；新增 `JsonTests` **132 断言**纳入 CI | 见 §八.3 |
-| 5.2 哈希配方三（四）处（P2） | **采纳** | `zwc.ps1` 三处合并为 `Get-HelperSha12`；client 新增 `hash` 子命令；`serve -Action status` 输出 `helperSha/clientSha/recipeMatch`，不一致 → `HASH_RECIPE_MISMATCH` | `recipeMatch:true`；新实现 40 次中位 **0.69 ms vs 2.15 ms**、sha 完全一致 |
+| 5.1 拆 `CadHelper.cs` 巨石（P2） | **已做第一批（第二轮）** | `Json`（262 行）+ `PipeIo`（51 行）整体搬出，`CadHelper.cs` 4,371→4,100 行（diff = 0 insertions / 271 deletions，类体逐字节相等）；新增 `JsonTests` **132 断言**纳入 CI | 见 §八.3 |
+| 5.2 哈希配方三（四）处（P2） | **采纳** | `cad.ps1` 三处合并为 `Get-HelperSha12`；client 新增 `hash` 子命令；`serve -Action status` 输出 `helperSha/clientSha/recipeMatch`，不一致 → `HASH_RECIPE_MISMATCH` | `recipeMatch:true`；新实现 40 次中位 **0.69 ms vs 2.15 ms**、sha 完全一致 |
 | 5.3 合并 build_sections 双脚本（P2） | **已做（第二轮）** | `section_lib.py`（1,138 行）单一实现 + 两个薄入口（376→42、414→47 行）；重复度 168 行→9 行；golden 逐单元格 0 差异（34,024 + 69,987 cell） | 见 §八.1 |
-| 5.4 编辑残留与死代码（P2） | **采纳（含扩展）** | `bindFailures` 重复行、`instanceError` 重复行、`ShowCmd` 重复 `return`；ZwcClient 退出码改结构化（不再全文搜子串）；daemon 的 ping/daemon-stop 改 `Json.Parse` 判顶层 `cmd`；`qa_yssd --block` 由死参数改为**真正生效**（默认行为不变）；硬编码 TEMP 回退改 `tempfile.gettempdir()` | 退出码 19 个假响应用例（含「`ok:true` + 文本含 BAD_DATA → **0**」，旧实现错判 3）；真机 `query -Text ping` 修复前返回 `cmd:"ping"`、修复后 `cmd:"query"` |
+| 5.4 编辑残留与死代码（P2） | **采纳（含扩展）** | `bindFailures` 重复行、`instanceError` 重复行、`ShowCmd` 重复 `return`；CadClient 退出码改结构化（不再全文搜子串）；daemon 的 ping/daemon-stop 改 `Json.Parse` 判顶层 `cmd`；`qa_yssd --block` 由死参数改为**真正生效**（默认行为不变）；硬编码 TEMP 回退改 `tempfile.gettempdir()` | 退出码 19 个假响应用例（含「`ok:true` + 文本含 BAD_DATA → **0**」，旧实现错判 3）；真机 `query -Text ping` 修复前返回 `cmd:"ping"`、修复后 `cmd:"query"` |
 | 5.5 prepare.py 模块化（P2） | **已做（第二轮 + 尾巴）** | 2,090 行 → **368 行薄壳** + `prep_io`/`prep_yssd`/`prep_db`/`prep_model` 四模块；v1/v2 坐标映射/TOO_TALL/layer-prefix/字高字面量共 **54 行重复 → 24 行调用点 + 48 行单实现**；golden **21/21 全等**（stdout 字节/退出码/stderr/落盘 sha256）。**尾巴 `--compare-source`**：13 形态离线 golden（合成 DB+源表）+ 新测试 71 断言，并修掉两处真问题（见 §8.8） | 见 §八.4 / §8.8 |
 | 6.1 依赖声明（P3） | **采纳** | 新增 `requirements.txt`（`xlrd>=2.0`/`openpyxl>=3.0`/`ezdxf>=1.0`，可选 matplotlib）；build 脚本延迟导入 + 明确错误码 | CI 用它装依赖；缺库时报 `NO_OPENPYXL` + exit 2（原裸 traceback） |
 | 6.2 最小 CI（P3） | **采纳** | `.github/workflows/offline-ci.yml`：windows-latest + Python 3.9，跑 5 个离线入口（含 csc 编译的 `selftest_lisp.ps1`），**不跑任何在线 CAD 测试** | 五个入口本机全绿（见 §五）；CI 本身尚未在 GitHub 实跑（需首次 push，见 §七） |
@@ -40,8 +40,8 @@
 
 ## 三、稳定性与运行时工程化
 
-- **4.1**：见摘要表。关键设计：脚本先 `(setq _zwc_olderr *error*)` 再 `(defun *error* …)`，处理器关闭打开的文件、还原 CMDECHO、还原旧处理器；正常收尾同样还原；`SafetyError` 白名单为此新增 `defun` 但**跳过形参表**，`forbidden` 表与只读语义不变（`defun` 体内 `command` 仍被拒，有负例）。
-- **4.3**：见摘要表；`PruneCache` 只动 `bin\cache\<12位小写hex>`，散落文件/非 hex 目录/`bin\ZwcClient.exe`/`bin\tray` 一律不碰。
+- **4.1**：见摘要表。关键设计：脚本先 `(setq _cad_olderr *error*)` 再 `(defun *error* …)`，处理器关闭打开的文件、还原 CMDECHO、还原旧处理器；正常收尾同样还原；`SafetyError` 白名单为此新增 `defun` 但**跳过形参表**，`forbidden` 表与只读语义不变（`defun` 体内 `command` 仍被拒，有负例）。
+- **4.3**：见摘要表；`PruneCache` 只动 `bin\cache\<12位小写hex>`，散落文件/非 hex 目录/`bin\CadClient.exe`/`bin\tray` 一律不碰。
 - **5.2 / 5.4**：见摘要表。daemon 的 `{"cmd":"daemon-stop"}` 与 `{"cmd":"ping"}` 响应报文**逐字节未改**；解析失败按原样交给正常分派（不因解析失败拒合法请求）。
 
 ## 四、Python 数据侧
@@ -62,17 +62,17 @@
 | 体检规则 | `python tests\audit\test_audit.py` | **PASS 89 / FAIL 0 / SKIP 3**（与改前一致） |
 | 基准检查器负例 | `python tests\bench\selftest_checkers.py` | **SELFTEST PASS** |
 | 端到端 dry-run | `tests\run_m1.ps1 -DryRunOnly -NoCad` | **PASS 10 / FAIL 0 / SKIP 2**（改前 9/0/2，新增 `lisp.wire` 步） |
-| 退出码抽取 | `bin\ZwcClient.exe --selftest-exitcode` | 19 个假响应全对（含旧实现错判用例） |
-| cache 淘汰 | `zwc.ps1 serve -Action prune` | 141→9 目录、33→0 空目录、释放 12.00 MB、幂等 `removed=0` |
-| 哈希自检 | `zwc.ps1 serve -Action status` | `recipeMatch:true`（`helperSha==clientSha`） |
+| 退出码抽取 | `bin\CadClient.exe --selftest-exitcode` | 19 个假响应全对（含旧实现错判用例） |
+| cache 淘汰 | `cad.ps1 serve -Action prune` | 141→9 目录、33→0 空目录、释放 12.00 MB、幂等 `removed=0` |
+| 哈希自检 | `cad.ps1 serve -Action status` | `recipeMatch:true`（`helperSha==clientSha`） |
 | 真机回归（只读） | `tmp\evidence-runtime\real-regression.ps1` | **ALL PASS**：pre/post 与 `baseline2` 两组字段级 **ALL MATCH**；`serve stop` 后自动重启；CAD 保持 **1 实例 / 41413 实体** |
-| 收尾现场 | — | `bin\cache` 10 目录 / 0 空 / 1.76 MB；`%TEMP%\zwcad-cooperate` 无本轮 `geom-*/scan-*` 残留 |
+| 收尾现场 | — | `bin\cache` 10 目录 / 0 空 / 1.76 MB；`%TEMP%\cad-cooperate` 无本轮 `geom-*/scan-*` 残留 |
 
 ## 六、未采纳 / 降级项与理由
 
 > **第二轮更新**：下列第 1–3 项（5.1、5.5、5.3、4.2）已在同日第二轮补齐（见 §八）；本节保留为**当时的取舍理由**，用于解释"为什么当时先不做、后来怎么做的"。
 
-1. **5.1 拆 `ZwcHelper.cs`、5.5 `prepare.py` 模块化**：纯行为保持的大规模搬移（各 2–3 人日），必须逐类/逐函数跑在线+离线回归；本轮窗口内做不完，硬做只会把"未验证的大 diff"塞进历史。建议单独开一个批次，前提是先用 6.2 的 CI 把离线网兜住。
+1. **5.1 拆 `CadHelper.cs`、5.5 `prepare.py` 模块化**：纯行为保持的大规模搬移（各 2–3 人日），必须逐类/逐函数跑在线+离线回归；本轮窗口内做不完，硬做只会把"未验证的大 diff"塞进历史。建议单独开一个批次，前提是先用 6.2 的 CI 把离线网兜住。
 2. **5.3 合并 build_sections 双脚本**：计划估计 1–1.5 人日且需重跑真实数据；本轮只做了**风险侧**（输入校验、延迟导入、参数化），去重留给下一次（4.4 的空间索引优化也应等这次合并后再做，避免改两遍）。
 3. **4.2 的注入管道合并**：解析层已合并（收益最大且可离线测）；注入管道（守卫→注入→哨兵→清理，约 120 行同构）与 4.1 改的是同一片代码，本轮先保证 4.1 的正确性并做真机验证，管道抽象留待下一轮（届时 4.1 的修复只需改一处）。
 4. **4.4 其余热点**（断面×等高线空间索引、yssd 归一化缓存、audit 文字重叠网格、gcd 宽表 append）：当前数据量 10 s 可接受，属防御性优化；且 5.3 合并后代码会搬动，先优化会重复劳动。
@@ -83,13 +83,13 @@
 
 1. **真机 `radius` 未观测**：本轮样本图前 500 实体不含 CIRCLE/ARC。建议下次在一张有圆/弧的图上跑 `read -Mode geom -Limit 50` 确认（离线断言与模板已覆盖生成/消费两端）。
 2. **全量 geom 响应体上限（既有边界，未改协议）**：41k 实体全量 `read -Mode geom` 时，LISP 扫描只需 ≈1.5 s 且 dump 与基线逐字节相同（4.8 MB），但"41k 实体 → JSON 响应"产生不出应答（client 180 s 超时、stdout 0 字节；直连 one-shot helper 也不写 response）。已写入 `SKILL.md` 能力边界与 `docs/M3-E6-geometry-dump.md §6.3`；**可用做法**是 `-Limit` 分页或直接消费 `%TEMP%` 的 dump 文件。若要做"一次拿全量"，需要改协议（分块/流式/落盘引用），属独立课题。
-3. ~~**CI 未在 GitHub 实跑**~~ → **已完成（2026-11-05 08:48Z）**：推 `main` 后 `offline-ci` 首跑即暴露两个真问题，修完第二跑 11 步全绿（run [41943999965](https://github.com/freeskychenjun/zwcad-cooperate/actions/runs/41943999965)，1m14s）：
+3. ~~**CI 未在 GitHub 实跑**~~ → **已完成（2026-11-05 08:48Z）**：推 `main` 后 `offline-ci` 首跑即暴露两个真问题，修完第二跑 11 步全绿（run [41943999965](https://github.com/freeskychenjun/cad-cooperate/actions/runs/41943999965)，1m14s）：
    - `run_m1.ps1` 对参数做 `Test-Path` 预检 ⇒ workflow 里裸 `python` 必然 `missing: python`，改为 `-Python (Get-Command python).Source`；
    - windows runner 控制台是 **cp1252**，`tests/selftest.py` 打印中文明细抛 `UnicodeEncodeError` ⇒ job 级 `PYTHONUTF8=1`/`PYTHONIOENCODING=utf-8` + 三个测试入口加 `reconfigure(encoding="utf-8", errors="replace")` 自保；
    - 顺手把 `setup-python` 从 3.9 改 3.11（3.9 已 EOL、镜像可能缺失），"支持 3.9"改由新增的 `tests/check_py39_syntax.py`（`ast.parse(feature_version=(3,9))` 校验 34 个 .py）把关。
    证据：`gh run view 41943999965`；本机也按 CI 同编码（`PYTHONIOENCODING=cp1252`、清空 `PYTHONPATH`）预演过全部步骤。
-4. **下一轮可做**（按建议顺序；**前四项已于第二轮完成，见 §八**）：~~5.3 合并 build_sections~~ → ~~4.4 空间索引~~ → ~~4.2 注入管道抽象~~ → ~~5.1 第一批（Json/PipeIo）~~ → 剩余：`DEFAULT_DB_PATH` 延迟求值（按「先别改语义」保留导入期求值）；`docs/section-model-v2.md` 里 helper 侧对 `SOURCE_COMPARE_UNMATCHED` 的透传建议（未验证，非阻塞）。**已完成**：5.1 第二/三批（ZwcHelper 拆 24 个 .cs）、4.4 宽表 append（评估后决定不改）、5.5 `--compare-source` golden。
-5. **本机现场**：`bin\cache` 已从 140 目录/13.39 MB 收敛到 10 目录/1.76 MB；`%TEMP%\zwcad-cooperate` 里的 `g3.*`、`gtest*`、`contours.json`、`sections-src.json` 等是 **2026-11-04 M3-E6 试验遗留**，非本轮产物，可随时手工删除（不在仓库内）。
+4. **下一轮可做**（按建议顺序；**前四项已于第二轮完成，见 §八**）：~~5.3 合并 build_sections~~ → ~~4.4 空间索引~~ → ~~4.2 注入管道抽象~~ → ~~5.1 第一批（Json/PipeIo）~~ → 剩余：`DEFAULT_DB_PATH` 延迟求值（按「先别改语义」保留导入期求值）；`docs/section-model-v2.md` 里 helper 侧对 `SOURCE_COMPARE_UNMATCHED` 的透传建议（未验证，非阻塞）。**已完成**：5.1 第二/三批（CadHelper 拆 24 个 .cs）、4.4 宽表 append（评估后决定不改）、5.5 `--compare-source` golden。
+5. **本机现场**：`bin\cache` 已从 140 目录/13.39 MB 收敛到 10 目录/1.76 MB；`%TEMP%\cad-cooperate` 里的 `g3.*`、`gtest*`、`contours.json`、`sections-src.json` 等是 **2026-11-04 M3-E6 试验遗留**，非本轮产物，可随时手工删除（不在仓库内）。
 
 ## 八、第二轮执行（2026-11-05，按 §七 建议开工）
 
@@ -105,12 +105,12 @@
 
 ### 8.2 4.2 LISP 注入管道抽象：`LispScan.cs`
 - 新增 `scripts/helper/LispScan.cs`（304 行）：CMDACTIVE/LASTPROMPT 守卫 → ssget 过滤串 → 生成/写盘/`SendCommand` → 两阶段哨兵 → GBK 读回 → finally CMDECHO 还原 + 成功删档/失败 `*.orphan`，**五步唯一实现**；纯函数可离线测。
-- `LispFile.cs` 240→**133 行**、`LispGeom.cs` 269→**161 行**：只剩 request + `LispWire.Parse*` + `LispRecord→JMap` 映射。**签名、`result`/`meta` 字段集合与顺序、10 处错误码/文案/hint/detail 逐字不变**，`ZwcHelper.cs`/`EditsQuery.cs` 调用点零改动。
+- `LispFile.cs` 240→**133 行**、`LispGeom.cs` 269→**161 行**：只剩 request + `LispWire.Parse*` + `LispRecord→JMap` 映射。**签名、`result`/`meta` 字段集合与顺序、10 处错误码/文案/hint/detail 逐字不变**，`CadHelper.cs`/`EditsQuery.cs` 调用点零改动。
 - **真机 A/B**（显式 `-Doc`、只读）：`-Mode geom -Limit 20/500`、`read -Limit 20`、`query -Limit 10` 与 `tmp\baseline2` **0 字段差异**（`diff_ab.py` problems=0）；`%TEMP%` 残留 0、无 orphan、**CMDECHO=1 / CMDACTIVE=0**。
 - 新增 `tests/lispwire/LispScanTests.cs`（**119 断言**，含 COM 桩端到端：成功删档+GBK 读回、started 超时→`LISP_FILE_TIMEOUT`+`.orphan`、not-started→`LISP_NOT_STARTED`、BUSY/PROMPT_POLLUTED 文案渲染断言）。
 
 ### 8.3 5.1 第一批：`Json.cs` / `PipeIo.cs` 可离线测
-- `ZwcHelper.cs` **4,371 → 4,100 行**；`git diff --numstat` = **0 insertions / 271 deletions**；两个类体逐字节相等（独立字符串感知 walker 复核：Json 9,552 字符、PipeIo 1,087 字符 IDENTICAL）。协议（4 字节小端长度 + UTF-8 JSON）、数字格式、错误文案全不变。
+- `CadHelper.cs` **4,371 → 4,100 行**；`git diff --numstat` = **0 insertions / 271 deletions**；两个类体逐字节相等（独立字符串感知 walker 复核：Json 9,552 字符、PipeIo 1,087 字符 IDENTICAL）。协议（4 字节小端长度 + UTF-8 JSON）、数字格式、错误文案全不变。
 - 新增 `tests/jsonself/JsonTests.cs`（**132 断言**）+ `JMapStub.cs`（仅测试用最小桩，不进 `scripts\helper`）：转义/数字边界/嵌套/键序/中文往返/50 层嵌套/15 个非法输入/`Write→Parse→Write` 字节相等。**收益：JSON 层从此能在无 CAD 的 CI 上回归。**
 - 编码约定（查证结论）：request 写侧统一 UTF-8 无 BOM；读侧接受 UTF-8（含/不含 BOM）甚至带 BOM 的 UTF-16LE/BE，但 **GBK/ANSI 不报错、静默变 U+FFFD 乱码** ⇒ 调用方不得用 ANSI 写 request。已写入 `docs/M3-E1-perf.md §10.5`。
 
@@ -132,15 +132,15 @@
 | `tests\run_m1.ps1 -DryRunOnly -NoCad` | **PASS 10 / FAIL 0 / SKIP 2**（`lisp.wire` 步 PASS lines 291→410） |
 | 四个 golden 对比 | 数据侧 34,024+69,987 cell 0 差异；prepare 21/21 全等；LISP 真机 0 字段差异 |
 | 真机只读冒烟（5.1 第二批后） | status / read geom 20 / read 20 / query 10 / doctor 全 ok，`readPath` 仍 lisp-file-geom / lisp-file；CMDECHO=1、CMDACTIVE=0、%TEMP% 残留 0 |
-| **GitHub Actions `offline-ci`** | **首次实跑 11 步全绿**（run [41943999965](https://github.com/freeskychenjun/zwcad-cooperate/actions/runs/41943999965)，1m14s）：语法门 → selftest 41 → audit 89·0·3 → checkers → sections 82 → run_m1 10·0·2 → selftest_lisp 6 套 644 → 证据 artifact |
+| **GitHub Actions `offline-ci`** | **首次实跑 11 步全绿**（run [41943999965](https://github.com/freeskychenjun/cad-cooperate/actions/runs/41943999965)，1m14s）：语法门 → selftest 41 → audit 89·0·3 → checkers → sections 82 → run_m1 10·0·2 → selftest_lisp 6 套 644 → 证据 artifact |
 
-### 8.6 5.1 第二批：`ZwcHelper.cs` 逐类拆完（4,100 → 173 行）
-- 13 个类型按 6 步搬出：`Core.cs`(130) `ComInterop.cs`(64) `Com.cs`(269) `Procs.cs`(124) `Cad.cs`(864) `State.cs`(218) `Cmd.cs`(126) `Daemon.cs`(108)，`Commands`（2,135 行 / 46 成员）拆成 **双 partial**：`Commands.cs`(810，共享 helper+会话诊断) + `CommandsRead.cs`(1,382，read/section/写图/verify/rollback)。`ZwcHelper.cs` 只剩 `Program`（173 行）；`scripts\helper` 现 22 个 `.cs`，**csc 通配、`zwc.ps1`、run_m1 源清单零改动**。
+### 8.6 5.1 第二批：`CadHelper.cs` 逐类拆完（4,100 → 173 行）
+- 13 个类型按 6 步搬出：`Core.cs`(130) `ComInterop.cs`(64) `Com.cs`(269) `Procs.cs`(124) `Cad.cs`(864) `State.cs`(218) `Cmd.cs`(126) `Daemon.cs`(108)，`Commands`（2,135 行 / 46 成员）拆成 **双 partial**：`Commands.cs`(810，共享 helper+会话诊断) + `CommandsRead.cs`(1,382，read/section/写图/verify/rollback)。`CadHelper.cs` 只剩 `Program`（173 行）；`scripts\helper` 现 22 个 `.cs`，**csc 通配、`cad.ps1`、run_m1 源清单零改动**。
 - **纯搬移自证**：8 个搬移块在 baseline 字节流中各唯一出现、互不重叠；`baseline − 块 − 随块空行 == 搬移后文件`（198,878→118,438 B 逐字节相同，零夹带）；第 6 步成员级：baseline 类体 2,100 成员行**每行恰好归属一个成员一次**、46 成员在两文件中**各出现且仅一次**、顺序为 baseline 序子序列。
 - **Lead 独立复核**（不复用对方脚本）：按成员名+成员体比对 → missing/extra/跨文件重复/成员体差异全 none；`HEAD − Commands 块` 与当前文件 diff **只剩 −9 行 using/空行、+0 行**。
-- 3 处非搬移偏差（已批准）：两文件类声明插入 `partial `；原 12 处相邻成员间补单个空行；`ZwcHelper.cs` 删 8 条无用 `using`（编译器可证最小集）。
+- 3 处非搬移偏差（已批准）：两文件类声明插入 `partial `；原 12 处相邻成员间补单个空行；`CadHelper.cs` 删 8 条无用 `using`（编译器可证最小集）。
 - 收益：入口文件 4,100→173 行；`Core`/`Com`/`State`/`Cmd` 成为可独立离线单测的单元；read/section 家族与会话诊断家族不再混在一个 2,135 行的类里。**未做**（按纯搬移纪律原样保留）：`Doctor` 的 `deepMatched` 死变量等，留待专门清理（`JMap`/`Json` 两处过时注释已随本批修正）。
-- **配套离线测试（5.1 的收益兑现）**：新增 `tests/coreself/CoreTests.cs`（**103 断言**：JMap 覆盖写/键序/大小写/缺键/类型不匹配、ZwcError/Ctx、Json 往返、State 的内存态 session/token 函数）与 `ComCmdTests.cs`（**131 断言**：POCO 假 COM 对象走 `Com.Get/TryGet/Call/Set/Str/Dbl/I32/Bool/Pt/Flat/Hr`、**永久失败不重试**这个 M3-E1 策略（`ReadRetries=5` 时实际调用仍 1 次）、`Cmd.Balanced`/`PromptPolluted`/`Send` 四类守卫）。**零桩**：直接编译真的 `Core.cs`/`Com.cs`/`Cmd.cs`/`State.cs`；`tests/jsonself/JMapStub.cs` 删除，JsonTests 改用**真 JMap**（断言数不变 132）。
+- **配套离线测试（5.1 的收益兑现）**：新增 `tests/coreself/CoreTests.cs`（**103 断言**：JMap 覆盖写/键序/大小写/缺键/类型不匹配、CadError/Ctx、Json 往返、State 的内存态 session/token 函数）与 `ComCmdTests.cs`（**131 断言**：POCO 假 COM 对象走 `Com.Get/TryGet/Call/Set/Str/Dbl/I32/Bool/Pt/Flat/Hr`、**永久失败不重试**这个 M3-E1 策略（`ReadRetries=5` 时实际调用仍 1 次）、`Cmd.Balanced`/`PromptPolluted`/`Send` 四类守卫）。**零桩**：直接编译真的 `Core.cs`/`Com.cs`/`Cmd.cs`/`State.cs`；`tests/jsonself/JMapStub.cs` 删除，JsonTests 改用**真 JMap**（断言数不变 132）。
   C# 离线套件从 4 套/410 断言长到 **6 套/644 断言**（LispWire 106 + LispTemplate 53 + Json 132 + LispScan 119 + Core 103 + ComCmd 131），`tests\selftest_lisp.ps1` 一次跑完，CI 无需改动。
 
 ### 8.7 5.1 第三批：`CommandsRead.cs` 再拆 read / section / verify 三文件

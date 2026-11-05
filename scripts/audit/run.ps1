@@ -1,7 +1,7 @@
-﻿# run.ps1 - drawing health audit runner (read-only layer for zwcad-cooperate).
+﻿# run.ps1 - drawing health audit runner (read-only layer for cad-cooperate).
 #
-#   scripts\zwc.ps1 info  --> info.json
-#   scripts\zwc.ps1 read  --> read.json
+#   scripts\cad.ps1 info  --> info.json
+#   scripts\cad.ps1 read  --> read.json
 #   scripts\audit\audit.py --info info.json --read read.json --md report.md --json report.json
 #
 # Prints an ASCII summary (rule ids / counts / report paths) so a GBK console never
@@ -16,7 +16,7 @@
 #   ... -InfoJson info.json -ReadJson read.json          # audit existing JSON, no CAD
 #   ... -ProgId ZWCAD.Application.2025 | -App autocad
 #
-# Exit codes: 0 = audit ran (gate passed), 2 = zwc/input failure, 3 = blockers found
+# Exit codes: 0 = audit ran (gate passed), 2 = cad/input failure, 3 = blockers found
 #             (only with -ExitCode), 4 = audit.py failed.
 param(
     [string]$ProgId = 'ZWCAD.Application.16',
@@ -47,12 +47,12 @@ function Write-Info([string]$text) { [Console]::Out.WriteLine($text) }
 $scriptDir = $PSScriptRoot
 if (-not $scriptDir) { $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
 $root = Split-Path -Parent (Split-Path -Parent $scriptDir)
-$zwcPath = Join-Path $root 'scripts\zwc.ps1'
+$cadPath = Join-Path $root 'scripts\cad.ps1'
 $auditPy = Join-Path $root 'scripts\audit\audit.py'
 $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 
 $pyExe = $Python
-if (-not $pyExe) { $pyExe = $env:ZWC_PYTHON }
+if (-not $pyExe) { $pyExe = $env:CAD_PYTHON }
 if (-not $pyExe) {
     $candidate = 'python'
     if (Test-Path -LiteralPath $candidate) { $pyExe = $candidate } else { $pyExe = 'python' }
@@ -72,7 +72,7 @@ if (-not $ReadJson) { $ReadJson = Join-Path $outDirFull 'read.json' }
 if (-not $Json) { $Json = Join-Path $outDirFull 'report.json' }
 if (-not $Md) { $Md = Join-Path $outDirFull 'report.md' }
 
-function Test-ZwcResponse {
+function Test-CadResponse {
     param([string]$path, [string]$label, [switch]$Quiet)
     if (-not (Test-Path -LiteralPath $path)) {
         if (-not $Quiet) { Write-Info ('ERROR ' + $label + ' output missing: ' + $path) }
@@ -94,22 +94,22 @@ function Test-ZwcResponse {
     return $true
 }
 
-function Get-ZwcErrorCode([string]$path) {
+function Get-CadErrorCode([string]$path) {
     if (-not (Test-Path -LiteralPath $path)) { return '' }
     $text = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
     if ($text -match '"code"\s*:\s*"([^"]+)"') { return $matches[1] }
     return ''
 }
 
-# Run zwc.ps1 in a CHILD powershell: zwc.ps1 calls exit, which would kill this script.
-function Invoke-Zwc([string[]]$zwcArgs, [string]$outPath, [switch]$AllowFail) {
-    if (-not (Test-Path -LiteralPath $zwcPath)) {
-        Write-Info ('ERROR zwc.ps1 not found: ' + $zwcPath)
+# Run cad.ps1 in a CHILD powershell: cad.ps1 calls exit, which would kill this script.
+function Invoke-Cad([string[]]$cadArgs, [string]$outPath, [switch]$AllowFail) {
+    if (-not (Test-Path -LiteralPath $cadPath)) {
+        Write-Info ('ERROR cad.ps1 not found: ' + $cadPath)
         exit 2
     }
-    Write-Info ('zwc: ' + ($zwcArgs -join ' '))
+    Write-Info ('cad: ' + ($cadArgs -join ' '))
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
-    $text = & $psExe -NoProfile -ExecutionPolicy Bypass -File $zwcPath @zwcArgs 2>$null
+    $text = & $psExe -NoProfile -ExecutionPolicy Bypass -File $cadPath @cadArgs 2>$null
     $code = $LASTEXITCODE
     $watch.Stop()
     $joined = ''
@@ -117,11 +117,11 @@ function Invoke-Zwc([string[]]$zwcArgs, [string]$outPath, [switch]$AllowFail) {
         if ($text -is [array]) { $joined = ($text -join "`n") } else { $joined = [string]$text }
     }
     [System.IO.File]::WriteAllText($outPath, $joined, (New-Object System.Text.UTF8Encoding($false)))
-    Write-Info ('  -> ' + $outPath + ' (' + $watch.ElapsedMilliseconds + ' ms, zwc exit ' + $code + ')')
+    Write-Info ('  -> ' + $outPath + ' (' + $watch.ElapsedMilliseconds + ' ms, cad exit ' + $code + ')')
     if ($code -ne 0 -and -not $AllowFail) {
         $snippet = $joined
         if ($snippet.Length -gt 400) { $snippet = $snippet.Substring(0, 400) }
-        Write-Info ('ERROR zwc.ps1 exit ' + $code + ': ' + $snippet)
+        Write-Info ('ERROR cad.ps1 exit ' + $code + ': ' + $snippet)
         exit 2
     }
     return $code
@@ -131,8 +131,8 @@ function Invoke-Zwc([string[]]$zwcArgs, [string]$outPath, [switch]$AllowFail) {
 if ($InfoJson -and $ReadJson -and (Test-Path -LiteralPath $InfoJson) -and (Test-Path -LiteralPath $ReadJson) `
         -and -not $Doc -and -not $Launch) {
     Write-Info 'using existing JSON (offline mode, CAD untouched)'
-    if (-not (Test-ZwcResponse $InfoJson 'info')) { exit 2 }
-    if (-not (Test-ZwcResponse $ReadJson 'read')) { exit 2 }
+    if (-not (Test-CadResponse $InfoJson 'info')) { exit 2 }
+    if (-not (Test-CadResponse $ReadJson 'read')) { exit 2 }
 } else {
     $target = @()
     if ($App) { $target += @('-App', $App) } else { $target += @('-ProgId', $ProgId) }
@@ -143,30 +143,30 @@ if ($InfoJson -and $ReadJson -and (Test-Path -LiteralPath $InfoJson) -and (Test-
     if ($TimeoutSec -gt 0) { $target += @('-TimeoutSec', [string]$TimeoutSec) }
 
     $infoArgs = @('info') + $target
-    $infoCode = Invoke-Zwc $infoArgs $InfoJson -AllowFail
+    $infoCode = Invoke-Cad $infoArgs $InfoJson -AllowFail
     if ($infoCode -ne 0) {
         # -Doc is only useful when that drawing is actually open. Two recoverable cases:
         #   DOC_NOT_FOUND          -> open it (read-only) and retry once
         #   NO_INSTANCE + -Launch  -> start CAD with the drawing, then retry once
-        $err = Get-ZwcErrorCode $InfoJson
+        $err = Get-CadErrorCode $InfoJson
         $recoverable = $Doc -and ($err -eq 'DOC_NOT_FOUND' -or ($err -eq 'NO_INSTANCE' -and $Launch))
         if ($recoverable) {
             Write-Info ('  info returned ' + $err + '; opening the drawing first (open -Doc -ReadOnly)')
             $openArgs = @('open') + $target + @('-ReadOnly')
             $openPath = Join-Path $outDirFull 'open.json'
-            $openCode = Invoke-Zwc $openArgs $openPath -AllowFail
-            if ($openCode -ne 0 -or -not (Test-ZwcResponse $openPath 'open')) {
+            $openCode = Invoke-Cad $openArgs $openPath -AllowFail
+            if ($openCode -ne 0 -or -not (Test-CadResponse $openPath 'open')) {
                 Write-Info (('cannot open the drawing: ' + $err) + '; check the path, or open it in CAD yourself')
                 exit 2
             }
-            $infoCode = Invoke-Zwc $infoArgs $InfoJson -AllowFail
+            $infoCode = Invoke-Cad $infoArgs $InfoJson -AllowFail
         }
     }
-    if (-not (Test-ZwcResponse $InfoJson 'info')) { exit 2 }
+    if (-not (Test-CadResponse $InfoJson 'info')) { exit 2 }
 
     $readArgs = @('read') + $target + @('-Max', [string]$Max, '-Scope', $Scope)
-    Invoke-Zwc $readArgs $ReadJson | Out-Null
-    if (-not (Test-ZwcResponse $ReadJson 'read')) { exit 2 }
+    Invoke-Cad $readArgs $ReadJson | Out-Null
+    if (-not (Test-CadResponse $ReadJson 'read')) { exit 2 }
 }
 
 # ------------------------------------------------------------------ run the engine

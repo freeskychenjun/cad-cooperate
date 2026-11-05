@@ -1,15 +1,15 @@
 // Core.cs - core data model of the helper: ordered JSON map, error type, request context.
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05: pure move of the
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05: pure move of the
 // Core / ComInterop / Com / Procs / Cad / State / Cmd / Daemon / Commands units). Class
 // and member bodies are unchanged: no logic, no visibility, no field order and no comment
-// text was edited. JMap carries every command result, ZwcError is the failure type.
+// text was edited. JMap carries every command result, CadError is the failure type.
 
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // Ordered JSON map. The JSON writer/parser itself lives in Json.cs (moved out 2026-11-05);
@@ -94,12 +94,12 @@ namespace ZwcHelper
     // ======================================================================================
     // Errors / context
     // ======================================================================================
-    internal sealed class ZwcError : Exception
+    internal sealed class CadError : Exception
     {
         public string Code;
         public string Hint;
         public string Detail;
-        public ZwcError(string code, string message, string hint, string detail)
+        public CadError(string code, string message, string hint, string detail)
             : base(message)
         {
             Code = code; Hint = hint; Detail = detail;

@@ -3,7 +3,7 @@
 """test_audit.py - offline regression tests for the drawing audit layer.
 
 No CAD, no COM: everything runs against the JSON fixtures in tests/audit/fixtures/
-(shape-identical to real `zwc.ps1 info/read` output) plus, when present, the archived
+(shape-identical to real `cad.ps1 info/read` output) plus, when present, the archived
 real-CAD snapshots in tests/audit/real/.
 
     python tests/audit/test_audit.py            # run everything
@@ -267,7 +267,7 @@ def test_bad_input():
     with open(failed, "w", encoding="utf-8") as fh:
         json.dump({"ok": False, "error": {"code": "NO_INSTANCE", "message": "no CAD"}}, fh)
     proc = run(["--read", failed], expect_exit=2)
-    check("ok:false zwc payload is rejected", "NO_INSTANCE" in proc.stderr or proc.returncode == 2)
+    check("ok:false cad payload is rejected", "NO_INSTANCE" in proc.stderr or proc.returncode == 2)
 
 
 def test_markdown_report():

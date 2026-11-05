@@ -5,15 +5,15 @@
 ## 调用链
 
 ```
-zwc.cmd  →  bin\ZwcClient.exe  hint -Doc <图> -Text "<步骤>" -Tray
+cad.cmd  →  bin\CadClient.exe  hint -Doc <图> -Text "<步骤>" -Tray
                                   │ 成功 (ok:true) 后读取响应 app.hwnd / app.pid / doc.name
                                   └─► powershell -File scripts\tray.ps1 -Start -Doc <doc> -Step <步骤>
                                           -Hwnd <hwnd> -CadPid <pid>
-                                          │ 写 %TEMP%\zwcad-cooperate\tray-<sha8(doc)>.json (UTF-8)
-                                          └─► bin\tray\ZwcTray.exe --state <json>   (WinForms NotifyIcon)
+                                          │ 写 %TEMP%\cad-cooperate\tray-<sha8(doc)>.json (UTF-8)
+                                          └─► bin\tray\CadTray.exe --state <json>   (WinForms NotifyIcon)
 ```
 
-- `scripts\tray\ZwcTray.cs`：纯 ASCII、`/target:winexe`、不引用 CAD；图标/菜单文字全部来自 `scripts\tray\ui.json`（UTF-8）。
+- `scripts\tray\CadTray.cs`：纯 ASCII、`/target:winexe`、不引用 CAD；图标/菜单文字全部来自 `scripts\tray\ui.json`（UTF-8）。
 - `scripts\tray.ps1`：纯 ASCII wrapper（`-Start|-Stop|-Status`），首次缺 exe 时用 csc 编译；state 文件按 `sha8(文档名)` 命名，**一图一 state**。
 - `scripts\tray\ui.json`：`prefix`（〔AI 接管中〕）、`balloonTitle`、`open/copy/end` 菜单文案。
 
@@ -22,7 +22,7 @@ zwc.cmd  →  bin\ZwcClient.exe  hint -Doc <图> -Text "<步骤>" -Tray
 | 触发 | 动作 |
 |---|---|
 | `hint -Clear` | client 调 `tray.ps1 -Stop -Doc <doc>`（移除该图 state；tray exe 见 state 消失后自退） |
-| `finish` | 同 `-Stop`；**未带 `-Doc`** 时 client 扫 `%TEMP%\zwcad-cooperate\tray-*.json` 逐个 stop，避免"结束接管但图标残留" |
+| `finish` | 同 `-Stop`；**未带 `-Doc`** 时 client 扫 `%TEMP%\cad-cooperate\tray-*.json` 逐个 stop，避免"结束接管但图标残留" |
 | 自动 | tray exe 检测 state 文件消失、CAD pid 退出或 4 小时到期后自退 |
 
 ## 可见性 / Windows 溢出区

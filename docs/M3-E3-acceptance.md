@@ -1,7 +1,7 @@
 # M3-E3 稳定性验收：故障注入 + 并发（三会话零丢失）+ 回归
 
 > 验收人：audit-dev（造故障、独立判据）｜被测：core-cad 的 E3 稳定性骨架（文档级锁/排队、忙态自愈、写前重锚定、挂死检测 + `serve reset/recover`）
-> 产品：ZWCAD 2025（本人固定；core-cad 用 Classic/ACAD）｜入口：`-Entry client` + **frozen 快照**（每次 chaos 自己复制 zwc.ps1/helper/ZwcClient 到私有目录，避免队友热改代码把 hash 变掉）
+> 产品：ZWCAD 2025（本人固定；core-cad 用 Classic/ACAD）｜入口：`-Entry client` + **frozen 快照**（每次 chaos 自己复制 cad.ps1/helper/CadClient 到私有目录，避免队友热改代码把 hash 变掉）
 > 证据：`tmp\bench\e3\{concurrency,concurrency-locked,chaos}.json` + 各 case 目录
 > 判定口径（用户/lead 拍板）：**要么干净失败（明确错误码/有界），要么自愈（明确 `PROMPT_CLEARED`/`recover`/自动重启证据）；"挂死但最后看起来没事"算失败**。SKIPPED 只允许是"注入手段受限"，必须写明原因，不能混成 PASS。
 
@@ -18,7 +18,7 @@
 
 ## 2. 三会话并发基准（`tmp\bench\e3\concurrency*.json`）
 
-方法：私有夹具副本（20 实体）、3 个 `bin\ZwcClient.exe` **同时**各发一条 `entity -Items`；起始 `snapshot`，结束用 `read -Mode geom` 独立回读 + `diff -Since` 交叉验证。
+方法：私有夹具副本（20 实体）、3 个 `bin\CadClient.exe` **同时**各发一条 `entity -Items`；起始 `snapshot`，结束用 `read -Mode geom` 独立回读 + `diff -Since` 交叉验证。
 
 | Shape | 版本 | 命令数 | 实体 | p50 | p95 | 每实体成本 | 说明 |
 |---|---|---|---|---|---|---|---|
@@ -97,7 +97,7 @@
 |---|---|---|
 | **20/20 基准** | `run_bench.ps1 -Tasks all -Product zwcad2025 -Repeat 2 -Entry client`（frozen 快照） | ✅ **20/20 success**（`tmp\bench\e3\regression3`，18:38，含 E3 全部新代码） |
 | **M1 离线回归 · 有 CAD**（自己 `-Launch` 一个 2025 后跑） | `tests\run_m1.ps1 -DryRunOnly` | ✅ **PASS 9 / FAIL 0 / SKIP 2**（期望值；18:53 实测） |
-| **M1 离线回归 · 无 CAD**（刻意不启实例） | 同上 | ⚠️ **PASS 7 / FAIL 0 / SKIP 4**（18:56 实测）：多出的 2 个 SKIP = `zwc.expected.crosscheck`（拿不到 `result.expected`）与 `zwc.section.dryrun`（`-DryRun` 仍先附 CAD → `NO_INSTANCE`）。**"有 CAD 9/0/2、无 CAD 7/0/4" 是预期差异，不是回归**；无 CAD 下若出现 FAIL 才是问题 |
+| **M1 离线回归 · 无 CAD**（刻意不启实例） | 同上 | ⚠️ **PASS 7 / FAIL 0 / SKIP 4**（18:56 实测）：多出的 2 个 SKIP = `cad.expected.crosscheck`（拿不到 `result.expected`）与 `cad.section.dryrun`（`-DryRun` 仍先附 CAD → `NO_INSTANCE`）。**"有 CAD 9/0/2、无 CAD 7/0/4" 是预期差异，不是回归**；无 CAD 下若出现 FAIL 才是问题 |
 | **overlay 84 + cross_app_diff** | `tests\bench\chaos\probe.ps1 -Case overlay` + `python tests\cross_app_diff.py` | ✅ overlay：`section exit=0, expected.total=84, verify.ok=true, readCount=84`；cross_app_diff：归档三产品两两 **ALL MATCH** + 本次新画 2025 vs 归档 zwcad16 **MATCH** |
 
 **窗口绕行记录**：回归首跑/次跑成批"首步失败"根因分别是 core-cad 归零时杀掉了我的实例、以及 E3 严格 `-Doc` FullName 解析 + 残留实例导致 `{scratch}` `DOC_NOT_FOUND`；恢复窗口后 20/20 全绿，非产品回归。教训：跑回归前必须确认目标产品族 0 残留。
@@ -133,7 +133,7 @@
 | **ZWCAD Classic 16** | **audit-dev 独立 harness** | **403 / 445**（第 3 次因他人进程干扰无效，已重跑丢 1 次） | **424** | 403 / 445 | **❌ 未达标** |
 | ZWCAD Classic 16 | core-cad 同口径 | 303/419、306/337、315/381 | 326（口径B 348） | 303 / 419 | ✅（他的 harness） |
 
-**两套 harness 存在 +70~90 ms 系统差**（2025：我 453 中位 vs 他 380；Classic：我 424 vs 他 326），且我的 p95 明显更高（2025 p95 4.6–4.9 s，他 0.5–0.7 s）。已知差异点：① 我的 worker 是独立 `powershell` 进程、每条命令都经 `Invoke-Cad` 全包装（含 JSON 解析/写盘）；② 他的会话脚本内直接 `& ZwcClient.exe`；③ 跑次间机器负载/其他 agent 干扰（我 2025 的第 3 次 435、Classic 第 1 次 seq 全错均为干扰迹象）。
+**两套 harness 存在 +70~90 ms 系统差**（2025：我 453 中位 vs 他 380；Classic：我 424 vs 他 326），且我的 p95 明显更高（2025 p95 4.6–4.9 s，他 0.5–0.7 s）。已知差异点：① 我的 worker 是独立 `powershell` 进程、每条命令都经 `Invoke-Cad` 全包装（含 JSON 解析/写盘）；② 他的会话脚本内直接 `& CadClient.exe`；③ 跑次间机器负载/其他 agent 干扰（我 2025 的第 3 次 435、Classic 第 1 次 seq 全错均为干扰迹象）。
 **结论（不粉饰）**：按我这套独立 harness，"每产品 3 次 fresh 中位 <400" **未达成**（2025 453、Classic 424，均超 400）；core-cad 的正式协议数字为 2025 380.5 / Classic 326（达标）。**两套 harness 必须先对齐测量口径（同一会话脚本/同一计时点）才能给出唯一结论**——在未对齐前，E3 的 p50 项口径应记为"**未稳定达标（独立 harness 复跑 453；对方 harness 380）**"。
 
 **实体数无关性（O(1) 证据，本机 2025 冻结快照）**：顺序 1 warmup + 10 采样单实体 `entity` 写入，不同实体数的图：
@@ -169,7 +169,7 @@
 | ZWCAD 2025 | 待填 | 待填 | 待填 | 待填 |
 | ZWCAD Classic 16 | 待填 | 待填 | 待填 | 待填 |
 
-**测量卫生规则（后人必读）**：测量期间禁止改 `scripts\helper\*.cs` / `scripts\zwc.ps1` / `bin\ZwcClient.exe`（helper hash 变 → `CLIENT_FAILED: helper binary missing`，整轮作废）；用 **frozen 快照**（复制 scripts/helper/client 到私有目录 + 对副本 ngen）；**他人进程/daemon 干扰会直接毁掉一次测量**（本任务 2025/Classic 各浪费 1 轮），跑前确认产品窗口空闲、`serve -Action status`。
+**测量卫生规则（后人必读）**：测量期间禁止改 `scripts\helper\*.cs` / `scripts\cad.ps1` / `bin\CadClient.exe`（helper hash 变 → `CLIENT_FAILED: helper binary missing`，整轮作废）；用 **frozen 快照**（复制 scripts/helper/client 到私有目录 + 对副本 ngen）；**他人进程/daemon 干扰会直接毁掉一次测量**（本任务 2025/Classic 各浪费 1 轮），跑前确认产品窗口空闲、`serve -Action status`。
 
 ### 8.1 shape A 独立复跑明细（task-20）
 

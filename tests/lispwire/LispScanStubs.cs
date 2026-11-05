@@ -1,7 +1,7 @@
-// LispScanStubs.cs - test-only stand-ins for the ZwcHelper types LispScan.cs touches at compile time.
+// LispScanStubs.cs - test-only stand-ins for the CadHelper types LispScan.cs touches at compile time.
 //
 // Compiled ONLY by tests\selftest_lisp.ps1 together with LispScanTests.cs (never into
-// bin\cache\<sha>\ZwcHelper.exe, which compiles scripts\helper\*.cs and therefore the real types).
+// bin\cache\<sha>\CadHelper.exe, which compiles scripts\helper\*.cs and therefore the real types).
 //
 // The stubs are deliberately small but not inert: they simulate the CAD side of the pipeline so that
 // tests\lispwire\LispScanTests.cs can drive LispScan.Run end to end offline -
@@ -15,7 +15,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal sealed class Ctx
     {

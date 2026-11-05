@@ -1,7 +1,7 @@
 # 断面图计算侧（section-gen）交付说明
 
 > 对应 `DESIGN-M1.md` §4（断面图契约）/ §5（验收）。**本目录与 `scripts\section\**` 全部纯计算、零 COM，绝不启动 CAD。**
-> 写作用域：`scripts\section\**`、`tests\**`。CAD 侧（`scripts\zwc.ps1`、`scripts\helper\**`）属 core-cad 的域，勿改。
+> 写作用域：`scripts\section\**`、`tests\**`。CAD 侧（`scripts\cad.ps1`、`scripts\helper\**`）属 core-cad 的域，勿改。
 
 ## 1. 交付物
 
@@ -12,13 +12,13 @@
 | `tests\verify_model_self.py` | 模型**自洽**核对（任意 profile，独立重算 §4.2/§4.3 后比对 entities/computed/dataQuality） |
 | `tests\make_fixtures.py` | 生成 `tests\fixtures\*.xlsx`（可重复再生） |
 | `tests\make_expected.py` | **独立**按 §4.2/§4.3 算出 `section-30.expected.json`（不 import prepare.py） |
-| `tests\verify_section.py` | 独立核对器：吃 model.json 或 `zwc.ps1 read` 响应，逐项 PASS/FAIL；`--tamper` 负例自证 |
+| `tests\verify_section.py` | 独立核对器：吃 model.json 或 `cad.ps1 read` 响应，逐项 PASS/FAIL；`--tamper` 负例自证 |
 | `tests\check_dxf.py` | ezdxf 真实 DXF 内核往返复核（第三份实现，需 `tools\py-libs` 在 `PYTHONPATH`） |
 | `tests\run_m1.ps1` | 端到端 runner（纯 ASCII + UTF-8 BOM + CRLF）；`-DryRunOnly` / `-NoCad` 无 CAD 全绿 |
 | `tests\selftest.py` | 计算侧全量自测（41 项：基准/负例/反序/bad 用例/升档/变体/回读 schema） |
 | `tests\selftest_sections.py` | 断面提取两条路线自测（**85 项**，纯离线合成夹具，写 `tmp\selftest-sections\`，不需要 `%TEMP%` 真实数据）：`section_lib` 几何/网格索引与暴力解等价、两个薄入口逐格断言（含 **宽表整表逐格数值/顺序**）、坏输入/缺库负例 |
 | `tests\selftest_compare_source.py` | `--compare-source`（DB vs 源表逐点比对）自测（**84 项**，纯离线：脚本内合成 sqlite DB〔虚构站码 99000001〕+ 合成 yssd 多列块 xlsx〔含截断高程/偏差/缺批次〕，写 `tmp\selftest-compare-source\`）：`sourceCompare` 全字段、`byDate[]`/`differing[]` 数值、容差边界、`--drop-suspect` 组合口径、负例 BAD_ARGS/BAD_DB/BAD_DATA |
-| `tests\coreself\` | helper 纯逻辑离线套件（csc 编译，零 CAD）：`CoreTests.cs`（JMap/ZwcError/Ctx/Json 往返/State 内存态，**103 断言**）、`ComCmdTests.cs`（COM 反射晚绑定 + 重试策略 + Cmd 括号/提示符守卫，**131 断言**）——由 `tests\selftest_lisp.ps1` 统一跑 |
+| `tests\coreself\` | helper 纯逻辑离线套件（csc 编译，零 CAD）：`CoreTests.cs`（JMap/CadError/Ctx/Json 往返/State 内存态，**103 断言**）、`ComCmdTests.cs`（COM 反射晚绑定 + 重试策略 + Cmd 括号/提示符守卫，**131 断言**）——由 `tests\selftest_lisp.ps1` 统一跑 |
 | `tests\fixtures\section-30.xlsx` | 30 点合成断面（起点距 0..290 步长 10 m，高程 38.55..44.30 m，深泓第 15 点/140 m），表头行「起点距/高程」，D1/D2 附设计水位 42.30（供人读，程序从参数取） |
 | `tests\fixtures\section-30.expected.json` | 验收基准（实体清单 + `expected.total` + `bbox` + `computed`） |
 | `tests\fixtures\section-30-reversed.xlsx` | 同行序完全反向，验自动反转 + `ORDER_REVERSED` |
@@ -108,7 +108,7 @@ python scripts\section\prepare.py --data <xlsx> --out <json> [--sheet 名称|序
 python tests\verify_section.py --model <model.json 或 read.json> --expected <expected.json> [--tamper] [--tol 1e-6]
 ```
 
-- 输入两种形态自动识别：`prepare.py` 的 model（含 `entities[].role`）或 `zwc.ps1 read` 响应（`result.entities[].type/vertices|start,end|insertion|center`，AcDb* 名会归一）。read 形态无 `role` 时按「文字内容 + 最近位置」贪婪匹配；非 `layerPrefix` 图层实体自动过滤。
+- 输入两种形态自动识别：`prepare.py` 的 model（含 `entities[].role`）或 `cad.ps1 read` 响应（`result.entities[].type/vertices|start,end|insertion|center`，AcDb* 名会归一）。read 形态无 `role` 时按「文字内容 + 最近位置」贪婪匹配；非 `layerPrefix` 图层实体自动过滤。
 - 断言：实体总数 / 分类型 / 分图层 / 图层名 / 地面线顶点逐点（<1e-6）/ 水位线 y 与端点与线型 / 每处文字内容+位置+字高+图层+文字样式 / 基线+左竖线端点 / 深泓圆心半径 / bbox（<0.01 mm，§4.4）/ `computed` 各字段 / `points` 与 `pointsDetail` / `warnings`。
 - 退出码 `0` 全绿、`1` 有 FAIL。
 - `--tamper`：把地面线顶点#1 的 y +1.0 mm 后跑同一套断言，**抓到 FAIL 才算校验有效**（抓到→退出码 0；抓不到→1）。
@@ -121,7 +121,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -NoCad     
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 [-Doc <dwg>]  # 真画（需调用方已开图纸）
 ```
 
-步骤：`prepare.py` → `verify` → `check_dxf`（ezdxf 往返）→ **`lisp.wire`（C# 离线 6 套，调 `tests\selftest_lisp.ps1`）** → `verify --tamper` → 3 个 bad 用例 → `zwc.ps1 section -DryRun`（并与基准交叉核对 `result.expected`）→ 真画（`-DryRunOnly/-NoCad` 时跳过）→ `zwc.ps1 read` → `verify`。
+步骤：`prepare.py` → `verify` → `check_dxf`（ezdxf 往返）→ **`lisp.wire`（C# 离线 6 套，调 `tests\selftest_lisp.ps1`）** → `verify --tamper` → 3 个 bad 用例 → `cad.ps1 section -DryRun`（并与基准交叉核对 `result.expected`）→ 真画（`-DryRunOnly/-NoCad` 时跳过）→ `cad.ps1 read` → `verify`。
 
 - **绝不启动 CAD**：不传 `-Launch`，只 attach 已开实例。真画/回读在无 CAD 或 CAD 未开图时判 `SKIP` 而非 FAIL（`NO_INSTANCE`/`NO_CAD`/`NO_DOC` 等错误码）。
 - `--water` 由 runner 从 `expected.json` 运行时拼出（保证 `.ps1` 纯 ASCII）。
@@ -129,7 +129,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 [-Doc <dwg>
 - 编码纪律：`tests\run_m1.ps1` 必须是 **纯 ASCII + UTF-8 BOM + CRLF**（PS 5.1 按 ANSI 读含中文的 .ps1 会语法错）。改动后请重跑规范化：
   `BOM=EF BB BF`、无 >127 字节、`Parser::ParseFile` 无错。
 
-## 6. `zwc.ps1 read` 对 verify 的接口期待（已与 core-cad 对齐）
+## 6. `cad.ps1 read` 对 verify 的接口期待（已与 core-cad 对齐）
 
 ```
 {"ok":true,"cmd":"read","result":{"readPath":"com","counts":{...},"truncated":false,"entities":[
@@ -152,7 +152,7 @@ powershell -File tests\selftest_lisp.ps1        # C# 6 套：106+53+132+119+103+
 powershell -File tests\run_m1.ps1 -DryRunOnly -Python <python全路径>   # PASS 10 / FAIL 0 / SKIP 2（CAD 步按设计跳过）
 ```
 
-以上全部已接进 `.github\workflows\offline-ci.yml`（push/PR，windows runner，零 CAD）：首次实跑 11 步全绿（[run 41943999965](https://github.com/freeskychenjun/zwcad-cooperate/actions/runs/41943999965)）。跑 CI 等价环境时注意两件事：`run_m1.ps1` 的 `-Python` 要传**解析后的路径**（它对参数做 `Test-Path` 预检）；runner 控制台默认 **cp1252**，本目录脚本已各自 `reconfigure(encoding="utf-8", errors="replace")` 自保。
+以上全部已接进 `.github\workflows\offline-ci.yml`（push/PR，windows runner，零 CAD）：首次实跑 11 步全绿（[run 41943999965](https://github.com/freeskychenjun/cad-cooperate/actions/runs/41943999965)）。跑 CI 等价环境时注意两件事：`run_m1.ps1` 的 `-Python` 要传**解析后的路径**（它对参数做 `Test-Path` 预检）；runner 控制台默认 **cp1252**，本目录脚本已各自 `reconfigure(encoding="utf-8", errors="replace")` 自保。
 
 - 30 点 fixture → **67 实体**：`LWPOLYLINE 1 / LINE 3 / TEXT 62 / CIRCLE 1`；`AI-SEC-GROUND 1 / WATER 1 / ANNO 63 / AXIS 2`。
 - `bbox={x0:0,y0:10,x1:290,y1:125}`、`widthMm=290`、`heightMm=115`、`elevBase=38.05`、`scale=1000/50`、`autoScaled=true`。

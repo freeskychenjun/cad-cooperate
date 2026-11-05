@@ -1,7 +1,7 @@
 // Trust.cs - AutoCAD SECURELOAD gate for the LISP-file fast path.
 //
 // Measured on 2026-11-05 with AutoCAD 2021 (SECURELOAD=1, TRUSTEDPATHS empty):
-//   the LISP fast path injects `(load "<%TEMP%>\zwcad-cooperate\geom-xxxx.lsp")`, and AutoCAD
+//   the LISP fast path injects `(load "<%TEMP%>\cad-cooperate\geom-xxxx.lsp")`, and AutoCAD
 //   answered with the modal dialog "Security - Unsigned Executable File" (buttons Always Load /
 //   Load Once / Do Not Load). Autodesk documents SECURELOAD as covering LSP/FAS/VLX/MNL, so this is
 //   by design and not a bug in the script. The dialog blocks the whole application: COM answers
@@ -28,7 +28,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     /// <summary>SECURELOAD / TRUSTEDPATHS state of one attached CAD document, plus the path we load
     /// LISP files from.</summary>
@@ -178,7 +178,7 @@ namespace ZwcHelper
             LispTrust trust = LispTrust.Read(doc, autoCad, ctx);
             if (!trust.CanInject(ctx.ForceLispInject))
             {
-                throw new ZwcError("LISP_TRUST_BLOCKED",
+                throw new CadError("LISP_TRUST_BLOCKED",
                     "AutoCAD SECURELOAD=" + trust.SecureLoad.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     + " would show a security prompt for the LISP file in " + trust.TempDir
                     + ", so the fast path was skipped (nothing was injected)",
@@ -199,11 +199,11 @@ namespace ZwcHelper
             {
                 return LispScan.Run(doc, ctx, req, out meta, out phase);
             }
-            catch (ZwcError ze)
+            catch (CadError ze)
             {
                 if (ze.Code == "LISP_ABORTED" && guard != null && guard.Hit)
                 {
-                    throw new ZwcError("LISP_TRUST_BLOCKED",
+                    throw new CadError("LISP_TRUST_BLOCKED",
                         "AutoCAD's SECURELOAD prompt appeared while loading the LISP dump and was cancelled automatically",
                         "one-time fix: `trust -Action addTemp` (adds the temp dir to TRUSTEDPATHS), then retry; -ForceLispInject skips the preflight",
                         guard.Detail);
@@ -240,7 +240,7 @@ namespace ZwcHelper
             ThreadStart body = delegate { Loop(timeoutMs); };
             _thread = new Thread(body);
             _thread.IsBackground = true;
-            _thread.Name = "zwc-dialog-guard";
+            _thread.Name = "cad-dialog-guard";
             _thread.Start();
         }
 

@@ -1,9 +1,9 @@
-# DESIGN-M1：zwcad-cooperate v0.1（断面图首版）
+# DESIGN-M1：cad-cooperate v0.1（断面图首版）
 
 > 2026-11-04 用户决策锁定：① 只要「用户开着图纸、agent 当场改」的实时协作；② 公司同时用中望 CAD 与 AutoCAD，**两边都有多个版本**（跨版本是硬需求，AutoCAD 放第二阶段）；③ **不做图框/会签栏**；④ 纪律 = 默认不保存、改动一步可撤销、图上不留任何 AI 标记；⑤ 首场景 = **断面图**（Excel 起点距↔高程）；⑥ 比例/图幅/水位由参数指定，默认值可覆盖。
 > 实测依据全部在 `research/com-probe.md`，架构取舍见 `research/pattern.md` §1、§5；**实机验收记录见 `docs/M1-acceptance.md`**。
 >
-> **⚠ 环境更正（2026-11-04 验收时发现）**：本机装了**两套** ZWCAD，`ZWCAD.Application` 已被 64 位 **ZWCAD 2025 试用版**抢注（`{2F671EA1-…}`）；Classic 16 只能用 **`ZWCAD.Application.16`**（`{FB081ED6-…}`）。helper 默认 `.16` 优先、其余兜底，`-ProgId` 可覆盖。另：`zwc.ps1` 曾因参数名归一化缺失（`-ProgId` → `progid`，helper 只认 `progId`）而**静默附着到 2025**，已修（`keyMap`）。
+> **⚠ 环境更正（2026-11-04 验收时发现）**：本机装了**两套** ZWCAD，`ZWCAD.Application` 已被 64 位 **ZWCAD 2025 试用版**抢注（`{2F671EA1-…}`）；Classic 16 只能用 **`ZWCAD.Application.16`**（`{FB081ED6-…}`）。helper 默认 `.16` 优先、其余兜底，`-ProgId` 可覆盖。另：`cad.ps1` 曾因参数名归一化缺失（`-ProgId` → `progid`，helper 只认 `progId`）而**静默附着到 2025**，已修（`keyMap`）。
 
 ---
 
@@ -16,7 +16,7 @@
 | LISP 结果回传只用 `GetLispVariable`（**标量**）+ `SendCommand` | 列表回传 `E_INVALIDARG`；拼串返回字符串可行（288 KB 实测可） |
 | 单条 `SendCommand` 字符串 **≤ 2 KB**，且分片后每条都要校验 `LASTPROMPT` | 1944 字符 ✅ / 3864 字符 ❌ **静默失败**；语法错会把命令态污染成 `Missing: 2) >` 吞掉后续命令 |
 | 一批写操作 = 一个 `StartUndoMark`/`EndUndoMark` 组 | 实测 10 次 COM 编辑合成 1 步撤销；一条 SendCommand 天然 1 步 |
-| 中间文件一律落 `%TEMP%\zwcad-cooperate\<sha>\` | DGS 按扩展名加密：`.dxf` 落盘即密文；写工作区曾 15 s 超时 |
+| 中间文件一律落 `%TEMP%\cad-cooperate\<sha>\` | DGS 按扩展名加密：`.dxf` 落盘即密文；写工作区曾 15 s 超时 |
 | 用户没开 CAD 时**默认不自动起实例**（冷启动 8–9 s + 可能弹授权框）；`-Launch` 显式才起 | 实测冷启动 8.0–9.4 s |
 | 本次起的实例收尾必须 `doc.Close($false)` + `app.Quit()` | 直接 `Quit()` 遇脏文档弹保存框留僵尸进程；组合调用 5.4–6.9 s、0 残留 |
 | 忙闲判据：`GetVariable("CMDACTIVE")` + `LASTPROMPT` 文本 | `IsQuiescent` 不可靠（30000 实体批量时仍 True） |
@@ -29,14 +29,14 @@
 
 ```
 用户/agent
-  └─ powershell -NoProfile -ExecutionPolicy Bypass -Mta -File scripts\zwc.ps1 <命令> [参数]
+  └─ powershell -NoProfile -ExecutionPolicy Bypass -Mta -File scripts\cad.ps1 <命令> [参数]
         ├─ (可选) python scripts\section\prepare.py  xlsx → section.model.json   [纯计算，零 COM]
-        └─ bin\ZwcHelper.exe --request <req.json> --response <resp.json>          [STA，一次性]
+        └─ bin\CadHelper.exe --request <req.json> --response <resp.json>          [STA，一次性]
               └─ COM 晚绑定 → 用户已开的 CAD 实例 → 操作 ActiveDocument
 ```
 
 - **M1 不引入常驻 daemon**：附着只要 191 ms、命令本体 ms 级，一次性进程足够；daemon 留到 M3（跨命令会话状态/快照缓存）。
-- helper 编译：`csc.exe` 按源码哈希缓存到 `bin\cache\<sha12>\ZwcHelper.exe`（照 WPS 做法，避免每条命令 300 ms 编译）。
+- helper 编译：`csc.exe` 按源码哈希缓存到 `bin\cache\<sha12>\CadHelper.exe`（照 WPS 做法，避免每条命令 300 ms 编译）。
 - **所有中文/长文本/几何参数走 JSON 文件**，命令行只传 ASCII（PS 5.1 按 ANSI 读 .ps1、cmd 吞 `^`/`=`/`%`）。
 - 输出：**单段 JSON**（唯一判据看顶层 `ok`）；退出码 0/2（`ok:false`）/3（门禁失败）。
 
@@ -135,8 +135,8 @@ origin    = [0,0] 平移；最终 bbox 宽度 = (offset_max-offset_min)*1000/hSc
 
 | 角色 | 写作用域 | 交付 |
 |---|---|---|
-| **core-cad** | `scripts\zwc.ps1`、`scripts\zwc.cmd`、`scripts\lib\*.ps1`、`scripts\helper\**`（C#）、`bin\`（编译缓存，仅运行时生成） | 可用的 9 条命令 + 编译缓存 + 忙/错处理；`doctor/section` 必须真跑通 |
+| **core-cad** | `scripts\cad.ps1`、`scripts\cad.cmd`、`scripts\lib\*.ps1`、`scripts\helper\**`（C#）、`bin\`（编译缓存，仅运行时生成） | 可用的 9 条命令 + 编译缓存 + 忙/错处理；`doctor/section` 必须真跑通 |
 | **section-gen** | `scripts\section\*.py`、`tests\fixtures\*`、`tests\verify_section.py`、`tests\run_m1.ps1` | xlsx→section.model.json（含比例自动选档、校验、负例用例）、ezdxf 独立复核脚本、验收 runner |
 | **Lead** | `DESIGN-m1.md`、`SKILL.md`（M1 之后）、集成、实机验收 | 裁决与最终验收 |
 
-**接口冻结**：`prepare.py` 输出 `section.model.json`（字段见 §4.2/4.3），`zwc.ps1 section -Data` 调它；helper 只吃 JSON，不解析 xlsx（Python 侧用 openpyxl，已装 3.1.5）。
+**接口冻结**：`prepare.py` 输出 `section.model.json`（字段见 §4.2/4.3），`cad.ps1 section -Data` 调它；helper 只吃 JSON，不解析 xlsx（Python 侧用 openpyxl，已装 3.1.5）。

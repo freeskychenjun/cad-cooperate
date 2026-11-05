@@ -4,7 +4,7 @@
 // to 15-20 s - not COM, not the helper, but plain contention. The pieces here make concurrent use
 // safe and bounded:
 //
-//   * DocLock: a cross-process named mutex per drawing ("Local\zwc-doc-<sha16(fullpath)>");
+//   * DocLock: a cross-process named mutex per drawing ("Local\cad-doc-<sha16(fullpath)>");
 //     write commands take it, readers do not. Waiting is bounded (-LockTimeout) and a timeout is a
 //     clean DOC_LOCKED with the holder's identity (pid/progId/startedAt) so callers can retry.
 //   * Busy: CMDACTIVE / LASTPROMPT / modal-dialog detection with bounded retry (-BusyTimeout),
@@ -26,7 +26,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static class Stability
     {
@@ -81,7 +81,7 @@ namespace ZwcHelper
             if (timeout < 0) timeout = 0;
             string key = Sha16(DocKeyOf(doc));
             DocLockHandle h = new DocLockHandle();
-            h.Name = @"Local\zwc-doc-" + key;
+            h.Name = @"Local\cad-doc-" + key;
             h._holderPath = Path.Combine(LockDir(), key + ".json");
             try { h._mutex = new Mutex(false, h.Name); }
             catch (Exception) { h.Acquired = true; return h; }   // no mutex support: never block the tool
@@ -100,7 +100,7 @@ namespace ZwcHelper
                 detail.Add("holder", holder);
                 detail.Add("waitedMs", h.WaitedMs);
                 detail.Add("lock", h.Name);
-                throw new ZwcError("DOC_LOCKED",
+                throw new CadError("DOC_LOCKED",
                     "another session is writing to this drawing (held " + h.WaitedMs + " ms, timeout " + timeout + " ms)",
                     "retry later, raise -LockTimeout, or ask the other session to finish",
                     Json.Write(detail));
@@ -317,7 +317,7 @@ namespace ZwcHelper
                 det.Add("reason", "fault-inject");
                 det.Add("waitedMs", simSw2.ElapsedMilliseconds);
                 det.Add("injected", "busy");
-                throw new ZwcError("BUSY_TIMEOUT", "FAULT_INJECT: simulated busy state exceeded " + timeout + " ms",
+                throw new CadError("BUSY_TIMEOUT", "FAULT_INJECT: simulated busy state exceeded " + timeout + " ms",
                     "injection is a test hook (-FaultInject busy); the real CAD prompt was not touched", Json.Write(det));
             }
             Stopwatch sw = Stopwatch.StartNew();
@@ -374,7 +374,7 @@ namespace ZwcHelper
                     string hint = p.Reason == "prompt-polluted"
                         ? "send ESC in CAD (or run the tool again) so the command prompt returns to Command:"
                         : "finish the command in CAD, close the dialog, or press ESC; retry with -BusyTimeout for a longer wait";
-                    throw new ZwcError(code, "CAD stayed busy for " + sw.ElapsedMilliseconds + " ms (" + p.Reason + ")", hint, Json.Write(detail));
+                    throw new CadError(code, "CAD stayed busy for " + sw.ElapsedMilliseconds + " ms (" + p.Reason + ")", hint, Json.Write(detail));
                 }
                 Thread.Sleep(50);
             }
@@ -542,7 +542,7 @@ namespace ZwcHelper
             {
                 doc = cad.ResolveDoc(Commands.DocArgOf(req, args), args.Bool("allowActive", false), ctx, out matchedBy);
             }
-            catch (ZwcError e)
+            catch (CadError e)
             {
                 bool planOnly = args.Bool("dryRun", false)
                     || string.Equals(args.Str("mode", ""), "plan", StringComparison.OrdinalIgnoreCase);
@@ -554,7 +554,7 @@ namespace ZwcHelper
                 }
                 else if (e.Code == "DOC_NOT_FOUND")
                 {
-                    ZwcError gone = new ZwcError("DOC_GONE",
+                    CadError gone = new CadError("DOC_GONE",
                         "the drawing is no longer open in CAD: " + (e.Message ?? ""),
                         "re-open it (open -Doc <path>) or pass -Launch; nothing was written", e.Detail);
                     throw gone;

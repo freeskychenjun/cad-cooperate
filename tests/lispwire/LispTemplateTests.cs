@@ -1,6 +1,6 @@
 // LispTemplateTests.cs - offline unit tests for scripts\helper\LispTemplate.cs (M3-E6 P1-4.1).
 //
-// Compiled by tests\selftest_lisp.ps1 together with LispTemplate.cs + LispWire.cs + ZwcErrorStub.cs.
+// Compiled by tests\selftest_lisp.ps1 together with LispTemplate.cs + LispWire.cs + CadErrorStub.cs.
 // No CAD, no COM, no JMap: everything here is pure string/file logic, so the safety gate and the
 // generated script shape are asserted before anything is ever injected into a drawing.
 //
@@ -14,7 +14,7 @@
 using System;
 using System.IO;
 using System.Text;
-using ZwcHelper;
+using CadHelper;
 
 internal static class LispTemplateTests
 {
@@ -38,7 +38,7 @@ internal static class LispTemplateTests
 
     private static void Main()
     {
-        string temp = Path.Combine(Path.GetTempPath(), "zwc-lisptpl-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+        string temp = Path.Combine(Path.GetTempPath(), "cad-lisptpl-" + Guid.NewGuid().ToString("N").Substring(0, 8));
         Directory.CreateDirectory(temp);
         try
         {
@@ -68,9 +68,9 @@ internal static class LispTemplateTests
         Check("tpl.geom.balance", LispTemplate.BalanceError(src) == null);
         Check("tpl.geom.safety", LispTemplate.SafetyError(src) == null);
         Check("tpl.geom.has-error-handler", src.IndexOf("(defun *error* (msg)", StringComparison.Ordinal) >= 0);
-        Check("tpl.geom.handler-closes-txt", src.IndexOf("(close _zwc_f)", StringComparison.Ordinal) >= 0);
-        Check("tpl.geom.handler-restores-cmdecho", src.IndexOf("(setvar \"CMDECHO\" _zwc_echo)", StringComparison.Ordinal) >= 0);
-        Check("tpl.geom.restores-old-error-twice", CountOf(src, "(setq *error* _zwc_olderr)") == 2);
+        Check("tpl.geom.handler-closes-txt", src.IndexOf("(close _cad_f)", StringComparison.Ordinal) >= 0);
+        Check("tpl.geom.handler-restores-cmdecho", src.IndexOf("(setvar \"CMDECHO\" _cad_echo)", StringComparison.Ordinal) >= 0);
+        Check("tpl.geom.restores-old-error-twice", CountOf(src, "(setq *error* _cad_olderr)") == 2);
         Check("tpl.geom.has-start-sentinel", src.IndexOf("__START__", StringComparison.Ordinal) >= 0);
         Check("tpl.geom.has-done-sentinel", src.IndexOf("__DONE__|", StringComparison.Ordinal) >= 0);
         Check("tpl.geom.has-radius-record", src.IndexOf("\"R|\"", StringComparison.Ordinal) >= 0);
@@ -78,7 +78,7 @@ internal static class LispTemplateTests
 
         int iHandler = src.IndexOf("(defun *error* (msg)", StringComparison.Ordinal);
         int iStart = src.IndexOf("__START__", StringComparison.Ordinal);
-        int iOpenTxt = src.IndexOf("(setq _zwc_f (open", StringComparison.Ordinal);
+        int iOpenTxt = src.IndexOf("(setq _cad_f (open", StringComparison.Ordinal);
         int iDone = src.IndexOf("__DONE__|", StringComparison.Ordinal);
         Check("tpl.geom.order-handler-first", iHandler >= 0 && iHandler < iStart);
         Check("tpl.geom.order-start-before-dump", iStart >= 0 && iStart < iOpenTxt);
@@ -146,7 +146,7 @@ internal static class LispTemplateTests
         Check("safety.allows-defun-with-readonly-body",
             LispTemplate.SafetyError("(defun f (a b) (if a (princ b)))") == null);
         Check("safety.allows-plain-dump-calls",
-            LispTemplate.SafetyError("(progn (ssget \"X\") (write-line \"x\" _zwc_f) (close _zwc_f) (princ))") == null);
+            LispTemplate.SafetyError("(progn (ssget \"X\") (write-line \"x\" _cad_f) (close _cad_f) (princ))") == null);
         Check("safety.rejects-unknown-symbol", LispTemplate.SafetyError("(progn (frobnicate 1))") != null);
     }
 

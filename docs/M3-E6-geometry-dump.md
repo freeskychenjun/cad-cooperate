@@ -1,6 +1,6 @@
 # M3-E6：大图几何快路径与 LISP 脚本纪律（教训固化）
 
-> 起因：2026-11-04 用 `zwcad-cooperate` 处理用户真实图纸 `东总干渠1+300~16+500地形图20261020.dwg`
+> 起因：2026-11-04 用 `cad-cooperate` 处理用户真实图纸 `东总干渠1+300~16+500地形图20261020.dwg`
 > （36,558 实体 / 17 图层 / 304 条断面线），目标是提取每条断面线的「起点距—高程」并出 Excel。
 > 任务最终成功，但**耗时约 50 分钟**，其中真正取数只需 1–2 分钟。本文固化两条教训与待补能力。
 
@@ -48,7 +48,7 @@ handle | type | layer | text
 ## 四、断面提取的产出与口径（本次交付，供复用）
 
 - 脚本：`scripts\section\build_sections_from_dmx.py`
-- 输入：`%TEMP%\zwcad-cooperate\geom-com.json`（实体几何）+ `contours.json`（等高线 + Elevation）
+- 输入：`%TEMP%\cad-cooperate\geom-com.json`（实体几何）+ `contours.json`（等高线 + Elevation）
 - 识别规则：断面线 = `dmx` 层直线；桩号 = `KZD` 层 `\d+\+\d+` 文字（8 m 内 1:1 匹配）；高程点 = `ZDH` 层 POINT 的 Z（≠0）；补点 = `DGX` 等高线与断面线求交
 - 起点距：面朝下游（桩号增大方向）的**左岸为 0**
 - 实测：304 条断面、6,647 个高程点 + 2,803 个等高线交点 = 9,450 个剖面点；同图重跑 10 s
@@ -79,7 +79,7 @@ handle | type | layer | text
 | `scripts/helper/LispScan.cs` | **注入管道唯一实现**（2026-11-05 从两个 Scan 抽出）：CMDACTIVE/LASTPROMPT 守卫 → ssget 过滤串 → 生成+写盘+`SendCommand` 注入 → 两阶段哨兵等待 → GBK 读回 → finally CMDECHO 还原 + 成功删档/失败 `*.orphan` 留证。纯函数可离线单测（过滤串/路径/load 命令/哨兵计数/GBK/phase/清理决策）。 |
 | `scripts/helper/LispWire.cs` | **文本线协议唯一解析实现**：escape-aware `SplitRecord`、`UnescapeField`、`ParseGeometry`/`ParseFlat`、`R|`→`radius`；`LispSentinelPhase`（phase 分类）与 `LispOrphans`（清理决策）也在此（BCL-only，可离线编译）。 |
 | `scripts/helper/LispGeom.cs` / `LispFile.cs` | **薄入口**：只负责 request 参数（geom/flat、`scan-`/`geom-` 前缀、错误文案）+ 解析回调 + `LispRecord`→`JMap` 映射（字段名/顺序即 `read`/`query` 的输出契约，按 `AuxOrder` 回放保持顺序）。 |
-| `ZwcHelper.Read` | `-Mode geom` 在"无 LISP 桥 + 实体数 > `-LispThreshold`（默认 2000）"时自动走 LispGeom，响应 `readPath:"lisp-file-geom"`；失败回退 COM + `LISP_GEOM_FALLBACK`（对 geom 而言 COM 很慢，故仅在 LISP 不可用时发生）。 |
+| `CadHelper.Read` | `-Mode geom` 在"无 LISP 桥 + 实体数 > `-LispThreshold`（默认 2000）"时自动走 LispGeom，响应 `readPath:"lisp-file-geom"`；失败回退 COM + `LISP_GEOM_FALLBACK`（对 geom 而言 COM 很慢，故仅在 LISP 不可用时发生）。 |
 | `lispgen` debug 命令 | 不 attach CAD，只生成 `.lsp` 到文件并回 `{path,bytes,ascii,balance}`，供测试/审查（本轮用它验证生成器）。 |
 | `Queries` | E5 的 `query` 也改为调用同一生成器（ASCII/括号/安全校验），`-Type` 仍下推 ssget。 |
 
@@ -118,12 +118,12 @@ handle | type | layer | text
 - **`*error*` 处理器**：脚本开头保存旧 `*error*`，安装「关文件 + 还原 CMDECHO + 还原旧 `*error*`」的处理器；正常收尾也还原。`SafetyError` 白名单为此新增 `defun`，但**跳过形参表**、`forbidden` 表与只读语义不变（`defun` 体内出现 `command` 仍被拒，有离线负例）。
 - **两阶段哨兵**：脚本**先写 `__START__`**（独立 `.start` 文件）再做重活；超时后区分「注入未执行」（无 `__START__` ⇒ 新错误码 `LISP_NOT_STARTED`，提示查 CAD 忙/模态框/命令态）与「执行中卡死」（`LISP_FILE_TIMEOUT`，`error.detail` 带 `phase=started|not-started`）。
 - **超时不再删正在写的文件**：失败/超时把 `.lsp/.start/.txt/.done` 改名 `*.orphan` 留证（CAD 可能还在写），每次扫描开头清理 **>24 h** 的 `*.orphan` 与遗留 `scan-*/geom-*`（失败静默）。
-- 真机证据（2026-11-05）：`CMDECHO` 全量 read 前后均 **1**；成功路径 `%TEMP%\zwcad-cooperate` 中 `geom-*/scan-*` 计数 **0**；`FileSystemWatcher` 抓到 `geom-f7a56e0a3ce4.start 01:12:05.953 → .done 01:12:07.403`（另一次 01:14:20.308 → 01:14:21.741），即 `__START__` 先于 `__DONE__`；预置 mtime=25h 的 `geom-*.txt` 与 `.orphan` 均被清、mtime=now 的 `.orphan` 保留（24 h 宽限）。超时分支因 **Read 失败会 `LISP_FILE_FALLBACK` 回退 COM 全扫（41k≈10 min）**，按代价权衡改为**纯函数离线单测**（`LispOrphans`/`LispSentinelPhase` + `LispScan` 的 phase/清理决策，含在 C# 离线 6 套 644 断言里），不做端到端触发。
+- 真机证据（2026-11-05）：`CMDECHO` 全量 read 前后均 **1**；成功路径 `%TEMP%\cad-cooperate` 中 `geom-*/scan-*` 计数 **0**；`FileSystemWatcher` 抓到 `geom-f7a56e0a3ce4.start 01:12:05.953 → .done 01:12:07.403`（另一次 01:14:20.308 → 01:14:21.741），即 `__START__` 先于 `__DONE__`；预置 mtime=25h 的 `geom-*.txt` 与 `.orphan` 均被清、mtime=now 的 `.orphan` 保留（24 h 宽限）。超时分支因 **Read 失败会 `LISP_FILE_FALLBACK` 回退 COM 全扫（41k≈10 min）**，按代价权衡改为**纯函数离线单测**（`LispOrphans`/`LispSentinelPhase` + `LispScan` 的 phase/清理决策，含在 C# 离线 6 套 644 断言里），不做端到端触发。
 
 ### 6.3 已知限制（本轮实测确认，协议未变）
 
 **单次 `read -Mode geom` 的响应体过大时无法返回**：全量 41,413 实体时，LISP 通道本身**只有 ≈1.45 s**（dump 文件 4,801,512 B，与改动前基线**逐字节相同**）、扫描完全成功并自清理，但「41k 实体 → JSON 响应」这一步产生不出应答：
-- 经 `ZwcClient`：客户端 180 s 超时被杀，**stdout 0 字节**；
+- 经 `CadClient`：客户端 180 s 超时被杀，**stdout 0 字节**；
 - 绕开 client/管道直连 one-shot helper：进程 237,512 ms 后退出，**未写出 response 文件**，stdout/stderr 均空。
 - 该失败形态在改动前就存在（`tmp\evidence-e6\geom-36558.json`，2026-11-04，同形 `TIMEOUT`），与本次改动无关。
 - **可用做法**：`-Limit` 分页（实测最大成功档 `-Limit 500` = 152,422 B JSON，其背后的 dump 仍是全量 41,413 实体）；或直接消费 `%TEMP%` 里的 dump 文件（`build_sections_*.py` 走的就是这条）。

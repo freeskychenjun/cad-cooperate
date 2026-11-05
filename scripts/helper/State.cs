@@ -1,8 +1,8 @@
 // State.cs - session state persisted across helper processes
-// (%TEMP%\zwcad-cooperate\state.json: which instance we launched, caption originals, undo
+// (%TEMP%\cad-cooperate\state.json: which instance we launched, caption originals, undo
 // tokens; the only cross-process memory the helper has).
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). No logic,
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). No logic,
 // no visibility, no field order and no message text was changed.
 
 using System;
@@ -12,17 +12,17 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
-    // Session state (%TEMP%\zwcad-cooperate\state.json): which instance we launched, caption
+    // Session state (%TEMP%\cad-cooperate\state.json): which instance we launched, caption
     // originals, undo tokens. M1 has no daemon, so this file is the only cross-process memory.
     // ======================================================================================
     internal static class State
     {
         public static string Dir()
         {
-            string d = Path.Combine(Path.GetTempPath(), "zwcad-cooperate");
+            string d = Path.Combine(Path.GetTempPath(), "cad-cooperate");
             try { if (!Directory.Exists(d)) Directory.CreateDirectory(d); }
             catch (Exception) { }
             return d;

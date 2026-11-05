@@ -1,4 +1,4 @@
-# zwcad-cooperate 项目分析与优化方案
+# cad-cooperate 项目分析与优化方案
 
 > **执行状态（2026-11-05 更新）**：本报告的建议已逐项评审并执行 —— 第一轮（P0/P1/P3 + 工程化）与**第二轮（5.3 / 4.4 / 4.2 / 5.1 第一批 / 5.5）**的采纳决策、实际改动与验证证据见
 > [`docs/optimization-executed-2026-11-05.md`](optimization-executed-2026-11-05.md)（第二轮见该文 §八）。本文保持原样作为**分析底稿**（不改写结论；文中行号是分析当时的快照）。
@@ -15,12 +15,12 @@
 
 ```
 用户/Agent
-  │  bin\ZwcClient.exe（原生客户端，60–100 ms 启动）
-  │     ├─ ① 连常驻 daemon 命名管道（zwc-<源码哈希12位>）
-  │     ├─ ② 无 daemon → 跨进程互斥锁下拉起 ZwcHelper.exe --serve（隐藏窗口）
+  │  bin\CadClient.exe（原生客户端，60–100 ms 启动）
+  │     ├─ ① 连常驻 daemon 命名管道（cad-<源码哈希12位>）
+  │     ├─ ② 无 daemon → 跨进程互斥锁下拉起 CadHelper.exe --serve（隐藏窗口）
   │     └─ ③ 仍失败 → one-shot helper（临时文件进出）
   ▼
-ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文件）
+CadHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文件）
   │  COM 晚绑定（无互操作程序集）→ 中望CAD 2016/2025、AutoCAD 2007
   │  读快路径：LISP ssget+entget 写 %TEMP% 文本 + __DONE__ 哨兵（36 k 实体 0.4 s vs COM 310 s）
   ▼
@@ -33,11 +33,11 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 | 组件 | 行数 | 说明 |
 |---|---|---|
-| `scripts/helper/ZwcHelper.cs` | 4,354 | 巨石文件：JMap/Json/Com/State/Cad/Commands/Program/Daemon 全在其中 |
+| `scripts/helper/CadHelper.cs` | 4,354 | 巨石文件：JMap/Json/Com/State/Cad/Commands/Program/Daemon 全在其中 |
 | `scripts/section/prepare.py` | 2,048 | Excel 双后端 + yssd 解析 + SQLite + 建模 + CLI 混在一起 |
 | `scripts/audit/audit.py` | 1,657 | 规则引擎 + 报告渲染 + CLI |
 | `scripts/helper/Edits.cs` / `SectionOverlay.cs` | 1,071 / 1,033 | 写原语 / 断面绘制 |
-| `scripts/client/ZwcClient.cs` | 634 | 原生客户端（本次已读全文） |
+| `scripts/client/CadClient.cs` | 634 | 原生客户端（本次已读全文） |
 | `scripts/helper/LispFile/LispGeom/LispTemplate.cs` | 285/238/252 | E5/E6 LISP 快路径（M3-E6 新增后两者未跟踪） |
 | `build_sections_from_dmx.py` / `build_sections_gcd.py` | 311 / 269 | 两脚本约 50–55% 逐行重复 |
 
@@ -60,12 +60,12 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 | 4 | **P0** | `.gitignore` 缺 `/output/`、`*.dwl` | 一条 `git add -A` 就提交真实工程数据+机器信息 | output/ 1.1 MB 成品；design-water.dwl 含用户名/主机名 |
 | 5 | **P1** | LISP 超时后脚本可能仍在 CAD 内运行 | %TEMP% 残留、CMDECHO 可能未恢复（已有一次真实事故） | M3-E6 §5.2；LispFile/LispGeom 的 finally 直接删文件 |
 | 6 | **P1** | `LispFile.Scan` 与 `LispGeom.Scan` 约 60% 重复 | 双份守卫/轮询/解码逻辑，改一处漏一处 | 两文件 39-99 行近乎逐字相同 |
-| 7 | **P1** | bin/cache 无淘汰（105 exe/13 MB/33 空目录） | 日级增速无限膨胀 | 见 §4.3；zwc.ps1 全文仅 1 处 Remove-Item |
+| 7 | **P1** | bin/cache 无淘汰（105 exe/13 MB/33 空目录） | 日级增速无限膨胀 | 见 §4.3；cad.ps1 全文仅 1 处 Remove-Item |
 | 8 | **P1** | Python 侧多处方/嵌套循环 + 静默吞错 | 数据量增大后平方级变慢；查询失败与无记录不可区分 | prepare.py:1137-1141；build_sections_from_dmx.py:139-157 等 |
-| 9 | **P2** | ZwcHelper.cs 4,354 行巨石 | 每次改动触发全量重编译缓存失效 + 定位困难 | §1.2 |
-| 10 | **P2** | 哈希配方三处独立实现 | 三者不一致时 client/daemon/缓存互不匹配 | ZwcClient.cs:53-80、zwc.ps1 两处 |
+| 9 | **P2** | CadHelper.cs 4,354 行巨石 | 每次改动触发全量重编译缓存失效 + 定位困难 | §1.2 |
+| 10 | **P2** | 哈希配方三处独立实现 | 三者不一致时 client/daemon/缓存互不匹配 | CadClient.cs:53-80、cad.ps1 两处 |
 | 11 | **P2** | build_sections 两脚本 50-55% 重复 | 缺陷修一份漏一份 | difflib 实测 |
-| 12 | **P2** | 编辑残留与死代码 | ZwcHelper.cs 重复行×2、qa_yssd 死参数 | ZwcHelper.cs:4162-4163, 2070-2071；qa_yssd.py:358 |
+| 12 | **P2** | 编辑残留与死代码 | CadHelper.cs 重复行×2、qa_yssd 死参数 | CadHelper.cs:4162-4163, 2070-2071；qa_yssd.py:358 |
 | 13 | **P3** | 无 requirements.txt；py-libs 兜底缺 openpyxl | 离线环境必挂；依赖只活在 README 散文里 | README.md:112,326 |
 | 14 | **P3** | 无 CI | 139 项离线断言只能手工跑 | 仓库无 .github/ |
 | 15 | **P3** | 文档悬空引用 | 4 张 png 无引用；tmp/real 契约文档被 ignore | docs/section-*.png；tests/README §9 |
@@ -84,7 +84,7 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 ### 3.2 `R|`（半径）记录有生成、无消费
 
-- **证据**：模板为 CIRCLE/ARC 输出 `R|handle|radius`（LispTemplate.cs:237）；`LispFile.IsAuxRecord` 把 R 列为"忽略"（LispFile.cs:278）；`LispGeom.Scan` 的记录分派只有 V/P2/ELEV/H/CL（LispGeom.cs:143-166）；而 COM 路径返回 `radius` 字段（ZwcHelper.cs:2730）。
+- **证据**：模板为 CIRCLE/ARC 输出 `R|handle|radius`（LispTemplate.cs:237）；`LispFile.IsAuxRecord` 把 R 列为"忽略"（LispFile.cs:278）；`LispGeom.Scan` 的记录分派只有 V/P2/ELEV/H/CL（LispGeom.cs:143-166）；而 COM 路径返回 `radius` 字段（CadHelper.cs:2730）。
 - **影响**：同一张图走 `lisp-file-geom` 与走 COM 得到的圆/弧实体字段不一致——下游若依赖 radius（如审计规则、几何计算）会静默缺失。
 - **方案**：`LispGeom` 增加 `else if (kind == "R")` 分支写入 `m.Add("radius", Num(p[2]))`；`LispFile` 的 IsAuxRecord 保持不变。同时在 SKILL.md「能力边界」表更新该行为。
 - **工作量**：0.25 人日。
@@ -120,10 +120,10 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 ### 4.1 LISP 注入超时后的"孤儿脚本"治理（有真实事故史）
 
-- **证据**：`LispFile/LispGeom.Scan` 超时抛 `LISP_FILE_TIMEOUT` 后，finally 立即删三个临时文件（LispFile.cs:228-234）。但 CAD 内的 LISP 仍在执行：它随后 `open` 同名路径会**重建 txt/done 文件**（%TEMP% 垃圾越积越多），且若脚本中途出错，`(setvar "CMDECHO" _zwc_echo)` 恢复行不会执行——M3-E6 §5.2 记录了用户图纸 CMDECHO 被留 0 的真实事故（人工 `(setvar "CMDECHO 1)` 才恢复）。
+- **证据**：`LispFile/LispGeom.Scan` 超时抛 `LISP_FILE_TIMEOUT` 后，finally 立即删三个临时文件（LispFile.cs:228-234）。但 CAD 内的 LISP 仍在执行：它随后 `open` 同名路径会**重建 txt/done 文件**（%TEMP% 垃圾越积越多），且若脚本中途出错，`(setvar "CMDECHO" _cad_echo)` 恢复行不会执行——M3-E6 §5.2 记录了用户图纸 CMDECHO 被留 0 的真实事故（人工 `(setvar "CMDECHO 1)` 才恢复）。
 - **方案**（按代价从低到高，可只做前两条）：
-  1. 模板注册 AutoLISP 错误处理器：脚本开头 `(defun *error* (msg) (setvar "CMDECHO" _zwc_echo) (princ))`，LISP 出错也恢复 CMDECHO（需在白名单增加 `defun`、`*error*`，仍保持只读语义）。
-  2. 超时路径不删 txt/lsp（只删 helper 侧可确定性拥有的部分），改为重命名留档（如 `<guid>.orphan`），并在报错 hint 里告知"检查 %TEMP%\zwcad-cooperate"；下次 scan 启动时清理超过 24 h 的孤儿文件。
+  1. 模板注册 AutoLISP 错误处理器：脚本开头 `(defun *error* (msg) (setvar "CMDECHO" _cad_echo) (princ))`，LISP 出错也恢复 CMDECHO（需在白名单增加 `defun`、`*error*`，仍保持只读语义）。
+  2. 超时路径不删 txt/lsp（只删 helper 侧可确定性拥有的部分），改为重命名留档（如 `<guid>.orphan`），并在报错 hint 里告知"检查 %TEMP%\cad-cooperate"；下次 scan 启动时清理超过 24 h 的孤儿文件。
   3. 哨兵分两阶段：脚本第一行先写 `__START__`，超时时若只见 `__START__` 无 `__DONE__`，错误信息明确区分"注入未执行"（管道/命令态问题）与"执行中卡死"（图太大/超时太短）。
 - **验证**：`-FaultInject` 体系加一条"故意生成除零的 LISP"（仅测试模式绕过白名单）验证 CMDECHO 恢复；离线单测 `LispTemplate.BalanceError` 覆盖 *error* 定义后的括号配平。
 - **工作量**：1–1.5 人日。**风险**：中——改的是注入模板，必须过 lispgen + 小筛选真机回归。
@@ -137,11 +137,11 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 ### 4.3 bin/cache 编译缓存淘汰
 
-- **证据**：138 个 sha12 目录、105 个 ZwcHelper.exe（avg 127 KB，共 13.0 MB）、**33 个空目录**（编译失败残留：`EnsureHelper` 先 `Directory.CreateDirectory` 后编译，失败不回滚，ZwcClient.cs:368-394）；zwc.ps1 全文仅 1 处 Remove-Item；无任何 LRU/上限。源码每改一次永久 +127 KB。
+- **证据**：138 个 sha12 目录、105 个 CadHelper.exe（avg 127 KB，共 13.0 MB）、**33 个空目录**（编译失败残留：`EnsureHelper` 先 `Directory.CreateDirectory` 后编译，失败不回滚，CadClient.cs:368-394）；cad.ps1 全文仅 1 处 Remove-Item；无任何 LRU/上限。源码每改一次永久 +127 KB。
 - **方案**：
-  1. `EnsureHelper`/zwc.ps1 编译失败时删除刚建的空 cacheDir；
+  1. `EnsureHelper`/cad.ps1 编译失败时删除刚建的空 cacheDir；
   2. daemon 启动与 `serve` 命令处顺带做轻量维护：按目录 mtime 保留最近 N（如 10）份，删除更旧目录与空目录（守护进程持有当前 exe 的目录天然不会被删——运行中的 exe 文件被锁，删除失败静默跳过即可）；
-  3. `serve -Action` 增加子命令或 `zwc.ps1 cache -Clean` 供手动清理。
+  3. `serve -Action` 增加子命令或 `cad.ps1 cache -Clean` 供手动清理。
 - **工作量**：0.5 人日。**风险**：低（删除失败一律吞掉，不影响主流程）。
 
 ### 4.4 Python 侧性能热点
@@ -158,7 +158,7 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 ### 4.5 query 的 `-Layer` 下推（可选，收益有限）
 
-- **证据**：query 的 lisp 快路径刻意把 layer/text 留在客户端过滤以保持语义（EditsQuery.cs:87-98 注释）；`read` 的 lisp 路径同样不传 layer（ZwcHelper.cs:2517-2518）。
+- **证据**：query 的 lisp 快路径刻意把 layer/text 留在客户端过滤以保持语义（EditsQuery.cs:87-98 注释）；`read` 的 lisp 路径同样不传 layer（CadHelper.cs:2517-2518）。
 - **现状评估**：36 k 实体全量 dump 仅 0.4 s，客户端过滤开销可忽略——**不建议为纯性能做**。仅当未来支持"只 dump 单层几何"（省网络/内存）时，对**精确层名**（无通配、大小写不敏感匹配一次）下推 `(cons 8 layer)`，并在响应里保留 `layerPushed:true` 便于回归比对。
 - **工作量**：如做，0.5 人日。
 
@@ -166,9 +166,9 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 ## 五、P2：架构与可维护性（建议在 P0/P1 后的稳定窗口做，2–3 周节奏）
 
-### 5.1 拆分 ZwcHelper.cs 巨石文件
+### 5.1 拆分 CadHelper.cs 巨石文件
 
-- **证据**：单文件 4,354 行含 10+ 个类（JMap/Json/Com/Coll/State/Cad/Cmd/Procs/Commands/PipeIo/Daemon/Program，ZwcHelper.cs:52-4215）。已拆出的 Edits/EditsQuery/SectionOverlay/Stability/LispFile/LispGeom/LispTemplate 证明拆分模式可行。
+- **证据**：单文件 4,354 行含 10+ 个类（JMap/Json/Com/Coll/State/Cad/Cmd/Procs/Commands/PipeIo/Daemon/Program，CadHelper.cs:52-4215）。已拆出的 Edits/EditsQuery/SectionOverlay/Stability/LispFile/LispGeom/LispTemplate 证明拆分模式可行。
 - **连带成本**：任何一行改动 → 源码哈希变 → daemon 重启 + 新 127 KB 缓存副本。文件越巨，这条链触发越频繁（也放大 4.3 的缓存问题）。
 - **方案**：按既有先例继续抽 `Json.cs`（自研 writer/parser 独立可测）、`Cad.cs`（ProgID 解析/进程识别，纯逻辑离线可测）、`State.cs`、`Daemon.cs+PipeIo.cs`、`Commands.Read` 独立成 `Read.cs`（Read+ReadState 约 400 行）。**每次只搬一个类，搬完立即跑离线自测 + `run_m1.ps1 -DryRunOnly`**。
 - **收益**：编译单元变小（增量感知友好）、纯逻辑部分（Json/BalanceError/哈希配方）可进离线测试与未来 CI。
@@ -176,8 +176,8 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 ### 5.2 哈希配方收敛为单一事实源
 
-- **证据**：同一"文件数|最新mtime|排序sizes→SHA256前12位"配方在 ZwcClient.cs:53-80（C#）、zwc.ps1 委托分支（约 55-70 行）、zwc.ps1 编译分支三处独立实现，靠注释约定同步。
-- **方案**：zwc.ps1 内两处至少合并为一个函数；C# 侧与 .ps1 侧的同步改为**双向自检**——`doctor` 输出两侧算出的哈希，不一致时报 `HASH_RECIPE_MISMATCH`（比"约定"可靠，防止未来改动只改一边导致 client 连不上 daemon 且编译重复）。
+- **证据**：同一"文件数|最新mtime|排序sizes→SHA256前12位"配方在 CadClient.cs:53-80（C#）、cad.ps1 委托分支（约 55-70 行）、cad.ps1 编译分支三处独立实现，靠注释约定同步。
+- **方案**：cad.ps1 内两处至少合并为一个函数；C# 侧与 .ps1 侧的同步改为**双向自检**——`doctor` 输出两侧算出的哈希，不一致时报 `HASH_RECIPE_MISMATCH`（比"约定"可靠，防止未来改动只改一边导致 client 连不上 daemon 且编译重复）。
 - **工作量**：0.5 人日。
 
 ### 5.3 合并 build_sections 双脚本为"数据源策略"单实现
@@ -191,12 +191,12 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 | 项 | 证据 | 动作 |
 |---|---|---|
-| `bindFailures = 0;` 连续两行 | ZwcHelper.cs:4162-4163 | 删一行 |
-| `r.Add("instanceError", ...)` 连续两行（JMap.Add 是覆盖语义，不崩溃但冗余） | ZwcHelper.cs:2070-2071 | 删一行 |
+| `bindFailures = 0;` 连续两行 | CadHelper.cs:4162-4163 | 删一行 |
+| `r.Add("instanceError", ...)` 连续两行（JMap.Add 是覆盖语义，不崩溃但冗余） | CadHelper.cs:2070-2071 | 删一行 |
 | `qa_yssd.py` 的 `--block` 参数传入 `build_report(block_sel=...)` 但函数体从未使用（用户以为可选块，实际无效） | qa_yssd.py:32,358,373 | 实现或删除参数 |
 | 硬编码输出名/预选桩号 `16+475`、TEMP 回退硬编码 `C:\Users\Administrator\...` | build_sections_from_dmx.py:191-192, 69；build_sections_gcd.py:142-143, 46 | 参数化；TEMP 回退改 `tempfile.gettempdir()` |
-| ZwcClient 退出码靠在响应文本里搜 `"VERIFY_FAILED"` 等子串 | ZwcClient.cs:215-221 | 若 helper 在 message/detail 中合法提及这些词会误判为门禁码；建议解析顶层 `ok` 与 `error.code` 字段（哪怕仍用手写 JSON 提取，取 `"code":"..."` 第一个出现即可） |
-| daemon-stop/ping 靠 `reqJson.IndexOf("\"ping\"")` 匹配整个报文 | ZwcHelper.cs:4182,4191 | 请求体恰好含 `"ping"` 字符串时会误入 ping 分支；改为先 Json.Parse 再判 cmd（该路径不在热路径上） |
+| CadClient 退出码靠在响应文本里搜 `"VERIFY_FAILED"` 等子串 | CadClient.cs:215-221 | 若 helper 在 message/detail 中合法提及这些词会误判为门禁码；建议解析顶层 `ok` 与 `error.code` 字段（哪怕仍用手写 JSON 提取，取 `"code":"..."` 第一个出现即可） |
+| daemon-stop/ping 靠 `reqJson.IndexOf("\"ping\"")` 匹配整个报文 | CadHelper.cs:4182,4191 | 请求体恰好含 `"ping"` 字符串时会误入 ping 分支；改为先 Json.Parse 再判 cmd（该路径不在热路径上） |
 
 - **工作量**：合计 0.5–1 人日，可随其他改动顺手做。
 
@@ -236,7 +236,7 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 ### 6.4 可观测性小增强（建议，非必需）
 
-- daemon 无请求日志（Daemon.Run 仅异常回 DAEMON_ERROR，ZwcHelper.cs:4147-4213），排障只有 stdout；建议 daemon 把最近 N（如 100）条请求摘要+耗时环形写入 `%TEMP%\zwcad-cooperate\daemon.log`，`doctor` 附带回报最后几条。
+- daemon 无请求日志（Daemon.Run 仅异常回 DAEMON_ERROR，CadHelper.cs:4147-4213），排障只有 stdout；建议 daemon 把最近 N（如 100）条请求摘要+耗时环形写入 `%TEMP%\cad-cooperate\daemon.log`，`doctor` 附带回报最后几条。
 - `section` 命令返回缺 timings 细分（`entity` 已有 timings，SKILL.md:78）；任务级 8–28 s 的大头（数据校验/绘制/标注/回读）目前不可见，加细分有助于下一次性能攻坚定位。
 
 ---
@@ -263,7 +263,7 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
   6.1 requirements.txt
 
 第 4 批（稳定窗口，≈5–7 人日，可拆散）—— P2 架构
-  5.1 ZwcHelper.cs 逐类拆分（每搬一类跑一次离线回归）
+  5.1 CadHelper.cs 逐类拆分（每搬一类跑一次离线回归）
   5.2 哈希配方自检
   5.5 prepare.py 模块化
   5.4 残留清理（随时穿插）
@@ -277,9 +277,9 @@ ZwcHelper.exe（csc 按源码哈希缓存编译，4354 行核心 + 6 个分文�
 
 ## 八、附录：分析方法与未覆盖项
 
-- **逐文件人工精读**：ZwcClient.cs（全文）、LispFile.cs / LispGeom.cs / LispTemplate.cs（全文）、ZwcHelper.cs（结构 outline + Daemon/Program/Read/Doctor 关键段）、zwc.ps1（前 120 行）、M3-E6 文档、SKILL.md。
+- **逐文件人工精读**：CadClient.cs（全文）、LispFile.cs / LispGeom.cs / LispTemplate.cs（全文）、CadHelper.cs（结构 outline + Daemon/Program/Read/Doctor 关键段）、cad.ps1（前 120 行）、M3-E6 文档、SKILL.md。
 - **子任务委派分析**：Python 五文件（prepare/qa_yssd/build_sections×2/audit）代码质量报告；tests/bench/publish/bin-cache/.gitignore/git 体积报告。
-- **关键结论均经二次验证**：如 LispGeom 的 `Split('|')` 与 `R|` 记录缺失、ZwcHelper.cs 重复行（含 JMap.Add 覆盖语义确认，故不构成运行时 bug）。
+- **关键结论均经二次验证**：如 LispGeom 的 `Split('|')` 与 `R|` 记录缺失、CadHelper.cs 重复行（含 JMap.Add 覆盖语义确认，故不构成运行时 bug）。
 - **未深入**（本次范围外，如需可另开分析）：Edits.cs / SectionOverlay.cs / Stability.cs 的逐行审查；tray 子系统；`compare-three-cads.ps1`；`run_bench.ps1` 内部（45 KB）的拆分价值评估；真实 CAD 上的性能复测。
 
 > 本文档仅为分析结论与建议，**未对任何源码、配置或文档执行修改**。

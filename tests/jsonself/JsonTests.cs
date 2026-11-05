@@ -19,7 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
-using ZwcHelper;
+using CadHelper;
 
 internal static class JsonTests
 {

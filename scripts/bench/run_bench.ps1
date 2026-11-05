@@ -14,7 +14,7 @@
 #   * One CAD instance for the whole run: launched by THIS script (result.launched:true),
 #     finished by THIS script (finish -Quit on our own pid only). No other agent's
 #     instance is touched; another product running next to ours is fine.
-#   * -Freeze (default on): the CAD side (scripts\zwc.ps1 + scripts\helper\*.cs) is copied
+#   * -Freeze (default on): the CAD side (scripts\cad.ps1 + scripts\helper\*.cs) is copied
 #     into <Out>\frozen and the run uses that snapshot, so a teammate editing the helper
 #     mid-run cannot mix two versions into one baseline. SHA256 of the snapshot is
 #     recorded in summary.json. E1 comparison: run again with -Freeze on the new code.
@@ -70,7 +70,7 @@ $root = Split-Path -Parent (Split-Path -Parent $scriptDir)
 $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 
 $pyExe = $Python
-if (-not $pyExe) { $pyExe = $env:ZWC_PYTHON }
+if (-not $pyExe) { $pyExe = $env:CAD_PYTHON }
 if (-not $pyExe) {
     $candidate = 'python'
     if (Test-Path -LiteralPath $candidate) { $pyExe = $candidate } else { $pyExe = 'python' }
@@ -111,7 +111,7 @@ switch ($Product) {
 $productDesc = ($productArgs -join ' ')
 
 # ---- run mutex: two benchmark sessions driving the same CAD product cross-talk through the
-# shared helper state (%TEMP%\zwcad-cooperate\state.json) and the shared scratch drawing name,
+# shared helper state (%TEMP%\cad-cooperate\state.json) and the shared scratch drawing name,
 # which shows up as "read returned a stale drawing" glitches. One session per product.
 # FileShare.None: if the process dies the OS releases the handle, so there is no stale lock.
 $lockPath = Join-Path $env:TEMP ('zwcad-bench-' + $Product + '.lock')
@@ -175,8 +175,8 @@ function Get-CadProductList {
 }
 
 # ------------------------------------------------------------------ system under test
-$zwcPath = Join-Path $root 'scripts\zwc.ps1'
-$clientPath = Join-Path $root 'bin\ZwcClient.exe'
+$cadPath = Join-Path $root 'scripts\cad.ps1'
+$clientPath = Join-Path $root 'bin\CadClient.exe'
 $freezeInfo = $null
 $useFreeze = $Freeze
 if ($NoFreeze) { $useFreeze = $false }
@@ -185,15 +185,15 @@ if ($useFreeze) {
     $fzScripts = Join-Path $frozen 'scripts'
     $fzHelper = Join-Path $fzScripts 'helper'
     New-Item -ItemType Directory -Force -Path $fzHelper | Out-Null
-    Copy-Item -LiteralPath $zwcPath -Destination (Join-Path $fzScripts 'zwc.ps1') -Force
+    Copy-Item -LiteralPath $cadPath -Destination (Join-Path $fzScripts 'cad.ps1') -Force
     Copy-Item -Path (Join-Path $root 'scripts\helper\*.cs') -Destination $fzHelper -Force
     if (Test-Path -LiteralPath $clientPath) {
         $fzBin = Join-Path $frozen 'bin'
         New-Item -ItemType Directory -Force -Path $fzBin | Out-Null
-        Copy-Item -LiteralPath $clientPath -Destination (Join-Path $fzBin 'ZwcClient.exe') -Force
+        Copy-Item -LiteralPath $clientPath -Destination (Join-Path $fzBin 'CadClient.exe') -Force
     }
-    $zwcPath = Join-Path $fzScripts 'zwc.ps1'
-    $clientPath = Join-Path $frozen 'bin\ZwcClient.exe'
+    $cadPath = Join-Path $fzScripts 'cad.ps1'
+    $clientPath = Join-Path $frozen 'bin\CadClient.exe'
     $freezeInfo = [ordered]@{ root = $frozen; files = @(); sha256 = [ordered]@{} }
     foreach ($f in @(Get-ChildItem -LiteralPath $fzScripts -File -Recurse)) {
         $rel = $f.FullName.Substring($frozen.Length + 1)
@@ -202,7 +202,7 @@ if ($useFreeze) {
     }
 }
 $liveHashes = [ordered]@{}
-foreach ($rel in @('scripts\zwc.ps1', 'scripts\helper\ZwcHelper.cs', 'scripts\helper\SectionOverlay.cs')) {
+foreach ($rel in @('scripts\cad.ps1', 'scripts\helper\CadHelper.cs', 'scripts\helper\SectionOverlay.cs')) {
     $full = Join-Path $root $rel
     if (Test-Path -LiteralPath $full) { $liveHashes[$rel] = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLower() }
 }
@@ -214,7 +214,7 @@ if ($Entry -eq 'auto') {
     if (Test-Path -LiteralPath $clientPath) { $entryMode = 'client' } else { $entryMode = 'ps1' }
 }
 if ($entryMode -eq 'client' -and -not (Test-Path -LiteralPath $clientPath)) {
-    Write-Log ('WARNING: -Entry client requested but no ZwcClient.exe; falling back to ps1')
+    Write-Log ('WARNING: -Entry client requested but no CadClient.exe; falling back to ps1')
     $entryMode = 'ps1'
 }
 
@@ -280,7 +280,7 @@ function Expand-Vars([string]$text, $stepJson, [string]$runDir) {
     return $s
 }
 
-# Bounded invocation: a CAD call must NEVER wedge the whole benchmark. zwc.ps1 bounds the
+# Bounded invocation: a CAD call must NEVER wedge the whole benchmark. cad.ps1 bounds the
 # helper itself, but a CAD modal dialog / wedged COM call can still keep the child alive, so
 # the runner adds its own watchdog (timeoutSec + 60 s) and kills the child if needed.
 function Invoke-ProcessBounded([string]$exe, [string[]]$argv, [int]$timeoutSec,
@@ -403,7 +403,7 @@ function Invoke-ToolStep($step, [string]$runDir, $stepJson, [bool]$omitProduct) 
             if ($entryMode -eq 'client') {
                 $bounded = Invoke-ProcessBounded $clientPath $argv $timeoutSec $stdoutPath $stderrPath
             } else {
-                $psArgv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $zwcPath) + $argv
+                $psArgv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $cadPath) + $argv
                 $bounded = Invoke-ProcessBounded $psExe $psArgv $timeoutSec $stdoutPath $stderrPath
             }
             $exit = $bounded.exit
@@ -660,7 +660,7 @@ function Invoke-BenchCommand([string[]]$argv, [string]$label, [int]$timeoutSec) 
     if ($entryMode -eq 'client') {
         $bounded = Invoke-ProcessBounded $clientPath $argv $timeoutSec $stdoutPath $stderrPath
     } else {
-        $psArgv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $zwcPath) + $argv
+        $psArgv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $cadPath) + $argv
         $bounded = Invoke-ProcessBounded $psExe $psArgv $timeoutSec $stdoutPath $stderrPath
     }
     Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue

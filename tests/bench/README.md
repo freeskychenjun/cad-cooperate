@@ -75,7 +75,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bench\run_bench.ps1 
 
 # 只跑几条（冒烟/回归）
 ... -Tasks Q1-layer-stats,S1-single-section -Repeat 1 -Out tmp\bench\smoke
-# E1 之后用同一 runner 对比（daemon + ZwcClient 就绪后）
+# E1 之后用同一 runner 对比（daemon + CadClient 就绪后）
 ... -Entry client -Repeat 3
 # 不冻结代码（默认会冻结；-NoFreeze 关闭。注意 `powershell -File` 下不要写 -Freeze:$false，布尔参数会被当字符串）
 ... -NoFreeze
@@ -90,7 +90,7 @@ E2 负例：`powershell ... -File scripts\bench\run_bench.ps1 -TasksFile tests\b
 2. **只退自己 pid**：`finish -Quit` 只对本实例；其它产品（core-cad 的 Classic、lead 的 AutoCAD）**只记录不动**。
 3. **大图 read 必须放大超时**：ZWCAD 2025 无 LISP 桥，624 实体 ≈ 0.36 s/实体 → 任务里 `read` 给 `-TimeoutSec 900`。
 4. 每条命令显式 `-ProgId`（本机三产品共存），唯一例外是 `X2` 故意不带（那是被测点）。
-5. runner 的 `-Freeze` 默认开：把 `scripts\zwc.ps1` + `scripts\helper\*.cs` 复制到输出目录再跑，避免队友并行改代码把两个版本混进同一次基线；快照 SHA256 记在 `summary.json.meta.freeze`。
+5. runner 的 `-Freeze` 默认开：把 `scripts\cad.ps1` + `scripts\helper\*.cs` 复制到输出目录再跑，避免队友并行改代码把两个版本混进同一次基线；快照 SHA256 记在 `summary.json.meta.freeze`。
 
 ## 6. 加任务 / 改判定
 

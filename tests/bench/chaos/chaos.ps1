@@ -39,7 +39,7 @@ $jsonPath = Join-Path $root (Join-Path $OutDir 'chaos.json')
 
 function Get-ServeStatusJson {
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $argLine = '-NoProfile -ExecutionPolicy Bypass -File "' + $script:ZwcPs1 + '" serve -Action status'
+    $argLine = '-NoProfile -ExecutionPolicy Bypass -File "' + $script:CadPs1 + '" serve -Action status'
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $psExe
     $psi.Arguments = $argLine

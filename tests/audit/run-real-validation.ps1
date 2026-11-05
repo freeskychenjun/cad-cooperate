@@ -37,12 +37,12 @@ function Write-Info([string]$text) { [Console]::Out.WriteLine($text) }
 $scriptDir = $PSScriptRoot
 if (-not $scriptDir) { $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
 $root = Split-Path -Parent (Split-Path -Parent $scriptDir)
-$zwcPath = Join-Path $root 'scripts\zwc.ps1'
+$cadPath = Join-Path $root 'scripts\cad.ps1'
 $runPs1 = Join-Path $root 'scripts\audit\run.ps1'
 $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 
-function Invoke-Zwc([string[]]$zwcArgs) {
-    $text = & $psExe -NoProfile -ExecutionPolicy Bypass -File $zwcPath @zwcArgs 2>$null
+function Invoke-Cad([string[]]$cadArgs) {
+    $text = & $psExe -NoProfile -ExecutionPolicy Bypass -File $cadPath @cadArgs 2>$null
     $code = $LASTEXITCODE
     $joined = ''
     if ($null -ne $text) {
@@ -122,7 +122,7 @@ try {
         Write-Info ('=== ' + $case.Name + ' : ' + $case.Doc)
         $openArgs = @('open') + $target + @('-Doc', $case.Doc, '-ReadOnly', '-TimeoutSec', [string]$TimeoutSec)
         if (-not $ownPid) { $openArgs += '-Launch' }
-        $open = Invoke-Zwc $openArgs
+        $open = Invoke-Cad $openArgs
         if ($open.Code -ne 0) {
             Write-Info ('  ERROR open exit ' + $open.Code)
             $results.Add([pscustomobject]@{ Name = $case.Name; OpenExit = $open.Code; AuditExit = $null
@@ -198,7 +198,7 @@ finally {
     if ($ownPid -and -not $KeepInstance) {
         Write-Info ''
         Write-Info ('=== finish: quitting our own instance pid ' + $ownPid)
-        $finish = Invoke-Zwc (@('finish') + $target + @('-Quit', '-TimeoutSec', [string]$TimeoutSec))
+        $finish = Invoke-Cad (@('finish') + $target + @('-Quit', '-TimeoutSec', [string]$TimeoutSec))
         $closed = 'unknown'
         if ($finish.Text -match '"docsClosed"\s*:\s*(\d+)') { $closed = $matches[1] }
         Write-Info ('  finish exit ' + $finish.Code + ', docsClosed=' + $closed)

@@ -5,8 +5,8 @@
 Writes into tests/audit/fixtures/:
 
   problem-rich.dxf          a drawing that carries one of every problem the audit knows
-  problem-rich.info.json    zwc.ps1 info shaped JSON for that drawing
-  problem-rich.read.json    zwc.ps1 read shaped JSON for that drawing
+  problem-rich.info.json    cad.ps1 info shaped JSON for that drawing
+  problem-rich.read.json    cad.ps1 read shaped JSON for that drawing
   clean.info.json/.read    a well-formed drawing (must produce zero issues)
   strict.info.json/.read   layer / style edge cases used by the strict-mode tests
   expected-hits.json       rule -> minimum expected hits (regression contract)
@@ -14,7 +14,7 @@ Writes into tests/audit/fixtures/:
 The DXF is the source of truth for the two "real" drawing fixtures: the JSON pair
 is exported from the same entity table so an offline run is deterministic and does
 not need CAD. The DXF itself is then opened in CAD (tests/audit/run-real-validation.ps1)
-to prove that the audit also works on genuine `zwc.ps1 read` output.
+to prove that the audit also works on genuine `cad.ps1 read` output.
 
 Run:  set PYTHONPATH=<repo>/tools/py-libs && python make_fixtures.py
 """

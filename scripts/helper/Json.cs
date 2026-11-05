@@ -1,6 +1,6 @@
 // Json.cs - the project's own JSON writer + recursive-descent parser.
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 1: Json + PipeIo extraction). The class body
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 1: Json + PipeIo extraction). The class body
 // below is a pure move: no logic, no escaping rule, no number format and no error message changed.
 //
 // Contract that must not change:
@@ -22,7 +22,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static class Json
     {

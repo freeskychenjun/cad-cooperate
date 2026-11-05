@@ -570,7 +570,7 @@
     {
       "id": "W6-xdata-mark",
       "category": "edit",
-      "goal": "给 2 个文字实体打上自定义标记 ZWC=BENCH，按标记把它们筛出来确认，然后按标记删掉。",
+      "goal": "给 2 个文字实体打上自定义标记 CAD=BENCH，按标记把它们筛出来确认，然后按标记删掉。",
       "why": "打标（entity update xdata）→ query -XData 筛出 → entity delete 的完整闭环；handle 稳定，所以一条本地 gen 步骤就能同时生成打标和删除两份请求",
       "steps": [
         {

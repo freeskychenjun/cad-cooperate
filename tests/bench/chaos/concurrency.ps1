@@ -1,6 +1,6 @@
 ﻿# concurrency.ps1 - E3 concurrency baseline: 3 sessions writing to ONE drawing at the same time.
 #
-# What it does (all commands go through the E1 client, i.e. daemon + ZwcClient.exe):
+# What it does (all commands go through the E1 client, i.e. daemon + CadClient.exe):
 #   1. launch our own ZWCAD 2025 instance, open a private copy of the benchmark fixture;
 #   2. snapshot the drawing, then run R rounds; in each round 3 client processes are started
 #      TOGETHER and each does ONE `entity -Items` call adding 5 distinct text entities;
@@ -41,7 +41,7 @@ $frozenInfo = $null
 
 function Get-ServeStatus([string]$progId) {
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $argLine = '-NoProfile -ExecutionPolicy Bypass -File "' + $script:ZwcPs1 + '" serve -Action status'
+    $argLine = '-NoProfile -ExecutionPolicy Bypass -File "' + $script:CadPs1 + '" serve -Action status'
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $psExe
     $psi.Arguments = $argLine
@@ -93,7 +93,7 @@ $work = $null
 try {
     if (-not $NoFreeze) { $frozenInfo = New-FrozenProduct $runDir; $result.frozen = $frozenInfo }
     $result.hashesAtStart = @{}
-    foreach ($rel in @('scripts\helper\ZwcHelper.cs', 'scripts\helper\Edits.cs', 'scripts\helper\Stability.cs', 'scripts\zwc.ps1')) {
+    foreach ($rel in @('scripts\helper\CadHelper.cs', 'scripts\helper\Edits.cs', 'scripts\helper\Stability.cs', 'scripts\cad.ps1')) {
         $full = Join-Path $root $rel
         if (Test-Path -LiteralPath $full) { $result.hashesAtStart[$rel] = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLower() }
     }

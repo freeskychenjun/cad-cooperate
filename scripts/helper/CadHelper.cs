@@ -1,7 +1,7 @@
-// ZwcHelper.cs - zwcad-cooperate M1 helper (one-shot process, [STAThread], COM late binding).
+// CadHelper.cs - cad-cooperate M1 helper (one-shot process, [STAThread], COM late binding).
 //
 // Contract (DESIGN-M1.md section 2/3):
-//   ZwcHelper.exe --request <req.json> --response <resp.json>
+//   CadHelper.exe --request <req.json> --response <resp.json>
 //   request  { "cmd":"section", "doc":"<图纸目录>\\a.dwg", "app":"zwcad", "args":{...} }
 //   response { ok, cmd, doc, result, warnings[{code,message}], undoToken, elapsedMs, app }
 //            ok:false also carries error{code,message,hint,detail}
@@ -15,7 +15,7 @@
 //   * Every SendCommand string stays well below 2 KB and its LASTPROMPT is checked afterwards
 //     (a "Missing:" prompt or a trailing ">" continuation means the command state is polluted).
 //   * A burst of writes is wrapped in StartUndoMark/EndUndoMark so the user gets one Ctrl+Z.
-//   * Temporary files only under %TEMP%\zwcad-cooperate\ (DGS encrypts .dxf/.dwg by extension).
+//   * Temporary files only under %TEMP%\cad-cooperate\ (DGS encrypts .dxf/.dwg by extension).
 //   * Instances we started are closed with Close(false) + Quit(); nothing is ever saved.
 //
 // Chinese literals are written as \uXXXX escapes on purpose so the source file stays pure ASCII
@@ -26,7 +26,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // Entry point
@@ -44,14 +44,14 @@ namespace ZwcHelper
             JMap resultOut = null;
             string cmd = "";
             bool ok = false;
-            ZwcError zerr = null;
+            CadError zerr = null;
             Exception uerr = null;
 
             try
             {
                 object parsed = Json.Parse(reqJson);
                 req = parsed as JMap;
-                if (req == null) throw new ZwcError("BAD_ARGS", "request JSON must be an object", null, null);
+                if (req == null) throw new CadError("BAD_ARGS", "request JSON must be an object", null, null);
                 cmd = req.Str("cmd", "");
                 JMap argMap = req.Map("args");
                 if (argMap == null) argMap = new JMap();
@@ -79,12 +79,12 @@ namespace ZwcHelper
                     case "diff": resultOut = Query.DiffCmd(req, argMap, ctx); break;
                     case "xprobe": resultOut = Edits.XProbeCmd(req, argMap, ctx); break;
                     default:
-                        throw new ZwcError("BAD_ARGS", "unknown cmd '" + cmd + "'; expected doctor|status|open|info|read|section|undo|hint|finish|entity|query|snapshot|diff", null, null);
+                        throw new CadError("BAD_ARGS", "unknown cmd '" + cmd + "'; expected doctor|status|open|info|read|section|undo|hint|finish|entity|query|snapshot|diff", null, null);
                 }
                 try { Commands.ReapplyCaption(ctx); } catch (Exception) { }
                 ok = true;
             }
-            catch (ZwcError e) { zerr = e; resultOut = ctx.Result; }
+            catch (CadError e) { zerr = e; resultOut = ctx.Result; }
             catch (Exception e) { uerr = e; resultOut = ctx.Result; }
 
             JMap root = new JMap();
@@ -144,12 +144,12 @@ namespace ZwcHelper
             try
             {
                 if (reqPath == null || respPath == null)
-                    throw new ZwcError("BAD_ARGS", "usage: ZwcHelper.exe --request <req.json> --response <resp.json> | --serve <pipe>", null, null);
+                    throw new CadError("BAD_ARGS", "usage: CadHelper.exe --request <req.json> --response <resp.json> | --serve <pipe>", null, null);
                 if (!File.Exists(reqPath))
-                    throw new ZwcError("BAD_ARGS", "request file not found: " + reqPath, null, null);
+                    throw new CadError("BAD_ARGS", "request file not found: " + reqPath, null, null);
                 text = HandleRequestText(File.ReadAllText(reqPath, new UTF8Encoding(false)));
             }
-            catch (ZwcError e)
+            catch (CadError e)
             {
                 JMap err = new JMap();
                 err.Add("ok", false);

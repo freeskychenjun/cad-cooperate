@@ -49,12 +49,12 @@ readPath=lisp-file-geom  polylineComFilled=2  wall≈0.4–4 s
 ## 四、SECURELOAD：为什么会出现「安全性 - 未签名的可执行文件」
 
 - 本机 AutoCAD 2021：`SECURELOAD=1`、`TRUSTEDPATHS` 空。
-- Autodesk 文档明确 SECURELOAD 覆盖 **LSP/FAS/VLX/MNL**，不是只管二进制 ⇒ `(load "%TEMP%\zwcad-cooperate\geom-*.lsp")` 必然弹窗（按钮：始终加载 / 加载一次 / 不加载）。
+- Autodesk 文档明确 SECURELOAD 覆盖 **LSP/FAS/VLX/MNL**，不是只管二进制 ⇒ `(load "%TEMP%\cad-cooperate\geom-*.lsp")` 必然弹窗（按钮：始终加载 / 加载一次 / 不加载）。
 - 弹窗是**模态**的：`Documents` 集合返回空、所有 COM 调用挂起、helper 超时 ⇒ 表现像 CAD 死机，用户侧就是"总是弹窗"。
 - 处置（`scripts/helper/Trust.cs`）：
   1. **预检**：`SECURELOAD=1` 且临时目录不在 `TRUSTEDPATHS` ⇒ 不注入、降级 COM、告警 `LISP_TRUST_BLOCKED`；
   2. **看门狗**：强推（`-ForceLispInject`）时后台线程 80 ms 轮询该 CAD 进程的 `#32770` 窗口，命中安全框即点「不加载」（实测 1.46 s 内取消）；
-  3. **一次性修**：`trust -Action addTemp` 把 `%TEMP%\zwcad-cooperate` 追加进 `TRUSTEDPATHS`（本机已执行，回读 `tempTrusted=true`；`removeTemp` 可还原）；
+  3. **一次性修**：`trust -Action addTemp` 把 `%TEMP%\cad-cooperate` 追加进 `TRUSTEDPATHS`（本机已执行，回读 `tempTrusted=true`；`removeTemp` 可还原）；
   4. `LASTPROMPT` 里的「文件加载已取消」被识别为“干净状态”（否则一次取消会把快路径永久判成 `PROMPT_POLLUTED`）。
 - **不采用** `SECURELOAD=0`：它是注册表持久值，会全局降级安全策略。
 
@@ -96,11 +96,11 @@ python tests\bench\make_acad2021_fixture.py          # 生成夹具（R2007 DXF�
 powershell -File tests\selftest_lisp.ps1             # 离线 C# 6 套 644 断言
 powershell -File tests\run_m1.ps1 -DryRunOnly -Python <完整 python 路径>   # 离线 8/0/4
 
-bin\ZwcClient.exe status -App autocad                # 期望 product=AutoCAD 2021、mappedBy=process
-bin\ZwcClient.exe doctor -App autocad                # 期望 progIds 列出 2021 + 2007、lispTrust 有值
-bin\ZwcClient.exe trust -Action status -App autocad  # 看 secureLoad/trustedPaths
-bin\ZwcClient.exe open -Doc <repo>\tests\bench\fixtures\acad-oldpoly.dxf -NoHint -App autocad
-bin\ZwcClient.exe read -Mode geom -Doc acad-oldpoly.dxf -ForceLispFile -LispThreshold 1 -App autocad
+bin\CadClient.exe status -App autocad                # 期望 product=AutoCAD 2021、mappedBy=process
+bin\CadClient.exe doctor -App autocad                # 期望 progIds 列出 2021 + 2007、lispTrust 有值
+bin\CadClient.exe trust -Action status -App autocad  # 看 secureLoad/trustedPaths
+bin\CadClient.exe open -Doc <repo>\tests\bench\fixtures\acad-oldpoly.dxf -NoHint -App autocad
+bin\CadClient.exe read -Mode geom -Doc acad-oldpoly.dxf -ForceLispFile -LispThreshold 1 -App autocad
 # 期望 readPath=lisp-file-geom、polylineComFilled=2、nverts=5/8/4、attributes height=11.11/22.22
 ```
 

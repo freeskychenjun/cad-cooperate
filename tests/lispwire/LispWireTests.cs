@@ -12,7 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using ZwcHelper;
+using CadHelper;
 
 internal static class LispWireTests
 {
@@ -319,7 +319,7 @@ internal static class LispWireTests
 
     private static void TestOrphanStaleSweep()
     {
-        string dir = Path.Combine(Path.GetTempPath(), "zwc-lispwire-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+        string dir = Path.Combine(Path.GetTempPath(), "cad-lispwire-" + Guid.NewGuid().ToString("N").Substring(0, 8));
         Directory.CreateDirectory(dir);
         try
         {
@@ -356,7 +356,7 @@ internal static class LispWireTests
 
     private static void TestOrphanPreserve()
     {
-        string dir = Path.Combine(Path.GetTempPath(), "zwc-lispwire-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+        string dir = Path.Combine(Path.GetTempPath(), "cad-lispwire-" + Guid.NewGuid().ToString("N").Substring(0, 8));
         Directory.CreateDirectory(dir);
         try
         {

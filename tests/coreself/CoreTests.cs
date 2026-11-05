@@ -1,8 +1,8 @@
-// CoreTests.cs - offline unit tests for scripts\helper\Core.cs (JMap / ZwcError / Ctx) and the
+// CoreTests.cs - offline unit tests for scripts\helper\Core.cs (JMap / CadError / Ctx) and the
 // in-memory half of scripts\helper\State.cs (plan 5.1 batch 2: these units are pure C# now).
 //
 // No CAD, no COM, no file I/O: every assertion below runs against plain objects. State.Load /
-// Save / Flush and everything else that touches %TEMP%\zwcad-cooperate\state.json is deliberately
+// Save / Flush and everything else that touches %TEMP%\cad-cooperate\state.json is deliberately
 // NOT exercised here (it would write the real user state file) - see the report for that list.
 //
 // Compiled by tests\selftest_lisp.ps1 with:
@@ -12,7 +12,7 @@
 
 using System;
 using System.Collections.Generic;
-using ZwcHelper;
+using CadHelper;
 
 internal static class CoreTests
 {
@@ -47,10 +47,10 @@ internal static class CoreTests
             "expected=long:" + expected + " actual=" + Describe(actual));
     }
 
-    private static void CheckZwcError(string name, string expectedCode, Action a)
+    private static void CheckCadError(string name, string expectedCode, Action a)
     {
         try { a(); Check(name, false, "no exception thrown"); }
-        catch (ZwcError e)
+        catch (CadError e)
         {
             Check(name, string.Equals(e.Code, expectedCode, StringComparison.Ordinal),
                 "expected code=" + expectedCode + " actual=" + e.Code + " msg=" + Show(e.Message));
@@ -223,10 +223,10 @@ internal static class CoreTests
         Check("jmap.list.count", ml.List("l").Count == 2, "nested list count");
     }
 
-    // ---------------------------------------------------------------- ZwcError + Ctx
+    // ---------------------------------------------------------------- CadError + Ctx
     private static void RunErrorAndContext()
     {
-        ZwcError ze = new ZwcError("CODE_X", "message X", "hint X", "detail X");
+        CadError ze = new CadError("CODE_X", "message X", "hint X", "detail X");
         CheckEq("zwerr.code", ze.Code, "CODE_X");
         CheckEq("zwerr.message", ze.Message, "message X");
         CheckEq("zwerr.hint", ze.Hint, "hint X");

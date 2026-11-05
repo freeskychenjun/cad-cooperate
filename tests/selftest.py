@@ -287,7 +287,7 @@ def scenario_main() -> None:
 
 
 def to_read_response(model: Dict[str, Any]) -> Dict[str, Any]:
-    """把 prepare 的模型转成 core-cad 约定的 `zwc.ps1 read` 响应形态（无 role）。"""
+    """把 prepare 的模型转成 core-cad 约定的 `cad.ps1 read` 响应形态（无 role）。"""
     ents = []
     for i, e in enumerate(model["entities"]):
         handle = "%X" % (0x100 + i)

@@ -6,11 +6,11 @@ Chain:
   2. verify_section.py  model vs independent baseline        (must PASS)
   3. verify_section.py --tamper                             (must DETECT the tamper)
   4. bad fixtures -> prepare.py must exit 2 / BAD_DATA and write NO output file
-  5. zwc.ps1 section -Data <model.json> -DryRun             (SKIP when zwc.ps1 absent)
-  6. zwc.ps1 section -Data <model.json> [-Doc]              (real draw; caller must have CAD open)
-  7. zwc.ps1 read -> verify_section.py                      (independent read-back check)
+  5. cad.ps1 section -Data <model.json> -DryRun             (SKIP when cad.ps1 absent)
+  6. cad.ps1 section -Data <model.json> [-Doc]              (real draw; caller must have CAD open)
+  7. cad.ps1 read -> verify_section.py                      (independent read-back check)
 
-This script NEVER starts CAD / ZWCAD / AutoCAD. It only calls scripts\zwc.ps1, which
+This script NEVER starts CAD / ZWCAD / AutoCAD. It only calls scripts\cad.ps1, which
 attaches to an already-open drawing; there is no -Launch here on purpose.
 
 Usage:
@@ -41,7 +41,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 $TmpDir = Join-Path $Root "tmp"
 $PreparePy = Join-Path $Root "scripts\section\prepare.py"
 $VerifyPy = Join-Path $PSScriptRoot "verify_section.py"
-$ZwcPs1 = Join-Path $Root "scripts\zwc.ps1"
+$CadPs1 = Join-Path $Root "scripts\cad.ps1"
 $PsExe = Join-Path $PSHOME "powershell.exe"
 
 if ([string]::IsNullOrEmpty($DataFile)) {
@@ -114,7 +114,7 @@ Write-Output ("root     : " + $Root)
 Write-Output ("data     : " + $DataFile)
 Write-Output ("expected : " + $ExpectedFile)
 Write-Output ("python   : " + $Python)
-Write-Output ("zwc.ps1  : " + $ZwcPs1 + " (exists=" + (Test-Path $ZwcPs1) + ")")
+Write-Output ("cad.ps1  : " + $CadPs1 + " (exists=" + (Test-Path $CadPs1) + ")")
 if ($DryRunOnly) { Write-Output "mode     : DryRunOnly" }
 elseif ($NoCad) { Write-Output "mode     : NoCad" }
 else { Write-Output "mode     : full (real draw needs an already-open CAD drawing)" }
@@ -254,14 +254,14 @@ foreach ($bn in $badNames) {
     }
 }
 
-# ---- step 5..7: CAD side (delegated to core-cad's zwc.ps1) -----------------
-if (-not (Test-Path $ZwcPs1)) {
-    Write-Item "SKIP" "zwc.section.dryrun" "scripts\zwc.ps1 not found (core-cad not delivered yet); no CAD touched"
-    Write-Item "SKIP" "zwc.section.real" "scripts\zwc.ps1 not found; no CAD touched"
-    Write-Item "SKIP" "zwc.read.verify" "scripts\zwc.ps1 not found; no CAD touched"
+# ---- step 5..7: CAD side (delegated to core-cad's cad.ps1) -----------------
+if (-not (Test-Path $CadPs1)) {
+    Write-Item "SKIP" "cad.section.dryrun" "scripts\cad.ps1 not found (core-cad not delivered yet); no CAD touched"
+    Write-Item "SKIP" "cad.section.real" "scripts\cad.ps1 not found; no CAD touched"
+    Write-Item "SKIP" "cad.read.verify" "scripts\cad.ps1 not found; no CAD touched"
 } else {
     # step 5: -DryRun (should not need a running CAD; model/expected cross-checked below)
-    $dryArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Mta", "-File", $ZwcPs1,
+    $dryArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Mta", "-File", $CadPs1,
                  "section", "-Data", $ModelPath, "-DryRun")
     $rd1 = Invoke-Native $PsExe $dryArgs
     $jd1 = ConvertFrom-JsonText $rd1.Text
@@ -287,15 +287,15 @@ if (-not (Test-Path $ZwcPs1)) {
     $hmm = Get-Prop $dModel "heightMm"
     $expH = [double](Get-Prop $expBbox "y1") - [double](Get-Prop $expBbox "y0")
     if ($dTotal -eq $null) {
-        Write-Item "SKIP" "zwc.expected.crosscheck" "zwc.ps1 returned no result.expected (cannot cross-check)"
+        Write-Item "SKIP" "cad.expected.crosscheck" "cad.ps1 returned no result.expected (cannot cross-check)"
     } elseif ($okTotal -and $okType -and $okLayer -and $okScale -and $okBbox) {
         $note = ""
         if (($hmm -ne $null) -and ([double]$hmm -ne $expH)) {
             $note = " [note: helper heightMm=" + $hmm + " vs bbox height=" + $expH + " - derived-field only, bbox agrees]"
         }
-        Write-Item "PASS" "zwc.expected.crosscheck" ("helper expected == baseline: total=" + $dTotal + " byType/byLayer equal, hScale=" + $dScale + ", bbox equal" + $note)
+        Write-Item "PASS" "cad.expected.crosscheck" ("helper expected == baseline: total=" + $dTotal + " byType/byLayer equal, hScale=" + $dScale + ", bbox equal" + $note)
     } else {
-        Write-Item "FAIL" "zwc.expected.crosscheck" ("total=" + $dTotal + " okType=" + $okType + " okLayer=" + $okLayer + " okScale=" + $okScale + " okBbox=" + $okBbox + " helperBbox=" + (Get-JsonBlock ([pscustomobject]$dBbox | ConvertTo-Json -Compress)) + " json=" + (Get-JsonBlock $rd1.Text))
+        Write-Item "FAIL" "cad.expected.crosscheck" ("total=" + $dTotal + " okType=" + $okType + " okLayer=" + $okLayer + " okScale=" + $okScale + " okBbox=" + $okBbox + " helperBbox=" + (Get-JsonBlock ([pscustomobject]$dBbox | ConvertTo-Json -Compress)) + " json=" + (Get-JsonBlock $rd1.Text))
         if ($VerboseOut) { Write-Output $rd1.Text }
     }
 
@@ -303,20 +303,20 @@ if (-not (Test-Path $ZwcPs1)) {
     $ecode = Get-Prop (Get-Prop $jd1 "error") "code"
     $okd = ($rd1.Code -eq 0) -and ((Get-Prop $jd1 "ok") -eq $true) -and $okTotal
     if ($okd) {
-        Write-Item "PASS" "zwc.section.dryrun" ("exit=0 ok=true expected.total=" + $dTotal)
+        Write-Item "PASS" "cad.section.dryrun" ("exit=0 ok=true expected.total=" + $dTotal)
     } elseif ($ecode -eq "NO_INSTANCE") {
-        Write-Item "SKIP" "zwc.section.dryrun" ("zwc.ps1 -DryRun still attaches to CAD first (error.code=NO_INSTANCE); model/expected were computed correctly -> interface issue to fix on core-cad side (DryRun must not require a live instance)")
+        Write-Item "SKIP" "cad.section.dryrun" ("cad.ps1 -DryRun still attaches to CAD first (error.code=NO_INSTANCE); model/expected were computed correctly -> interface issue to fix on core-cad side (DryRun must not require a live instance)")
     } else {
-        Write-Item "FAIL" "zwc.section.dryrun" ("exit=" + $rd1.Code + " error.code=" + $ecode + " json=" + (Get-JsonBlock $rd1.Text))
+        Write-Item "FAIL" "cad.section.dryrun" ("exit=" + $rd1.Code + " error.code=" + $ecode + " json=" + (Get-JsonBlock $rd1.Text))
         if ($VerboseOut) { Write-Output $rd1.Text }
     }
 
     if ($DryRunOnly -or $NoCad) {
-        Write-Item "SKIP" "zwc.section.real" "skipped by -DryRunOnly/-NoCad (no CAD touched)"
-        Write-Item "SKIP" "zwc.read.verify" "skipped by -DryRunOnly/-NoCad (no CAD touched)"
+        Write-Item "SKIP" "cad.section.real" "skipped by -DryRunOnly/-NoCad (no CAD touched)"
+        Write-Item "SKIP" "cad.read.verify" "skipped by -DryRunOnly/-NoCad (no CAD touched)"
     } else {
         # step 6: real draw (caller must have the drawing open already)
-        $realArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Mta", "-File", $ZwcPs1,
+        $realArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Mta", "-File", $CadPs1,
                       "section", "-Data", $ModelPath)
         if ($Doc -ne "") { $realArgs = $realArgs + @("-Doc", $Doc) }
         $rd2 = Invoke-Native $PsExe $realArgs
@@ -329,24 +329,24 @@ if (-not (Test-Path $ZwcPs1)) {
         $okr = ($rd2.Code -eq 0) -and ((Get-Prop $jd2 "ok") -eq $true) -and ($verifyOk -eq $true)
         $skipRead = $false
         if ($okr) {
-            Write-Item "PASS" "zwc.section.real" ("exit=0 verify.ok=true created=" + $createdN + " undoToken=" + (Get-Prop $jd2 "undoToken"))
+            Write-Item "PASS" "cad.section.real" ("exit=0 verify.ok=true created=" + $createdN + " undoToken=" + (Get-Prop $jd2 "undoToken"))
         } else {
             $ecode2 = Get-Prop (Get-Prop $jd2 "error") "code"
             $skipCodes = @("NO_CAD", "NO_DOC", "NO_DOCUMENT", "APP_NOT_FOUND", "CAD_NOT_RUNNING", "NO_ACTIVE_DOCUMENT", "NO_INSTANCE")
             if ($skipCodes -contains [string]$ecode2) {
                 $skipRead = $true
-                Write-Item "SKIP" "zwc.section.real" ("CAD/drawing not available (error.code=" + $ecode2 + "); open a drawing first, then re-run without -DryRunOnly")
+                Write-Item "SKIP" "cad.section.real" ("CAD/drawing not available (error.code=" + $ecode2 + "); open a drawing first, then re-run without -DryRunOnly")
             } else {
-                Write-Item "FAIL" "zwc.section.real" ("exit=" + $rd2.Code + " error.code=" + $ecode2 + " verify.ok=" + $verifyOk + " json=" + (Get-JsonBlock $rd2.Text))
+                Write-Item "FAIL" "cad.section.real" ("exit=" + $rd2.Code + " error.code=" + $ecode2 + " verify.ok=" + $verifyOk + " json=" + (Get-JsonBlock $rd2.Text))
                 if ($VerboseOut) { Write-Output $rd2.Text }
             }
         }
 
         # step 7: read back + independent verification
         if ($skipRead) {
-            Write-Item "SKIP" "zwc.read.verify" "skipped: nothing was drawn (no CAD/drawing available)"
+            Write-Item "SKIP" "cad.read.verify" "skipped: nothing was drawn (no CAD/drawing available)"
         } else {
-            $readArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Mta", "-File", $ZwcPs1, "read")
+            $readArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Mta", "-File", $CadPs1, "read")
             if ($Doc -ne "") { $readArgs = $readArgs + @("-Doc", $Doc) }
             $rd3 = Invoke-Native $PsExe $readArgs
             $jd3 = ConvertFrom-JsonText $rd3.Text
@@ -355,13 +355,13 @@ if (-not (Test-Path $ZwcPs1)) {
                 Set-Content -Path $ReadJson -Value $block -Encoding UTF8
                 $r4 = Invoke-Native $Python @($VerifyPy, "--model", $ReadJson, "--expected", $ExpectedFile)
                 if (($r4.Code -eq 0) -and ($r4.Text -match "RESULT: PASS")) {
-                    Write-Item "PASS" "zwc.read.verify" ("read-back verified against baseline (read.json=" + $ReadJson + ")")
+                    Write-Item "PASS" "cad.read.verify" ("read-back verified against baseline (read.json=" + $ReadJson + ")")
                 } else {
-                    Write-Item "FAIL" "zwc.read.verify" ("exit=" + $r4.Code)
+                    Write-Item "FAIL" "cad.read.verify" ("exit=" + $r4.Code)
                     Write-Output $r4.Text
                 }
             } else {
-                Write-Item "FAIL" "zwc.read.verify" ("read failed exit=" + $rd3.Code + " json=" + (Get-JsonBlock $rd3.Text))
+                Write-Item "FAIL" "cad.read.verify" ("read failed exit=" + $rd3.Code + " json=" + (Get-JsonBlock $rd3.Text))
                 if ($VerboseOut) { Write-Output $rd3.Text }
             }
         }

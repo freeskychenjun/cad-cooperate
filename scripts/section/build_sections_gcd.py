@@ -1,7 +1,7 @@
 # Build the cross-section workbook from the CORRECT source: GCD blocks whose insertion Z is the
 # ground elevation on the section line (the ZDH layer holds unrelated terrain spot heights).
 #
-# Input : <tmp>\zwcad-cooperate\sections-src.json  (tmp\extract-sections-src.ps1)
+# Input : <tmp>\cad-cooperate\sections-src.json  (tmp\extract-sections-src.ps1)
 #         <tmp> 默认 = tempfile.gettempdir()，可用 --tmp-dir 覆盖（离线复现/测试用）
 # Output: <outdir>\<name>.xlsx (+ csv, preview png)（默认 <repo>\output，
 #         name 默认 断面数据-东总干渠-修正版，可用 --outdir/--name 覆盖）

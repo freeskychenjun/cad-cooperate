@@ -4,7 +4,7 @@
 
 吃两种输入：
   1) `prepare.py` 产出的 section.model.json（schema: zwcad-section-model/1）
-  2) `scripts\\zwc.ps1 read` 的响应 JSON（{"ok":true,"cmd":"read","result":{...,"entities":[...]}}）
+  2) `scripts\\cad.ps1 read` 的响应 JSON（{"ok":true,"cmd":"read","result":{...,"entities":[...]}}）
 
 对 `tests\\fixtures\\section-30.expected.json`（由 make_expected.py 独立算出）逐项断言：
   实体总数 / 分类型 & 分图层计数 / 图层名 / 地面线顶点坐标 / 水位线端点与 y /
@@ -528,7 +528,7 @@ def check_entities(ck: Checker, mode: str, raw: List[Dict[str, Any]],
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="断面图独立核对器（DESIGN-M1 §4.4/§5）")
     ap.add_argument("--model", required=True,
-                    help="section.model.json 或 zwc.ps1 read 的响应 JSON")
+                    help="section.model.json 或 cad.ps1 read 的响应 JSON")
     ap.add_argument("--expected", required=True, help="section-30.expected.json")
     ap.add_argument("--tamper", action="store_true",
                     help="负例自证：改一个地面线顶点 y，必须抓到 FAIL")

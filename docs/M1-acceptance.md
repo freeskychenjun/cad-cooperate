@@ -29,7 +29,7 @@
 
 ⇒ **强验 Classic 必须 `-ProgId ZWCAD.Application.16`**；helper 默认顺序已改为 `.16` 优先、`ZWCAD.Application` 兜底，`-ProgId` 可覆盖。
 
-**已修的 bug**：`zwc.ps1` 参数解析会把所有 flag 转小写，导致 `-ProgId X` 变成 `progid` 而 helper 只认 `progId` ⇒ **静默忽略、附着到错误的 CAD 版本**（本次实测中招：第一次 `open -Launch -New -Progid …` 附着到了 2025）。已在 `zwc.ps1` 加 `keyMap` 归一化并复测通过（`-ProgId` 大写也能正确只列 `.16`）。
+**已修的 bug**：`cad.ps1` 参数解析会把所有 flag 转小写，导致 `-ProgId X` 变成 `progid` 而 helper 只认 `progId` ⇒ **静默忽略、附着到错误的 CAD 版本**（本次实测中招：第一次 `open -Launch -New -Progid …` 附着到了 2025）。已在 `cad.ps1` 加 `keyMap` 归一化并复测通过（`-ProgId` 大写也能正确只列 `.16`）。
 
 ## 三、本轮新发现的问题（已记录，未修）
 
@@ -60,15 +60,15 @@ cd <repo>
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\run_m1.ps1 -DryRunOnly
 
 # 1) 起 Classic 并画断面（会新开一张 Drawing，不落盘）
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 open -Launch -New -ProgId ZWCAD.Application.16
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 open -Launch -New -ProgId ZWCAD.Application.16
 python scripts\section\prepare.py --data tests\fixtures\section-30.xlsx --out tmp\accept\m.json --water "42.30=设计水位"
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 section -Data tmp\accept\m.json -ProgId ZWCAD.Application.16
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 section -Data tmp\accept\m.json -ProgId ZWCAD.Application.16
 
 # 2) 回读 + 独立复核
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 read -ProgId ZWCAD.Application.16 -Max 200 | Out-File -Encoding utf8 tmp\accept\read.json
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 read -ProgId ZWCAD.Application.16 -Max 200 | Out-File -Encoding utf8 tmp\accept\read.json
 python tests\verify_section.py --model tmp\accept\read.json --expected tests\fixtures\section-30.expected.json
 
 # 3) 一步撤销 / 收尾
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 undo -Token <上一步返回的 undoToken> -ProgId ZWCAD.Application.16
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\zwc.ps1 finish -Quit -ProgId ZWCAD.Application.16
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 undo -Token <上一步返回的 undoToken> -ProgId ZWCAD.Application.16
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\cad.ps1 finish -Quit -ProgId ZWCAD.Application.16
 ```

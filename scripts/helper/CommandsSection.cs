@@ -12,7 +12,7 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     internal static partial class Commands
     {
@@ -110,12 +110,12 @@ namespace ZwcHelper
             object cmdActiveProbe = Com.TryCall(doc, "GetVariable", "CMDACTIVE");
             string promptProbe = Cmd.LastPrompt(doc);
             if (Com.I32(cmdActiveProbe) != 0 || Cmd.PromptPolluted(promptProbe))
-                throw new ZwcError("BUSY", "CAD is not idle (CMDACTIVE=" + Com.I32(cmdActiveProbe)
+                throw new CadError("BUSY", "CAD is not idle (CMDACTIVE=" + Com.I32(cmdActiveProbe)
                     + ", LASTPROMPT=\"" + promptProbe + "\"); refusing to draw",
                     "finish the pending command / close the dialog in CAD, then retry", null);
 
             int countBefore = CountOf(doc, "ModelSpace");
-            if (countBefore < 0) throw new ZwcError("NO_MODELSPACE", "cannot read ModelSpace.Count", null, null);
+            if (countBefore < 0) throw new CadError("NO_MODELSPACE", "cannot read ModelSpace.Count", null, null);
 
             // AutoCAD: BeginUndoMark / ZWCAD: StartUndoMark - same semantics, different names.
             // (EndUndoMark exists on both.)
@@ -130,7 +130,7 @@ namespace ZwcHelper
                 {
                     object ent = CreateEntity(ms, spec);
                     if (ent == null)
-                        throw new ZwcError("CREATE_FAILED", "CAD returned no object for " + spec.Kind + " on layer " + spec.Layer, null, null);
+                        throw new CadError("CREATE_FAILED", "CAD returned no object for " + spec.Kind + " on layer " + spec.Layer, null, null);
                     Com.TrySet(ent, "Layer", spec.Layer);
                     if (spec.Color > 0) Com.TrySet(ent, "Color", spec.Color);
                     if (spec.Kind == "poly")
@@ -153,7 +153,7 @@ namespace ZwcHelper
                     }
                     if (spec.Kind == "text") Com.TrySet(ent, "StyleName", styleName);
                     string h = Com.Str(Com.TryGet(ent, "Handle"));
-                    if (string.IsNullOrEmpty(h)) throw new ZwcError("HANDLE_MISSING", "entity created but its Handle property is empty", null, null);
+                    if (string.IsNullOrEmpty(h)) throw new CadError("HANDLE_MISSING", "entity created but its Handle property is empty", null, null);
                     spec.Handle = h;
                     handles.Add(h);
                 }
@@ -186,7 +186,7 @@ namespace ZwcHelper
                 Rollback(doc, countBefore, ctx);
                 verify.Add("rolledBack", true);
                 verify.Add("countAfterRollback", CountOf(doc, "ModelSpace"));
-                throw new ZwcError("VERIFY_FAILED",
+                throw new CadError("VERIFY_FAILED",
                     "the section was drawn but read-back verification failed ("
                     + (verify.List("issues") == null ? 0 : verify.List("issues").Count) + " issue(s)); the whole batch was undone",
                     "nothing was left on the drawing - see result.verify.issues", Json.Write(verify));
@@ -348,9 +348,9 @@ namespace ZwcHelper
             }
             catch (Exception e)
             {
-                throw new ZwcError("CREATE_FAILED", "Add* failed for " + spec.Kind + ": " + Com.Hr(e), null, null);
+                throw new CadError("CREATE_FAILED", "Add* failed for " + spec.Kind + ": " + Com.Hr(e), null, null);
             }
-            throw new ZwcError("CREATE_FAILED", "unknown spec kind " + spec.Kind, null, null);
+            throw new CadError("CREATE_FAILED", "unknown spec kind " + spec.Kind, null, null);
         }
 
         private static void EnsureLayer(object layers, string name, Ctx ctx)
@@ -367,7 +367,7 @@ namespace ZwcHelper
                     try { lyr = Com.Call(layers, "Item", name); }
                     catch (Exception) { lyr = null; }
                     if (lyr == null)
-                        throw new ZwcError("LAYER_FAILED", "cannot create layer " + name + ": " + Com.Hr(e), null, null);
+                        throw new CadError("LAYER_FAILED", "cannot create layer " + name + ": " + Com.Hr(e), null, null);
                 }
             }
             if (name.EndsWith("-WATER", StringComparison.OrdinalIgnoreCase)) Com.TrySet(lyr, "Color", 5);

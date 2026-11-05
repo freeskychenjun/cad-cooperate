@@ -7,7 +7,7 @@
 
 | 文件 | 作用 |
 |---|---|
-| `make_fixtures.py` | 生成 `fixtures\problem-rich.dxf`（45 实体，每条规则至少一个实例）+ 三套 JSON 夹具（与 `zwc.ps1 info/read` schema 同构，离线确定性） |
+| `make_fixtures.py` | 生成 `fixtures\problem-rich.dxf`（45 实体，每条规则至少一个实例）+ 三套 JSON 夹具（与 `cad.ps1 info/read` schema 同构，离线确定性） |
 | `make_clean_dxf.py` | 生成「零问题」干净图 `fixtures\clean.dxf`（14 实体） |
 | `fixtures\*.{info,read}.json` | 离线夹具：`problem-rich` / `clean` / `strict`（图层命名、未知图层、缺失文字样式） |
 | `fixtures\expected-hits.json` | 回归契约：每个规则最少命中数、必须 `not_measured` 的规则、最少 blocker 数 |

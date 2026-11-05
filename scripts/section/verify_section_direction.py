@@ -2,7 +2,7 @@
 """验证：设计中心线 5E078 的顶点顺序是否 = 桩号增大方向（决定"左岸"方向是否成立）。"""
 import json, math, os, re
 
-TMP = os.path.join(os.environ["TEMP"], "zwcad-cooperate")
+TMP = os.path.join(os.environ["TEMP"], "cad-cooperate")
 g = json.load(open(os.path.join(TMP, "sections-geom-cache.json"), encoding="utf-8"))
 lines, texts, centre = g["lines"], g["texts"], g["centre"]
 

@@ -6,7 +6,7 @@ DESIGN-M1 §6 把「ezdxf 独立复核脚本」划给计算侧；这是**第三�
   prepare.py（计算侧） / make_expected.py（基准侧） / 本脚本（DXF 内核往返）
 三方若一致，几何/文字/图层基本不可能同时错。
 
-做法：把模型里的实体写进一个真 DXF（%TEMP%\\zwcad-cooperate\\<hash>\\，避开 DGS 对
+做法：把模型里的实体写进一个真 DXF（%TEMP%\\cad-cooperate\\<hash>\\，避开 DGS 对
 工作区 .dxf 的透明加密）→ ezdxf 重新读回 → 逐项与 expected.json 比对。
 
 用法：
@@ -156,7 +156,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     model = load(args.model)
     expected = load(args.expected)
 
-    tmp_root = os.path.join(tempfile.gettempdir(), "zwcad-cooperate")
+    tmp_root = os.path.join(tempfile.gettempdir(), "cad-cooperate")
     os.makedirs(tmp_root, exist_ok=True)
     digest = hashlib.sha1(os.path.abspath(args.model).encode("utf-8")).hexdigest()[:12]
     dxf_path = os.path.join(tmp_root, "section-%s.dxf" % digest)

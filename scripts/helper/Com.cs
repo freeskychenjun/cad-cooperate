@@ -1,6 +1,6 @@
 // Com.cs - COM late-binding helpers (Com) and COM collection indexing (Coll).
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). Com wraps
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). Com wraps
 // InvokeMember with the retry policy and the error/hint text every command relies on;
 // Coll detects each collection's lower bound instead of assuming 0- or 1-based (getting it
 // wrong silently drops the first entity of every read). Nothing was edited.
@@ -12,7 +12,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // COM late-binding helpers
@@ -26,7 +26,7 @@ namespace ZwcHelper
 
         public static object Get(object o, string name)
         {
-            if (o == null) throw new ZwcError("COM_NULL", "COM object is null while reading '" + name + "'", null, null);
+            if (o == null) throw new CadError("COM_NULL", "COM object is null while reading '" + name + "'", null, null);
             return o.GetType().InvokeMember(name, F | BindingFlags.GetProperty, null, o, null);
         }
 
@@ -104,7 +104,7 @@ namespace ZwcHelper
 
         public static object Call(object o, string name, params object[] a)
         {
-            if (o == null) throw new ZwcError("COM_NULL", "COM object is null while calling '" + name + "'", null, null);
+            if (o == null) throw new CadError("COM_NULL", "COM object is null while calling '" + name + "'", null, null);
             return o.GetType().InvokeMember(name, F | BindingFlags.InvokeMethod, null, o, a);
         }
 

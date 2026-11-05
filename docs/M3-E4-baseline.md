@@ -24,8 +24,8 @@
 | 项 | 做法 |
 |---|---|
 | 任务集 | `tests\bench\tasks.json`：20 条任务级用例（目标用自然语言写，steps 是 agent 的真实命令序列），**不是**命令微基准 |
-| 入口 | `powershell -File scripts\zwc.ps1 <cmd> ...`（**PS 入口** = daemon 未启用时的现状；E1 后同一 runner 用 `-Entry client` 对比） |
-| 被测代码快照 | runner `-Freeze`（默认开）把 `scripts\zwc.ps1` + `scripts\helper\*.cs` 复制到 `<Out>\frozen` 再跑，SHA256 记在 `summary.json.meta.freeze`；避免队友并行改代码把两个版本混进同一次基线 |
+| 入口 | `powershell -File scripts\cad.ps1 <cmd> ...`（**PS 入口** = daemon 未启用时的现状；E1 后同一 runner 用 `-Entry client` 对比） |
+| 被测代码快照 | runner `-Freeze`（默认开）把 `scripts\cad.ps1` + `scripts\helper\*.cs` 复制到 `<Out>\frozen` 再跑，SHA256 记在 `summary.json.meta.freeze`；避免队友并行改代码把两个版本混进同一次基线 |
 | 重复 | 每条 3 次取**中位数**；`Q4` 大图读只跑 1 次（单次 >200 s 量级，控时长；量级与中位数同阶） |
 | 判定 | `tests\bench\checkers\check.py` 独立算（几何长度、分层计数、bbox 平移、verify 结果、退出码），输出 `{ok,kind,reasons,metrics}` |
 | 指标 | 成功率 / 命令数 / 墙钟（含 PS 启动）/ 每命令 / 响应字节（**token≈字节/3.2**）/ 失败分类 / 一键撤销（undo 后实体数回 0）/ 进程卫生 |
@@ -104,7 +104,7 @@
 | `X3-bad-data-gate`（脏数据前置拦截） | 3 份坏 xlsx 全部 exit 2 + `BAD_DATA`、**不产出模型文件**、每个 0.4 s |
 | 一键撤销 | 所有出图任务（S1–S4、C3、W4）`undo -Token` 后实体数回 0：**6/6 成功**，撤销墙钟 4.5–6.2 s（1 条命令，本身也吃地板价） |
 | 进程卫生 | 每任务后本产品实例恒为 1；`finish -Quit` 后目标产品进程 **0**；其它产品进程（core-cad 的 Classic）只记录不动 |
-| 命令面拒绝 | 未知写命令由 `zwc.ps1` 前置拒绝（**2.0–2.4 s**，未进 helper）——比正常命令便宜，因为不用起 helper |
+| 命令面拒绝 | 未知写命令由 `cad.ps1` 前置拒绝（**2.0–2.4 s**，未进 helper）——比正常命令便宜，因为不用起 helper |
 
 ### 5.2 能力缺口（5 条，E2 目标，不计失败）
 
@@ -142,18 +142,18 @@
 
 **全 20 条 client 组（repeat 2，`tmp\bench\20261104-160343`，2026-11-04 16:03–16:05）**：15 条成功 + 5 条能力缺口（E2）、**0 失败 / 0 产品缺陷**，W4 成功；每命令 `status` 均值 **139 ms**（min 123，地板价 **62 ms**）、`finish -Quit` **7.17 s**、`procsAfter:0`、总时长 **124.7 s**（20 条 ×2 次全跑完）。按类别中位任务成本：读/查 2.07 s、改图 1.09 s（含 5 条 76 ms 的缺口探针）、断面 5.72 s、检核 1.2–2.0 s、异常 1.15 s。**这组数据即 E1 后的全量对照。**
 
-> 说明：全量 client 组曾因 **`-Freeze` 快照 + client/daemon 共享状态**出现间歇 `CLIENT_FAILED: helper binary missing`（core-cad 已让 client 自编译兜底），且**同一产品上并发跑两个 bench 会话会互相串扰**（共享 `%TEMP%\zwcad-cooperate\state.json`、scratch 文档名）。runner 现已加 **per-product 运行互斥锁**（`FileShare.None`，进程退出自动释放；第二个会话会被拒绝并提示），并发不再影响数据；如需并行请用不同 `-Product`。
+> 说明：全量 client 组曾因 **`-Freeze` 快照 + client/daemon 共享状态**出现间歇 `CLIENT_FAILED: helper binary missing`（core-cad 已让 client 自编译兜底），且**同一产品上并发跑两个 bench 会话会互相串扰**（共享 `%TEMP%\cad-cooperate\state.json`、scratch 文档名）。runner 现已加 **per-product 运行互斥锁**（`FileShare.None`，进程退出自动释放；第二个会话会被拒绝并提示），并发不再影响数据；如需并行请用不同 `-Product`。
 
 ## 7. 已知坑（本次实测，写进 SKILL 时必须带）
 
 1. **E1 代码在基线前 1 分钟进树**：`read` 默认从 `geom` 改 `summary`（只回 handle/type/kind/layer/bbox），首版任务因此拿不到顶点。**对策**：基准里所有需要几何/文字的 `read` 显式 `-Mode geom`（旧 helper 忽略未知参数，所以同一 tasks.json 对 E1 前后都成立）。若再遇 read 结果“少了东西”，先看响应里的 `result.mode`。
 2. **`-Launch` 只附着不独占**：目标产品已有实例时 `open -Launch` 附着，随后 `finish -Quit` 会关掉**那个实例**的所有文档。判据只有 `result.launched` / `result.app.launched`。runner 已加「目标产品已有实例 → 拒绝运行」前置闸门。**只退自己 `launched:true` 的 pid。**
-3. **多文档累积会把 ZWCAD 2025 的 COM 打死（本次卡点）**：初版 runner 每个 rep 都 `open -New`，累积到 20+ 文档后，`section` 画 67 实体时 **hang 12+ 分钟**（期间检测到“中望CAD 帮助”窗口弹出，疑似模态阻塞；ZwcHelper 与 zwc.ps1 均卡在等待）。**已修**：① 写类任务共用一个 scratch 图纸（launch 创建、`{scratch}` 占位、收尾 undo 回空）→ 全程文档 ≤6；② 每条命令加 runner 级看门狗（`timeoutSec+60 s`，超时 kill 并记 `exit=-9/WATCHDOG_TIMEOUT`）。复跑请用**当前版 runner**（带看门狗），别用 144658 那版长跑。
+3. **多文档累积会把 ZWCAD 2025 的 COM 打死（本次卡点）**：初版 runner 每个 rep 都 `open -New`，累积到 20+ 文档后，`section` 画 67 实体时 **hang 12+ 分钟**（期间检测到“中望CAD 帮助”窗口弹出，疑似模态阻塞；CadHelper 与 cad.ps1 均卡在等待）。**已修**：① 写类任务共用一个 scratch 图纸（launch 创建、`{scratch}` 占位、收尾 undo 回空）→ 全程文档 ≤6；② 每条命令加 runner 级看门狗（`timeoutSec+60 s`，超时 kill 并记 `exit=-9/WATCHDOG_TIMEOUT`）。复跑请用**当前版 runner**（带看门狗），别用 144658 那版长跑。
 4. **大图 read 超时口径**：helper 默认 60 s；2025 无 LISP 桥、`-Mode geom` 时 ≈0.36 s/实体 → 624 实体需 3–4 分钟。任务里 `read` 一律 `-TimeoutSec 900`；`run_bench.ps1` 的看门狗在此基础上 +60 s。
 5. **机器负载会让地板价漂移 2.7–4.8 s**：本次三个 run 分别测到 2.7 / 4.2 / 4.8 s。对比 E1 前后务必**同环境**连跑，或只看相对降幅；报告里已标注每个 run 的地板价。
 6. **Python 侧步骤很便宜**（prepare 0.3–1.6 s、audit 0.1 s、verify 0.1 s），**不构成瓶颈**；成本全在 CAD 命令入口。
 7. **产品数据侧的 DB 查询正常**：`prepare.py --from-db <站码>`（2/4 序列、单日期）⇔ 5.9 GB `hydro_data.db` 只读查询 0.3–1.6 s。S2/S4 在 144658 的失败是**我的 runner 把站码当相对路径**（`{asset}` 标量被 `Join-Path`），已修（当前 tasks.json + runner 正常）。
-8. **同一产品上并发跑两个 bench 会话会串扰（本次实测，runner 已加互斥）**：两个会话共享 `%TEMP%\zwcad-cooperate\state.json`（undo token / openedDocs）与 scratch 文档名（`Drawing2.dwg`），会看到"section 画完 67 但 read 读到 0 / 下一 rep 读到 134"这类陈旧读取（`tmp\bench\client-entry3` 的 W4 即此现象；同期 `tmp\bench\20261104-160343` 的独立全量 client 跑 W4 成功 ⇒ 非稳定复现，也非绘制/undo 逻辑）。**已修**：`run_bench.ps1` 在启动处对 `-Product` 加 `FileShare.None` 排他锁（环境实例被占用就拒绝运行；崩溃自动释放，无陈锁）；需要真正并行请用不同 `-Product`。
+8. **同一产品上并发跑两个 bench 会话会串扰（本次实测，runner 已加互斥）**：两个会话共享 `%TEMP%\cad-cooperate\state.json`（undo token / openedDocs）与 scratch 文档名（`Drawing2.dwg`），会看到"section 画完 67 但 read 读到 0 / 下一 rep 读到 134"这类陈旧读取（`tmp\bench\client-entry3` 的 W4 即此现象；同期 `tmp\bench\20261104-160343` 的独立全量 client 跑 W4 成功 ⇒ 非稳定复现，也非绘制/undo 逻辑）。**已修**：`run_bench.ps1` 在启动处对 `-Product` 加 `FileShare.None` 排他锁（环境实例被占用就拒绝运行；崩溃自动释放，无陈锁）；需要真正并行请用不同 `-Product`。
 
 ## 8. 交付物 / 复跑
 

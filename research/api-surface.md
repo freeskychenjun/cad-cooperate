@@ -1,4 +1,4 @@
-# ZWCAD 自动化 API 全貌与版本差异（供 `zwcad-cooperate` skill 定接口）
+# ZWCAD 自动化 API 全貌与版本差异（供 `cad-cooperate` skill 定接口）
 
 > 调研人：api-research（task-2）｜日期：2026-11-04
 > 口径：本机 **ZWCAD Classic Chs 16.0.1111（= ZWCAD 2016 Classic，32 位）**，安装目录 `C:\Program Files (x86)\ZWCAD Classic Chs\`。

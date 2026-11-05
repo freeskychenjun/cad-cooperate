@@ -1,4 +1,4 @@
-# zwcad-cooperate -- Python 数据侧依赖
+# cad-cooperate -- Python 数据侧依赖
 #
 # 只有「数据侧」脚本需要这些库（CAD 协作主链路是 PowerShell + C#，零 Python 依赖）：
 #   scripts/section/prepare.py            xlsx/xls -> section.model.json（纯计算，零 COM）

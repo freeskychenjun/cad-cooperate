@@ -3,8 +3,8 @@
 import json, math, os, re, sys
 from openpyxl import load_workbook
 
-REPO = r"D:\DSH工作区\zwcad-cooperate"
-TMP = os.path.join(os.environ["TEMP"], "zwcad-cooperate")
+REPO = r"D:\DSH工作区\cad-cooperate"
+TMP = os.path.join(os.environ["TEMP"], "cad-cooperate")
 XLSX = os.path.join(REPO, "output", "断面数据-东总干渠-起点距高程.xlsx")
 
 ok = True

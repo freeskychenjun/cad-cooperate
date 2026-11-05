@@ -1,6 +1,6 @@
 // Cad.cs - CAD application attachment, document resolution and product detection.
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). Contains
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). Contains
 // Cad plus its nested product helpers ProdInfo and ProgChoice. Cad attaches to the running
 // ZWCAD/AutoCAD through late binding, resolves which drawing a request targets and never
 // saves anything. No logic, visibility, field order or comment text was changed.
@@ -17,7 +17,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // CAD application attachment and document resolution
@@ -612,7 +612,7 @@ namespace ZwcHelper
             if (kind == null)
             {
                 if (code == "NO_INSTANCE")
-                    throw new ZwcError("NO_INSTANCE",
+                    throw new CadError("NO_INSTANCE",
                         launch
                             ? "no CAD instance is running and -App was not given, so the product to start is unknown"
                             : "no ZWCAD and no AutoCAD instance is running",
@@ -620,7 +620,7 @@ namespace ZwcHelper
                             ? "pass -App zwcad|autocad (plus -ProgId when several versions of that product are installed) so the tool knows which CAD to start"
                             : "open the drawing in ZWCAD or AutoCAD first; the tool never starts a CAD on its own",
                         Json.Write(detail));
-                throw new ZwcError("AMBIGUOUS_PRODUCT",
+                throw new CadError("AMBIGUOUS_PRODUCT",
                     "both a ZWCAD and an AutoCAD instance are running and the target drawing is open in neither; refusing to guess which one to drive",
                     "pass -App zwcad|autocad (and -ProgId when several versions of that product run), or open the drawing in the one you want",
                     Json.Write(detail));
@@ -654,7 +654,7 @@ namespace ZwcHelper
                     m.Add("suggestedProgId", SuggestProgId(kind, lab));
                     prods.Add(m);
                 }
-                throw new ZwcError("MULTI_PRODUCT",
+                throw new CadError("MULTI_PRODUCT",
                     "two different CAD products are running (" + string.Join("; ", names.ToArray())
                     + "); refusing to guess which one to drive",
                     "pass -ProgId <ZWCAD.Application.16|ZWCAD.Application.2025> to choose, or close one of them",
@@ -663,7 +663,7 @@ namespace ZwcHelper
 
             string[] pids = pc.Candidates;
             if (pids == null || pids.Length == 0)
-                throw new ZwcError("NO_PRODUCT", "no usable ProgID for kind '" + kind + "'", null, Json.Write(pc.Detection));
+                throw new CadError("NO_PRODUCT", "no usable ProgID for kind '" + kind + "'", null, Json.Write(pc.Detection));
             Exception last = null;
 
             // 1) attach to a running instance - never start one implicitly
@@ -703,7 +703,7 @@ namespace ZwcHelper
                     msg = "could not attach to or start " + pids[0];
                     hint = "check that CAD is installed, licensed and not showing a modal dialog";
                 }
-                throw new ZwcError("NO_INSTANCE", msg, hint, detail);
+                throw new CadError("NO_INSTANCE", msg, hint, detail);
             }
 
             c.Hwnd = Com.HwndLong(Com.TryGet(c.App, "HWND"));
@@ -917,7 +917,7 @@ namespace ZwcHelper
             return string.Equals(x, y, StringComparison.OrdinalIgnoreCase);
         }
 
-        private ZwcError DocNotFound(string wanted, List<object> docs)
+        private CadError DocNotFound(string wanted, List<object> docs)
         {
             List<object> cands = new List<object>();
             List<string> names = new List<string>();
@@ -934,7 +934,7 @@ namespace ZwcHelper
             string detail = Json.Write(cands);
             string msg = "document not found by exact FullName: " + (wanted == null ? "(none)" : wanted)
                        + "; open documents: " + string.Join("; ", names.ToArray());
-            return new ZwcError("DOC_NOT_FOUND", msg,
+            return new CadError("DOC_NOT_FOUND", msg,
                 "pass -Doc with the exact full path (or the drawing name) of one of the candidates below", detail);
         }
 
@@ -975,7 +975,7 @@ namespace ZwcHelper
             if (string.IsNullOrEmpty(docArg))
             {
                 if (docs.Count == 0)
-                    throw new ZwcError("NO_DOCUMENT", "no drawing is open in CAD",
+                    throw new CadError("NO_DOCUMENT", "no drawing is open in CAD",
                         "open one (open -New / -Doc <path>) or pass -Launch", null);
                 if (docs.Count == 1) { matchedBy = "only"; Select(docs[0]); RememberDoc(docArg, null, docs[0]); return docs[0]; }
                 if (allowActive)
@@ -1003,7 +1003,7 @@ namespace ZwcHelper
                         return pick;
                     }
                 }
-                throw new ZwcError("DOC_AMBIGUOUS",
+                throw new CadError("DOC_AMBIGUOUS",
                     "no -Doc given and " + docs.Count + " drawings are open; refusing to guess which one to use",
                     "pass -Doc with the exact full path (or the drawing name); open documents: " + Candidates(docs),
                     Json.Write(CandidatesJson(docs)));
@@ -1062,7 +1062,7 @@ namespace ZwcHelper
             try { doc = Com.Call(coll, "Open", path, readOnly); }
             catch (Exception e)
             {
-                throw new ZwcError("OPEN_FAILED", "Documents.Open failed for " + path + ": " + Com.Hr(e),
+                throw new CadError("OPEN_FAILED", "Documents.Open failed for " + path + ": " + Com.Hr(e),
                     "check the path, that the file is not locked by another application, and that it is a real drawing", null);
             }
             return doc;
@@ -1075,7 +1075,7 @@ namespace ZwcHelper
             try { doc = Com.Call(coll, "Add"); }
             catch (Exception e)
             {
-                throw new ZwcError("NEW_DOC_FAILED", "Documents.Add failed: " + Com.Hr(e), null, null);
+                throw new CadError("NEW_DOC_FAILED", "Documents.Add failed: " + Com.Hr(e), null, null);
             }
             return doc;
         }

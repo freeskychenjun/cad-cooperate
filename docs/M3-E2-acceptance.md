@@ -27,8 +27,8 @@
 
 | 项 | 值 |
 |---|---|
-| 被测快照（`-Freeze`，SHA256 前 12） | `scripts\zwc.ps1` = `6cdfb6557ffa`；`Edits.cs` = `0fec6db13634`；`EditsQuery.cs` = `3a786d562ad6`；`ZwcHelper.cs` = 见 `full20-final\summary.json.meta.freeze` |
-| 入口 | `-Entry client`（daemon + `ZwcClient.exe`），daemon 由 client 自起；对照此前 `-Entry ps1` |
+| 被测快照（`-Freeze`，SHA256 前 12） | `scripts\cad.ps1` = `6cdfb6557ffa`；`Edits.cs` = `0fec6db13634`；`EditsQuery.cs` = `3a786d562ad6`；`CadHelper.cs` = 见 `full20-final\summary.json.meta.freeze` |
+| 入口 | `-Entry client`（daemon + `CadClient.exe`），daemon 由 client 自起；对照此前 `-Entry ps1` |
 | 重复 | 每条 **2 次取中位数**（20 条）；负例 1 次 |
 | 夹具 | `tests\bench\fixtures\design-water.dxf`（23 实体；**DXF R2007**，见 §6 的兼容性发现）；每条写任务由 runner 复制**私有副本**再打开，源图不变、repeat 互不污染 |
 | 命令纪律 | 每条 document 级命令显式 `-Doc`（DESIGN 口径，避免 `DOC_AMBIGUOUS`）；产品显式 `-ProgId/-App` |
@@ -81,7 +81,7 @@
 | **N1 坏锚点** | `ANCHOR_MISSING`、`applied=0`、前后指纹**完全一致** | ✅ `error.code=ANCHOR_MISSING`，detail `{i:1, handle:"DEAD2", field:"handle", actual:"(not found)"}`；21 个实体逐 handle 指纹 0 变化 | 1.85 s |
 | **N2 回读失败回滚** | `VERIFY_FAILED`、`rolledBack:true`、指纹不变 | ✅ `error.code=VERIFY_FAILED`、issues `READBACK_HEIGHT`（`height read back as 2.5, set requested -5`）、`result.rolledBack=true`、指纹 0 变化 | 2.50 s |
 | **N3 undo 回基线** | undo 后逐 handle 指纹恢复 | ✅ `undo.verify{baseline:20, countBefore:20, countAfter:20, ok:true}`；回读指纹与改前完全一致 | 2.84 s |
-| **N4 snapshot/diff** | `changed=3`（handle+字段 before/after 正确）、added/removed=0 | ✅ `added=0, removed=0, changed=3, same=17`；`changed[0]={handle:"42", fields:{text:{before:"设计水位 42.30 m", after:"临时改"}}}`；snapshot 落 `%TEMP%\zwcad-cooperate\snap\snap-20261104-171201.json`（count=20） | 3.79 s |
+| **N4 snapshot/diff** | `changed=3`（handle+字段 before/after 正确）、added/removed=0 | ✅ `added=0, removed=0, changed=3, same=17`；`changed[0]={handle:"42", fields:{text:{before:"设计水位 42.30 m", after:"临时改"}}}`；snapshot 落 `%TEMP%\cad-cooperate\snap\snap-20261104-171201.json`（count=20） | 3.79 s |
 
 > 三个负例都是**先证明失败语义，再证明文档没被污染**（逐 handle 指纹比对），不是只看错误码。
 
@@ -135,7 +135,7 @@
 
 ## 8. 已知限制与剩余风险
 
-1. **XData 读侧依赖同机镜像表（平台限制，非使用问题）**：`GetXData(AppName, out types, out vals)` 的 by-ref VARIANT 在 .NET 晚绑定下取不回（core-cad 用 `xprobe` 实测 params 保持 null，3 参/2 参分别报 TargetParameterCount）。实现改为：注册 `RegisteredApplications` → 真实 `SetXData` → 回读优先 `GetXData`，取不到则回退 `%TEMP%\zwcad-cooperate` 的 xdata 镜像表并给 `XDATA_READ_FALLBACK` warning；`query -XData` 同样先 GetXData 再镜像，`entity delete` 清镜像。**含义**：跨机器/跨会话读 xdata 需要重新打标（或 Classic 走 LISP 通道）。`APP:VALUE` 为精确串匹配，只给 `APP` 表示"有该 app 任意值"。
+1. **XData 读侧依赖同机镜像表（平台限制，非使用问题）**：`GetXData(AppName, out types, out vals)` 的 by-ref VARIANT 在 .NET 晚绑定下取不回（core-cad 用 `xprobe` 实测 params 保持 null，3 参/2 参分别报 TargetParameterCount）。实现改为：注册 `RegisteredApplications` → 真实 `SetXData` → 回读优先 `GetXData`，取不到则回退 `%TEMP%\cad-cooperate` 的 xdata 镜像表并给 `XDATA_READ_FALLBACK` warning；`query -XData` 同样先 GetXData 再镜像，`entity delete` 清镜像。**含义**：跨机器/跨会话读 xdata 需要重新打标（或 Classic 走 LISP 通道）。`APP:VALUE` 为精确串匹配，只给 `APP` 表示"有该 app 任意值"。
 2. ~~AutoCAD 2007 的 `finish -Quit` 不退出进程~~ → **core-cad 已修并复验**（2026-11-04 17:21）：`processesAfter:0 / forcedKill:false / exit 0`，此后 `Get-Process acad`=0。根因是 finish 的进程轮询只数 `zwcad` 映像（`-App autocad` 数不到 acad）；现按产品族计数 + 二次 Quit + 仅对自己 `launched:true` 的 pid 兜底 Kill。runner 的"按 pid 强停"保留作保险（本次未触发）。**语义变化**：`finish.processesAfter` 数本产品族，不是全部 CAD。
 3. **被测代码仍在演进 ⇒ 基线必须冻结**：E2 实现期 core-cad 多次热改 helper（16:26 一次 `COMPILE_FAILED`、16:47 一次 hash 变更导致 client `helper binary missing`），不冻结的跑法会混版本。**口径**：验收/对比一律 `-Freeze`（本次快照哈希见 §2），E1/E2 完成后再用 live 源码复跑一次。
 4. **大图读取**（624 实体）仍是单次最贵操作（~6.9 s helper）；如需更快需要 E1 的 `handles` 档（Classic 571 ms / 2025 预计 1–2 s）。

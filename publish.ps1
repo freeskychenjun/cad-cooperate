@@ -1,6 +1,6 @@
-# publish.ps1 - stage the zwcad-cooperate skill package into a skills install directory.
+# publish.ps1 - stage the cad-cooperate skill package into a skills install directory.
 #
-#   .\publish.ps1                       -> deploy to $env:USERPROFILE\.agents\skills\zwcad-cooperate
+#   .\publish.ps1                       -> deploy to $env:USERPROFILE\.agents\skills\cad-cooperate
 #   .\publish.ps1 -Target <dir>         -> deploy elsewhere (needs -Force unless <...>\skills\<name>)
 #   .\publish.ps1 -WhatIf               -> dry run: list what would be copied / removed, touch nothing
 #   .\publish.ps1 -SkipVerify           -> skip the post-deploy `doctor` smoke test
@@ -15,7 +15,7 @@
 # Pure ASCII source on purpose (PowerShell 5.1 parses a BOM-less .ps1 using the ANSI code page).
 
 param(
-    [string]$Target = (Join-Path $env:USERPROFILE '.agents\skills\zwcad-cooperate'),
+    [string]$Target = (Join-Path $env:USERPROFILE '.agents\skills\cad-cooperate'),
     [switch]$Force,
     [switch]$WhatIf,
     [switch]$SkipVerify
@@ -38,21 +38,21 @@ $manifest = @(
     @{ src = 'docs\M3-E6-geometry-dump.md';              dst = 'reference\geometry-dump.md' }
     @{ src = 'docs\tray-badge.md';                       dst = 'reference\tray-badge.md' }
     @{ src = 'docs\autocad-2021-acceptance.md';           dst = 'reference\autocad-2021.md' }
-    @{ src = 'scripts\zwc.ps1';                           dst = 'scripts\zwc.ps1' }
-    @{ src = 'scripts\zwc.cmd';                           dst = 'scripts\zwc.cmd' }
+    @{ src = 'scripts\cad.ps1';                           dst = 'scripts\cad.ps1' }
+    @{ src = 'scripts\cad.cmd';                           dst = 'scripts\cad.cmd' }
     @{ src = 'scripts\tray.ps1';                          dst = 'scripts\tray.ps1' }
-    @{ src = 'scripts\tray\ZwcTray.cs';                   dst = 'scripts\tray\ZwcTray.cs' }
+    @{ src = 'scripts\tray\CadTray.cs';                   dst = 'scripts\tray\CadTray.cs' }
     @{ src = 'scripts\tray\ui.json';                      dst = 'scripts\tray\ui.json' }
-    @{ src = 'bin\tray\ZwcTray.exe';                      dst = 'bin\tray\ZwcTray.exe'; optional = $true }
-    @{ src = 'scripts\client\ZwcClient.cs';               dst = 'scripts\client\ZwcClient.cs' }
+    @{ src = 'bin\tray\CadTray.exe';                      dst = 'bin\tray\CadTray.exe'; optional = $true }
+    @{ src = 'scripts\client\CadClient.cs';               dst = 'scripts\client\CadClient.cs' }
     @{ src = 'scripts\helper\*.cs';                       dst = 'scripts\helper\' }
     @{ src = 'scripts\section\prepare.py';                dst = 'scripts\section\prepare.py' }
     @{ src = 'scripts\section\qa_yssd.py';                dst = 'scripts\section\qa_yssd.py' }
     @{ src = 'scripts\audit\audit.py';                    dst = 'scripts\audit\audit.py' }
     @{ src = 'scripts\audit\run.ps1';                     dst = 'scripts\audit\run.ps1' }
     @{ src = 'tests\fixtures\section-30.xlsx';            dst = 'fixtures\section-30.xlsx' }
-    @{ src = 'bin\ZwcClient.exe';                         dst = 'bin\ZwcClient.exe'; optional = $true }
-    @{ src = 'bin\ZwcClient.sha';                         dst = 'bin\ZwcClient.sha'; optional = $true }
+    @{ src = 'bin\CadClient.exe';                         dst = 'bin\CadClient.exe'; optional = $true }
+    @{ src = 'bin\CadClient.sha';                         dst = 'bin\CadClient.sha'; optional = $true }
 )
 
 function Fail([string]$msg) { Write-Host ("ERROR: " + $msg) -ForegroundColor Red; exit 1 }
@@ -61,8 +61,8 @@ function Fail([string]$msg) { Write-Host ("ERROR: " + $msg) -ForegroundColor Red
 $leaf = Split-Path -Leaf $Target
 $parentLeaf = Split-Path -Leaf (Split-Path -Parent $Target)
 if (-not $Force) {
-    if ($leaf -ne 'zwcad-cooperate' -or $parentLeaf -ne 'skills') {
-        Fail ("target must look like <...>\skills\zwcad-cooperate (got: " + $Target + "). Pass -Force to override.")
+    if ($leaf -ne 'cad-cooperate' -or $parentLeaf -ne 'skills') {
+        Fail ("target must look like <...>\skills\cad-cooperate (got: " + $Target + "). Pass -Force to override.")
     }
 }
 
@@ -86,7 +86,7 @@ $staging = $Target + '.__staging'
 $backup = $Target + '.__old'
 $totalBytes = ($planned | Measure-Object -Property Bytes -Sum).Sum
 
-Write-Host '=== publish zwcad-cooperate ==='
+Write-Host '=== publish cad-cooperate ==='
 Write-Host ("root    : " + $root)
 Write-Host ("target  : " + $Target)
 Write-Host ("files   : " + $planned.Count + " (" + [math]::Round($totalBytes / 1KB, 1) + " KB)")
@@ -122,7 +122,7 @@ foreach ($p in $planned) {
 }
 
 # ---------------------------------------------------------------- swap
-# A running daemon keeps <target>\bin\cache\<sha>\ZwcHelper.exe open, which makes the directory
+# A running daemon keeps <target>\bin\cache\<sha>\CadHelper.exe open, which makes the directory
 # un-movable. Stop it first (best effort) and retry the move a few times before failing.
 function Move-WithRetry([string]$from, [string]$to, [int]$attempts = 6) {
     for ($i = 1; $i -le $attempts; $i++) {
@@ -134,7 +134,7 @@ function Move-WithRetry([string]$from, [string]$to, [int]$attempts = 6) {
 }
 
 if (Test-Path -LiteralPath $Target) {
-    $deployedPs1 = Join-Path $Target 'scripts\zwc.ps1'
+    $deployedPs1 = Join-Path $Target 'scripts\cad.ps1'
     if (Test-Path -LiteralPath $deployedPs1) {
         Write-Host 'pre-swap: stopping daemons that run from the deployed copy'
         try { & $deployedPs1 serve -Action stop 2>&1 | Out-Null } catch { }
@@ -150,8 +150,8 @@ Write-Host ("deployed: " + $Target) -ForegroundColor Green
 
 # ---------------------------------------------------------------- verify
 if (-not $SkipVerify) {
-    $client = Join-Path $Target 'bin\ZwcClient.exe'
-    $cmd = Join-Path $Target 'scripts\zwc.cmd'
+    $client = Join-Path $Target 'bin\CadClient.exe'
+    $cmd = Join-Path $Target 'scripts\cad.cmd'
     $verifyExe = if (Test-Path -LiteralPath $client) { $client } elseif (Test-Path -LiteralPath $cmd) { $cmd } else { $null }
     if (-not $verifyExe) {
         Write-Host 'verify  : skipped (no client/cmd found)' -ForegroundColor Yellow
@@ -172,5 +172,5 @@ if (-not $SkipVerify) {
 
 Write-Host ''
 Write-Host 'done. next steps:'
-Write-Host ('  1) ' + (Join-Path $Target 'bin\ZwcClient.exe') + ' doctor')
+Write-Host ('  1) ' + (Join-Path $Target 'bin\CadClient.exe') + ' doctor')
 Write-Host '  2) open your drawing in ZWCAD/AutoCAD, then run a read command with an explicit -ProgId'

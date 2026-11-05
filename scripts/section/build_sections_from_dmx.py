@@ -1,8 +1,8 @@
 # Build dense cross-section profiles for the 东总干渠 drawing.
 #
 # Inputs (read-only, extracted from the live CAD session):
-#   <tmp>\zwcad-cooperate\geom-com.json    section lines (dmx), spot heights (ZDH points), labels (KZD)
-#   <tmp>\zwcad-cooperate\contours.json    contours (DGX polylines with their elevation property)
+#   <tmp>\cad-cooperate\geom-com.json    section lines (dmx), spot heights (ZDH points), labels (KZD)
+#   <tmp>\cad-cooperate\contours.json    contours (DGX polylines with their elevation property)
 #   <tmp> 默认 = tempfile.gettempdir()，可用 --tmp-dir 覆盖（离线复现/测试用）
 #
 # Output (默认 <repo>\output，可用 --outdir/--name 覆盖):

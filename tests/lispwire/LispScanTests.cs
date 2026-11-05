@@ -1,7 +1,7 @@
 // LispScanTests.cs - offline unit tests for scripts\helper\LispScan.cs (M3-E7 P4.2).
 //
 // Pure C#, no CAD, no COM, no drawing: compiled together with LispScanStubs.cs (test-only JMap/Ctx/
-// Com/Commands stand-ins), ZwcErrorStub.cs, LispScan.cs, LispWire.cs and LispTemplate.cs by
+// Com/Commands stand-ins), CadErrorStub.cs, LispScan.cs, LispWire.cs and LispTemplate.cs by
 // tests\selftest_lisp.ps1. Every assertion prints "PASS <name>" or "FAIL <name>"; the exit code is
 // 0 when all pass and 1 otherwise.
 //
@@ -23,7 +23,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using ZwcHelper;
+using CadHelper;
 
 internal static class LispScanTests
 {
@@ -335,7 +335,7 @@ internal static class LispScanTests
             string phase = null;
             string code = null, msg = null, hint = null, detail = null;
             try { LispScan.Run(null, null, req, out meta, out phase); }
-            catch (ZwcError e) { code = e.Code; msg = e.Message; hint = e.Hint; detail = e.Detail; }
+            catch (CadError e) { code = e.Code; msg = e.Message; hint = e.Hint; detail = e.Detail; }
             CheckEq("run.started.code", code, "LISP_FILE_TIMEOUT");
             CheckEq("run.started.message", msg, "LISP scan did not finish within 1000 ms");
             CheckEq("run.started.phase", phase, LispSentinelPhase.Started);
@@ -361,7 +361,7 @@ internal static class LispScanTests
             string phase = null;
             string code = null, msg = null;
             try { LispScan.Run(null, null, req, out meta, out phase); }
-            catch (ZwcError e) { code = e.Code; msg = e.Message; }
+            catch (CadError e) { code = e.Code; msg = e.Message; }
             CheckEq("run.notstarted.code", code, "LISP_NOT_STARTED");
             CheckEq("run.notstarted.file-message", msg,
                 "the LISP file scan did not start within 1000 ms (no __START__ sentinel)");
@@ -380,7 +380,7 @@ internal static class LispScanTests
                 g.TimeoutLabel = "LISP geometry dump";
                 string gcode = null, gmsg = null;
                 try { LispScan.Run(null, null, g, out meta, out phase); }
-                catch (ZwcError e) { gcode = e.Code; gmsg = e.Message; }
+                catch (CadError e) { gcode = e.Code; gmsg = e.Message; }
                 CheckEq("run.notstarted.geom-code", gcode, "LISP_NOT_STARTED");
                 CheckEq("run.notstarted.geom-message", gmsg,
                     "the LISP geometry dump did not start within 1000 ms (no __START__ sentinel)");
@@ -407,7 +407,7 @@ internal static class LispScanTests
             req.BusyLabel = "LISP file scan";
             req.BusyHint = "retry when the command prompt is idle";
             try { LispScan.Run(null, null, req, out meta, out phase); }
-            catch (ZwcError e) { code = e.Code; msg = e.Message; hint = e.Hint; }
+            catch (CadError e) { code = e.Code; msg = e.Message; hint = e.Hint; }
             CheckEq("run.busy.code", code, "BUSY");
             CheckEq("run.busy.file-message", msg, "CAD is busy (CMDACTIVE != 0); LISP file scan not injected");
             CheckEq("run.busy.file-hint", hint, "retry when the command prompt is idle");
@@ -421,7 +421,7 @@ internal static class LispScanTests
             g.BusyLabel = "LISP geometry dump";
             g.BusyHint = "retry when idle";
             try { LispScan.Run(null, null, g, out meta, out phase); }
-            catch (ZwcError e) { code = e.Code; msg = e.Message; hint = e.Hint; }
+            catch (CadError e) { code = e.Code; msg = e.Message; hint = e.Hint; }
             CheckEq("run.busy.geom-code", code, "BUSY");
             CheckEq("run.busy.geom-message", msg, "CAD is busy (CMDACTIVE != 0); LISP geometry dump not injected");
             CheckEq("run.busy.geom-hint", hint, "retry when idle");
@@ -433,7 +433,7 @@ internal static class LispScanTests
             LispScan.Request p = LispScan.NewRequest("scan", false, dir, null, 5000);
             p.PollutedHint = "send ESC in CAD, or let the tool retry";
             try { LispScan.Run(null, null, p, out meta, out phase); }
-            catch (ZwcError e) { code = e.Code; msg = e.Message; hint = e.Hint; }
+            catch (CadError e) { code = e.Code; msg = e.Message; hint = e.Hint; }
             CheckEq("run.polluted.code", code, "PROMPT_POLLUTED");
             CheckEq("run.polluted.message", msg, "CAD command prompt is polluted: Error: undo failed");
             CheckEq("run.polluted.file-hint", hint, "send ESC in CAD, or let the tool retry");
@@ -446,7 +446,7 @@ internal static class LispScanTests
             LispScan.Request p2 = LispScan.NewRequest("geom", true, dir, null, 5000);
             p2.PollutedHint = "send ESC in CAD first";
             try { LispScan.Run(null, null, p2, out meta, out phase); }
-            catch (ZwcError e) { code = e.Code; msg = e.Message; hint = e.Hint; }
+            catch (CadError e) { code = e.Code; msg = e.Message; hint = e.Hint; }
             CheckEq("run.polluted.geom-code", code, "PROMPT_POLLUTED");
             CheckEq("run.polluted.geom-hint", hint, "send ESC in CAD first");
             Check("run.polluted.chinese-prompt-detected",

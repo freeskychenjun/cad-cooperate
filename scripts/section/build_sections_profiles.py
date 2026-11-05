@@ -4,10 +4,10 @@
 取代了原先写死 1+300~16+500 的那一版：中心线不再硬编码句柄，改为自动识别；分段/输出名走环境变量。
 
 环境变量（都可省略，省略时用括号里的默认值）
-  ZWC_GEOM      几何 dump 的 JSON（ZwcClient read -Mode geom 的输出；默认 %TEMP%\zwc-geom-all.utf8.json）
-  ZWC_CACHE     解析后的中间缓存路径（默认 %TEMP%\zwcad-cooperate\sections-geom-cache.json）
-  ZWC_TAG       输出文件名标签，如 "16+500~24+700"（默认空）
-  ZWC_UNIT_NOTE 单位说明，写进成果表（可选）
+  CAD_GEOM      几何 dump 的 JSON（CadClient read -Mode geom 的输出；默认 %TEMP%\cad-geom-all.utf8.json）
+  CAD_CACHE     解析后的中间缓存路径（默认 %TEMP%\cad-cooperate\sections-geom-cache.json）
+  CAD_TAG       输出文件名标签，如 "16+500~24+700"（默认空）
+  CAD_UNIT_NOTE 单位说明，写进成果表（可选）
 
 管线（与 1+300~16+500 那一段完全一致）
   断面线 dmx(LINE) / 高程点 GCD(块插入点 Z) / 桩号 KZD(TEXT)
@@ -27,12 +27,12 @@ from openpyxl.utils import get_column_letter
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 OUTDIR = os.path.join(REPO, "output")
-TMP = os.path.join(os.environ["TEMP"], "zwcad-cooperate")
+TMP = os.path.join(os.environ["TEMP"], "cad-cooperate")
 
-SRC = os.environ.get("ZWC_GEOM") or os.path.join(os.environ["TEMP"], "zwc-geom-all.utf8.json")
-CACHE = os.environ.get("ZWC_CACHE") or os.path.join(TMP, "sections-geom-cache.json")
-TAG = os.environ.get("ZWC_TAG", "")
-UNIT_NOTE = os.environ.get("ZWC_UNIT_NOTE", "")
+SRC = os.environ.get("CAD_GEOM") or os.path.join(os.environ["TEMP"], "cad-geom-all.utf8.json")
+CACHE = os.environ.get("CAD_CACHE") or os.path.join(TMP, "sections-geom-cache.json")
+TAG = os.environ.get("CAD_TAG", "")
+UNIT_NOTE = os.environ.get("CAD_UNIT_NOTE", "")
 
 ON_LINE_TOL = 0.50
 LABEL_R = 8.0

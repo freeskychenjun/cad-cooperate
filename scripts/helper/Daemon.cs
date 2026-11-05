@@ -1,6 +1,6 @@
 // Daemon.cs - M3-E1 performance base: resident daemon, pipe protocol, request dispatcher.
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). The daemon
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). The daemon
 // stays resident, reads one framed request per pipe connection and answers through the same
 // Commands entry points as the one-shot mode. No logic, visibility, idle timing or error
 // text was changed; the file-level "Entry point" banner stays with Program.
@@ -14,7 +14,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // M3-E1 performance base: resident daemon + pipe protocol + request dispatcher

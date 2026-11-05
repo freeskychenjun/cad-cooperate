@@ -1,6 +1,6 @@
 // Cmd.cs - SendCommand / LISP bridge with the discipline from com-probe.md.
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). Every
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). Every
 // command string stays well below 2 KB and its LASTPROMPT is checked afterwards; LISP
 // results come back through GetLispVariable (scalars only). No logic, visibility, sequence
 // number or message text was changed.
@@ -10,7 +10,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // SendCommand / LISP bridge with the discipline from com-probe.md
@@ -60,7 +60,7 @@ namespace ZwcHelper
         {
             string p = LastPrompt(doc);
             if (PromptPolluted(p))
-                throw new ZwcError("CMD_STATE_POLLUTED",
+                throw new CadError("CMD_STATE_POLLUTED",
                     "CAD command line is stuck before '" + what + "' (LASTPROMPT = \"" + p + "\")",
                     "press ESC in CAD (or run _.U) until the prompt is back to normal, then retry",
                     null);
@@ -70,22 +70,22 @@ namespace ZwcHelper
         /// The string must be a single line: SendCommand turns "\n" into Enter.</summary>
         public static void Send(object doc, string command, Ctx ctx, string what)
         {
-            if (command == null) throw new ZwcError("BAD_ARGS", "empty command for " + what, null, null);
+            if (command == null) throw new CadError("BAD_ARGS", "empty command for " + what, null, null);
             // a single trailing newline is the "press Enter" that submits the command; anything
             // else would be split into several commands by CAD
             string body = command;
             while (body.EndsWith("\n", StringComparison.Ordinal) || body.EndsWith("\r", StringComparison.Ordinal))
                 body = body.Substring(0, body.Length - 1);
             if (body.IndexOf('\n') >= 0 || body.IndexOf('\r') >= 0)
-                throw new ZwcError("BAD_ARGS", "internal: multi-line SendCommand payload for " + what, null, null);
+                throw new CadError("BAD_ARGS", "internal: multi-line SendCommand payload for " + what, null, null);
             if (command.Length > 2000)
-                throw new ZwcError("SENDCMD_TOO_LONG", "internal: " + command.Length
+                throw new CadError("SENDCMD_TOO_LONG", "internal: " + command.Length
                     + " chars would be silently dropped by CAD (limit ~2048)", null, null);
             AssertClean(doc, what);
             Com.Call(doc, "SendCommand", command);
             string p = LastPrompt(doc);
             if (PromptPolluted(p))
-                throw new ZwcError("CMD_STATE_POLLUTED",
+                throw new CadError("CMD_STATE_POLLUTED",
                     "after '" + what + "' the command line is stuck (LASTPROMPT = \"" + p + "\")",
                     "the LISP payload was rejected; check brackets/quotes, then press ESC in CAD", p);
         }
@@ -95,10 +95,10 @@ namespace ZwcHelper
         public static string EvalLisp(object doc, string expr, Ctx ctx, string what, int timeoutMs)
         {
             _seq++;
-            string varName = "ZWC_R" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture) + "_" + _seq;
-            string full = "(progn " + expr + " (setq " + varName + " ZWC_OUT))";
+            string varName = "CAD_R" + DateTime.Now.ToString("HHmmss", CultureInfo.InvariantCulture) + "_" + _seq;
+            string full = "(progn " + expr + " (setq " + varName + " CAD_OUT))";
             if (!Balanced(full))
-                throw new ZwcError("LISP_UNBALANCED", "internal: unbalanced LISP payload for " + what, null, full);
+                throw new CadError("LISP_UNBALANCED", "internal: unbalanced LISP payload for " + what, null, full);
             // clear any stale value first
             Com.TryCall(doc, "SetLispVariable", varName, "");
             Send(doc, full, ctx, what);
@@ -113,7 +113,7 @@ namespace ZwcHelper
                 }
                 Thread.Sleep(20);
             }
-            throw new ZwcError("LISP_TIMEOUT", "LISP result variable " + varName + " never got set by " + what,
+            throw new CadError("LISP_TIMEOUT", "LISP result variable " + varName + " never got set by " + what,
                 "CAD may still be processing the payload; re-run status to see LASTPROMPT", null);
         }
 

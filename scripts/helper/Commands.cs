@@ -1,7 +1,7 @@
 // Commands.cs - request command implementations: shared argument helpers plus the
 // session / diagnostic family (doctor, status, open, info, caption, cmdecho, finish).
 //
-// Moved verbatim out of ZwcHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). This is
+// Moved verbatim out of CadHelper.cs (plan 5.1 batch 2, 2026-11-05; pure move). This is
 // one half of a partial class split: the read/section/plan/write/verify/rollback half
 // lives in CommandsRead.cs. Member bodies are byte-identical, member order is preserved;
 // only this class declaration line gained "partial".
@@ -15,7 +15,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
-namespace ZwcHelper
+namespace CadHelper
 {
     // ======================================================================================
     // Section model / plan / writer / verifier  (DESIGN-M1.md section 4)
@@ -140,7 +140,7 @@ namespace ZwcHelper
                 r.Add("instanceError", anyError);
                 ctx.AppMap = null;
                 ctx.Result = r;
-                throw new ZwcError(anyError,
+                throw new CadError(anyError,
                     anyError == "AMBIGUOUS_PRODUCT"
                         ? "both a ZWCAD and an AutoCAD instance are running, so -App any cannot tell which one is meant"
                         : "no ZWCAD and no AutoCAD instance is running",
@@ -150,7 +150,7 @@ namespace ZwcHelper
 
             Cad cad;
             try { cad = Cad.AttachWithChoice(kind, false, ctx, pc, explicitProgId); }
-            catch (ZwcError e)
+            catch (CadError e)
             {
                 r.Add("instanceFound", false);
                 ctx.AppMap = null;
@@ -219,14 +219,14 @@ namespace ZwcHelper
                 probes.Add("promptPolluted", Cmd.PromptPolluted(lp));
                 try
                 {
-                    object lv = Com.Call(doc, "GetLispVariable", "ZWC_DOCTOR_PROBE_" + DateTime.Now.Ticks);
+                    object lv = Com.Call(doc, "GetLispVariable", "CAD_DOCTOR_PROBE_" + DateTime.Now.Ticks);
                     probes.Add("getLispVariable", lv == null ? "null" : (lv is bool ? "unset(False)" : "value:" + Com.Str(lv)));
                 }
                 catch (Exception e) { probes.Add("getLispVariable", "ERROR " + Com.Hr(e)); }
                 try
                 {
-                    Com.Call(doc, "SetLispVariable", "ZWC_DOCTOR_PROBE", "ok");
-                    object v = Com.Call(doc, "GetLispVariable", "ZWC_DOCTOR_PROBE");
+                    Com.Call(doc, "SetLispVariable", "CAD_DOCTOR_PROBE", "ok");
+                    object v = Com.Call(doc, "GetLispVariable", "CAD_DOCTOR_PROBE");
                     probes.Add("setLispVariableRoundTrip", Com.Str(v));
                 }
                 catch (Exception e) { probes.Add("setLispVariableRoundTrip", "ERROR " + Com.Hr(e)); }
@@ -364,7 +364,7 @@ namespace ZwcHelper
             else if (!string.IsNullOrEmpty(docArg))
             {
                 try { doc = cad.ResolveDoc(docArg, false, ctx, out matchedBy); }
-                catch (ZwcError e)
+                catch (CadError e)
                 {
                     if (e.Code != "DOC_NOT_FOUND") throw;
                     if (!File.Exists(docArg)) throw;
@@ -379,7 +379,7 @@ namespace ZwcHelper
             }
 
             if (doc == null)
-                throw new ZwcError("NO_DOCUMENT", "no drawing available after open", null, null);
+                throw new CadError("NO_DOCUMENT", "no drawing available after open", null, null);
 
             // activate so the user sees what we are touching (and so ActiveDocument is sane)
             try { Com.Call(doc, "Activate"); } catch (Exception) { }
@@ -717,7 +717,7 @@ namespace ZwcHelper
                     try { Com.Call(doc, "SetVariable", "TRUSTEDPATHS", want); }
                     catch (Exception e)
                     {
-                        throw new ZwcError("TRUST_WRITE_FAILED",
+                        throw new CadError("TRUST_WRITE_FAILED",
                             "Document.SetVariable(\"TRUSTEDPATHS\") failed: " + Com.Hr(e),
                             "add the temp dir by hand: Options > Files > Trusted Locations", null);
                     }
@@ -736,7 +736,7 @@ namespace ZwcHelper
             }
             else
             {
-                throw new ZwcError("BAD_ARGS", "unknown trust action '" + action + "'",
+                throw new CadError("BAD_ARGS", "unknown trust action '" + action + "'",
                     "use -Action status|addTemp|removeTemp", null);
             }
             return r;
@@ -780,7 +780,7 @@ namespace ZwcHelper
 
             Cad cad = null;
             try { cad = Cad.AttachFor(req, args, ctx, DocArg(req, args)); }
-            catch (ZwcError) { cad = null; }
+            catch (CadError) { cad = null; }
 
             bool ours = false;
             if (cad != null)

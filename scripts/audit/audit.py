@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""audit.py - drawing health audit rule engine for zwcad-cooperate.
+"""audit.py - drawing health audit rule engine for cad-cooperate.
 
 READ-ONLY LAYER. This tool never talks to CAD/COM. It consumes the JSON that
-scripts/zwc.ps1 already produces and turns it into a problem list:
+scripts/cad.ps1 already produces and turns it into a problem list:
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\zwc.ps1 info -ProgId X > info.json
-    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\zwc.ps1 read -ProgId X -Max 20000 > read.json
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\cad.ps1 info -ProgId X > info.json
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\cad.ps1 read -ProgId X -Max 20000 > read.json
     python scripts\\audit\\audit.py --info info.json --read read.json --md report.md --json report.json
 
 Usage:
@@ -44,8 +44,8 @@ import tempfile
 import unicodedata
 from collections import Counter, OrderedDict, defaultdict
 
-TOOL = "zwcad-cooperate/audit"
-SCHEMA = "zwcad-audit/1"
+TOOL = "cad-cooperate/audit"
+SCHEMA = "cad-audit/1"
 SEVERITIES = ("blocker", "major", "minor")
 SEV_RANK = {"blocker": 0, "major": 1, "minor": 2}
 
@@ -168,7 +168,7 @@ def deep_merge(base, override):
 
 
 def load_json(path):
-    """Load a JSON file written by zwc.ps1 (UTF-8, may carry a BOM)."""
+    """Load a JSON file written by cad.ps1 (UTF-8, may carry a BOM)."""
     with open(path, "rb") as fh:
         raw = fh.read()
     if raw.startswith(b"\xef\xbb\xbf"):
@@ -180,7 +180,7 @@ def load_json(path):
 
 
 def unwrap(obj):
-    """Accept a full zwc response ({ok,result,...}) or a bare result object."""
+    """Accept a full cad response ({ok,result,...}) or a bare result object."""
     if not isinstance(obj, dict):
         return {}, {}
     meta = {}
@@ -189,7 +189,7 @@ def unwrap(obj):
             meta[key] = obj[key]
     if obj.get("ok") is False:
         err = obj.get("error") or {}
-        raise ValueError("zwc response says ok:false (%s: %s)"
+        raise ValueError("cad response says ok:false (%s: %s)"
                          % (err.get("code"), err.get("message")))
     result = obj.get("result")
     if isinstance(result, dict):
@@ -1583,9 +1583,9 @@ def print_console(report, quiet=False):
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog="audit.py",
-        description="Drawing health audit for zwcad-cooperate (read-only, consumes zwc.ps1 JSON).")
-    parser.add_argument("--info", help="zwc.ps1 info response JSON (optional but recommended)")
-    parser.add_argument("--read", required=False, help="zwc.ps1 read response JSON")
+        description="Drawing health audit for cad-cooperate (read-only, consumes cad.ps1 JSON).")
+    parser.add_argument("--info", help="cad.ps1 info response JSON (optional but recommended)")
+    parser.add_argument("--read", required=False, help="cad.ps1 read response JSON")
     parser.add_argument("--rules", help="comma separated rule ids (default: all)")
     parser.add_argument("--config", help="JSON config file (or inline JSON string)")
     parser.add_argument("--json", dest="json_out", help="write machine report here")

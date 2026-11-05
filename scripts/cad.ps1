@@ -1,6 +1,6 @@
-# zwc.ps1 - zwcad-cooperate command line wrapper (M1).
+# cad.ps1 - cad-cooperate command line wrapper (M1).
 #
-#   zwc.ps1 <doctor|status|open|info|read|section|undo|hint|finish> [flags...]
+#   cad.ps1 <doctor|status|open|info|read|section|undo|hint|finish> [flags...]
 #
 # Contract: stdout is ALWAYS exactly one JSON document (DESIGN-M1.md section 2). Exit codes:
 #   0 = ok:true, 2 = ok:false, 3 = ok:false on a gate failure (verify rejected the work).
@@ -32,7 +32,7 @@ if ($args.Count -ge 1) {
 # ---------------------------------------------------------------- helper source hash (single recipe)
 # "source file count | newest mtime ticks | sorted sizes" -> SHA256 -> first 12 hex chars.
 # That string decides bin\cache\<sha>\, the daemon pipe name and the client's HelperHash() in
-# scripts\client\ZwcClient.cs. It used to be copy-pasted in FOUR places (the delegate fast path,
+# scripts\client\CadClient.cs. It used to be copy-pasted in FOUR places (the delegate fast path,
 # Get-RepoLayout, the legacy build block below and the C# client) kept in sync by comments only, so
 # editing the recipe on one side silently split wrapper, client and daemon onto different pipes.
 # Every PowerShell call site now goes through Get-HelperSha12, and `serve -Action status` cross-checks
@@ -70,21 +70,21 @@ function Get-HelperSha12 {
 }
 
 # ---------------------------------------------------------------- M3-E1 fast path
-# Every helper command is handed to bin\ZwcClient.exe: the client starts in ~60-100 ms and speaks
+# Every helper command is handed to bin\CadClient.exe: the client starts in ~60-100 ms and speaks
 # the daemon pipe, while `powershell -File` alone already costs ~1.9 s. Keeping the whole legacy
 # PowerShell pipeline in the way made this entry point 5-7 s per command even with a warm daemon
-# (measured 2026-11-04: zwc.ps1 status 5437-7814 ms vs ZwcClient status 84-176 ms), i.e. it ate the
+# (measured 2026-11-04: cad.ps1 status 5437-7814 ms vs CadClient status 84-176 ms), i.e. it ate the
 # entire daemon win. serve / --build-client are management commands and stay in this script (the
 # client delegates those back here, so delegating them would loop).
 $delegateRoot = $PSScriptRoot
 if (-not $delegateRoot) { $delegateRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
-$delegateClient = Join-Path (Split-Path $delegateRoot -Parent) 'bin\ZwcClient.exe'
+$delegateClient = Join-Path (Split-Path $delegateRoot -Parent) 'bin\CadClient.exe'
 $delegateIsAdmin = ($Command -eq 'serve' -or $Command -eq '--build-client' -or $Command -eq 'buildclient')
 if ($Command -and -not $delegateIsAdmin -and (Test-Path -LiteralPath $delegateClient)) {
     # only delegate when the helper binary for the CURRENT source hash exists; otherwise fall
     # through to the legacy path below, which compiles it first
     $dsha = Get-HelperSha12 -HelperDir (Join-Path $delegateRoot 'helper')
-    $dhelper = Join-Path (Join-Path (Join-Path (Split-Path $delegateRoot -Parent) 'bin\cache') $dsha) 'ZwcHelper.exe'
+    $dhelper = Join-Path (Join-Path (Join-Path (Split-Path $delegateRoot -Parent) 'bin\cache') $dsha) 'CadHelper.exe'
     if (Test-Path -LiteralPath $dhelper) {
         & $delegateClient @args
         exit $LASTEXITCODE
@@ -102,7 +102,7 @@ function Write-JsonError {
     exit 2
 }
 
-# zwc.ps1 --build-client : compile bin\ZwcClient.exe only (bootstrap used by zwc.cmd).
+# cad.ps1 --build-client : compile bin\CadClient.exe only (bootstrap used by cad.cmd).
 if ($Command -eq '--build-client' -or $Command -eq 'buildclient') {
     function Get-CscPathEarly {
         foreach ($arch in @('Framework64', 'Framework')) {
@@ -114,10 +114,10 @@ if ($Command -eq '--build-client' -or $Command -eq 'buildclient') {
     $sr = $PSScriptRoot
     if (-not $sr) { $sr = Split-Path -Parent $MyInvocation.MyCommand.Path }
     $repo = Split-Path $sr -Parent
-    $src = Join-Path $sr 'client\ZwcClient.cs'
+    $src = Join-Path $sr 'client\CadClient.cs'
     $bin = Join-Path $repo 'bin'
-    $exePath = Join-Path $bin 'ZwcClient.exe'
-    $hashPath = Join-Path $bin 'ZwcClient.sha'
+    $exePath = Join-Path $bin 'CadClient.exe'
+    $hashPath = Join-Path $bin 'CadClient.sha'
     if (Test-Path -LiteralPath $src) {
         $fi = Get-Item -LiteralPath $src
         $key = '' + $fi.Length + '|' + $fi.LastWriteTimeUtc.Ticks
@@ -147,7 +147,7 @@ if ($Command -eq '--build-client' -or $Command -eq 'buildclient') {
 }
 $KnownCommands = @('doctor', 'status', 'open', 'info', 'read', 'section', 'undo', 'hint', 'finish', 'serve', 'entity', 'query', 'snapshot', 'diff', 'show')
 if (-not $Command) {
-    Write-JsonError 'BAD_ARGS' 'usage: zwc.ps1 <doctor|status|open|info|read|section|undo|hint|finish> [flags...]' 'see DESIGN-M1.md section 3 for the flag list'
+    Write-JsonError 'BAD_ARGS' 'usage: cad.ps1 <doctor|status|open|info|read|section|undo|hint|finish> [flags...]' 'see DESIGN-M1.md section 3 for the flag list'
 }
 if ($KnownCommands -notcontains $Command) {
     Write-JsonError 'BAD_ARGS' ("unknown command: " + $Command) 'expected doctor|status|open|info|read|section|undo|hint|finish|serve'
@@ -176,8 +176,8 @@ function Get-RepoLayout {
         sha        = $info.sha
         cacheKey   = $info.key
         cacheDir   = $cacheDir
-        exe        = (Join-Path $cacheDir 'ZwcHelper.exe')
-        pipe       = ('zwc-' + $info.sha)
+        exe        = (Join-Path $cacheDir 'CadHelper.exe')
+        pipe       = ('cad-' + $info.sha)
         csc        = (Get-CscPath)
     }
 }
@@ -216,11 +216,11 @@ function Build-ClientExe {
     $scriptRoot = $PSScriptRoot
     if (-not $scriptRoot) { $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
     $repoRoot = Split-Path $scriptRoot -Parent
-    $src = Join-Path $scriptRoot 'client\ZwcClient.cs'
+    $src = Join-Path $scriptRoot 'client\CadClient.cs'
     if (-not (Test-Path -LiteralPath $src)) { return $null }
     $binDir = Join-Path $repoRoot 'bin'
-    $exe = Join-Path $binDir 'ZwcClient.exe'
-    $hashFile = Join-Path $binDir 'ZwcClient.sha'
+    $exe = Join-Path $binDir 'CadClient.exe'
+    $hashFile = Join-Path $binDir 'CadClient.sha'
     $fi = Get-Item -LiteralPath $src
     $key = '' + $fi.Length + '|' + $fi.LastWriteTimeUtc.Ticks
     if ((Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $hashFile)) {
@@ -234,7 +234,7 @@ function Build-ClientExe {
     $log = ''
     try { $log = (& $csc -nologo -optimize+ -target:exe -platform:anycpu -codepage:65001 ('-out:' + $tmpExe) -r:System.dll -r:System.Core.dll $src 2>&1 | Out-String) } catch { $log = [string]$_.Exception.Message }
     if (-not (Test-Path -LiteralPath $tmpExe)) {
-        # failure rollback: never leave bin\ZwcClient.exe.build-<pid>.exe behind
+        # failure rollback: never leave bin\CadClient.exe.build-<pid>.exe behind
         try { if (Test-Path -LiteralPath $tmpExe) { Remove-Item -LiteralPath $tmpExe -Force } } catch { }
         throw ('client compile failed: ' + $log.Trim())
     }
@@ -289,8 +289,8 @@ function Send-PipeJson([string]$pipeName, [string]$json, [int]$connectMs, [int]$
 }
 
 # ---------------------------------------------------------------- compile-cache eviction (P1-4.3)
-# The single implementation lives in bin\ZwcClient.exe (--prune-cache): it keeps the N newest
-# bin\cache\<sha12> entries plus the current source hash plus every directory a live ZwcHelper is
+# The single implementation lives in bin\CadClient.exe (--prune-cache): it keeps the N newest
+# bin\cache\<sha12> entries plus the current source hash plus every directory a live CadHelper is
 # running from, and removes stale/empty ones. This wrapper only shells out to it, so the eviction
 # rules cannot drift between the two entry points. Pure local work: no CAD attach, no daemon start
 # or stop, and a locked directory is reported (failedDirs) instead of breaking anything.
@@ -298,7 +298,7 @@ function Invoke-CachePrune($layout, [int]$Keep = 10) {
     $clientExe = $null
     try { $clientExe = Build-ClientExe } catch { $clientExe = $null }
     if (-not $clientExe) {
-        $cand = Join-Path (Split-Path $layout.scriptRoot -Parent) 'bin\ZwcClient.exe'
+        $cand = Join-Path (Split-Path $layout.scriptRoot -Parent) 'bin\CadClient.exe'
         if (Test-Path -LiteralPath $cand) { $clientExe = $cand }
     }
     if (-not $clientExe) { return $null }
@@ -308,7 +308,7 @@ function Invoke-CachePrune($layout, [int]$Keep = 10) {
     try { return ($text | ConvertFrom-Json) } catch { return $null }
 }
 
-# --build-client: bootstrap used by zwc.cmd when bin\ZwcClient.exe is missing
+# --build-client: bootstrap used by cad.cmd when bin\CadClient.exe is missing
 if ($Command -eq '--build-client' -or $Command -eq 'buildclient') {
     $exe = Build-ClientExe
     if ($exe) { exit 0 }
@@ -344,7 +344,7 @@ if ($Command -eq 'serve') {
             $o = [ordered]@{
                 ok    = $false
                 cmd   = 'serve'
-                error = [ordered]@{ code = 'PRUNE_FAILED'; message = 'bin\ZwcClient.exe --prune-cache did not answer'; hint = 'run: powershell -NoProfile -File scripts\zwc.ps1 --build-client' }
+                error = [ordered]@{ code = 'PRUNE_FAILED'; message = 'bin\CadClient.exe --prune-cache did not answer'; hint = 'run: powershell -NoProfile -File scripts\cad.ps1 --build-client' }
             }
             [Console]::Out.Write(($o | ConvertTo-Json -Depth 8 -Compress)); exit 2
         }
@@ -376,7 +376,7 @@ if ($Command -eq 'serve') {
     }
     elseif ($action -eq 'recover') {
         # Drop session state, rebuild the daemon, then re-attach through the pipe. Never touches CAD.
-        $statePath = Join-Path $env:TEMP 'zwcad-cooperate\state.json'
+        $statePath = Join-Path $env:TEMP 'cad-cooperate\state.json'
         $backup = $statePath + '.pre-recover'
         if (Test-Path -LiteralPath $statePath) { Copy-Item -LiteralPath $statePath -Destination $backup -Force }
         try {
@@ -404,7 +404,7 @@ if ($Command -eq 'serve') {
     elseif ($action -eq 'stop' -or $action -eq 'reset') {
         $stopped = ($null -ne (Send-PipeJson $layout.pipe '{"cmd":"daemon-stop"}' 500 2000))
         if ($action -eq 'reset') {
-            Get-Process -Name 'ZwcHelper' -ErrorAction SilentlyContinue | ForEach-Object {
+            Get-Process -Name 'CadHelper' -ErrorAction SilentlyContinue | ForEach-Object {
                 try { if ($_.Path -eq $layout.exe) { Stop-Process -Id $_.Id -Force; $stopped = $true } } catch { }
             }
         }
@@ -428,7 +428,7 @@ if ($Command -eq 'serve') {
         $clientExe = $null
         try { $clientExe = Build-ClientExe } catch { $clientExe = $null }
         if (-not $clientExe) {
-            $cand = Join-Path (Split-Path $layout.scriptRoot -Parent) 'bin\ZwcClient.exe'
+            $cand = Join-Path (Split-Path $layout.scriptRoot -Parent) 'bin\CadClient.exe'
             if (Test-Path -LiteralPath $cand) { $clientExe = $cand }
         }
         if (-not $clientExe) {
@@ -469,7 +469,7 @@ if ($Command -eq 'serve') {
         $resultObj['clientError'] = $clientError
         $resultObj['clientKey'] = $clientKey
         $resultObj['helperKey'] = $layout.cacheKey
-        $msg = 'the PowerShell wrapper and bin\ZwcClient.exe disagree on the helper source-hash recipe (ps1 helperSha=' + $psSha + ', client helperSha=' + [string]$clientSha + ', clientError=' + [string]$clientError + '); a stale client build counts as a mismatch'
+        $msg = 'the PowerShell wrapper and bin\CadClient.exe disagree on the helper source-hash recipe (ps1 helperSha=' + $psSha + ', client helperSha=' + [string]$clientSha + ', clientError=' + [string]$clientError + '); a stale client build counts as a mismatch'
         $o = [ordered]@{
             ok     = $false
             cmd    = 'serve'
@@ -477,7 +477,7 @@ if ($Command -eq 'serve') {
             error  = [ordered]@{
                 code    = 'HASH_RECIPE_MISMATCH'
                 message = $msg
-                hint    = 'both sides must hash "source file count | newest mtime ticks | sorted sizes" with SHA256 and take the first 12 hex chars; fix scripts\zwc.ps1 Get-HelperSha12 or ZwcClient.HelperHash, then rebuild the client: powershell -NoProfile -File scripts\zwc.ps1 --build-client'
+                hint    = 'both sides must hash "source file count | newest mtime ticks | sorted sizes" with SHA256 and take the first 12 hex chars; fix scripts\cad.ps1 Get-HelperSha12 or CadClient.HelperHash, then rebuild the client: powershell -NoProfile -File scripts\cad.ps1 --build-client'
             }
         }
         [Console]::Out.Write(($o | ConvertTo-Json -Depth 8 -Compress)); exit 2
@@ -525,7 +525,7 @@ for ($i = 0; $i -lt $Rest.Count; $i++) {
     }
 }
 if ($opts.ContainsKey('help')) {
-    Write-JsonError 'BAD_ARGS' 'usage: zwc.ps1 <command> [flags...]' 'doctor|status|open|info|read|section|undo|hint|finish; see DESIGN-M1.md section 3'
+    Write-JsonError 'BAD_ARGS' 'usage: cad.ps1 <command> [flags...]' 'doctor|status|open|info|read|section|undo|hint|finish; see DESIGN-M1.md section 3'
 }
 
 $Keep = $opts.ContainsKey('keep')
@@ -588,13 +588,13 @@ try {
     }
     $shaInfo = Get-HelperSha12 -HelperDir $helperDir -WithKey
     $sources = @($shaInfo.sources)
-    if ($sources.Count -eq 0) { Write-JsonError 'NO_HELPER' 'no .cs files next to zwc.ps1' 'the repository is incomplete' }
+    if ($sources.Count -eq 0) { Write-JsonError 'NO_HELPER' 'no .cs files next to cad.ps1' 'the repository is incomplete' }
     $cacheKey = $shaInfo.key
     $sha = $shaInfo.sha
 
     $repoRoot = Split-Path $scriptRoot -Parent
     $cacheDir = Join-Path $repoRoot ('bin\cache\' + $sha)
-    $exePath = Join-Path $cacheDir 'ZwcHelper.exe'
+    $exePath = Join-Path $cacheDir 'CadHelper.exe'
 
     if (-not (Test-Path -LiteralPath $exePath)) {
         $csc = $null
@@ -627,12 +627,12 @@ try {
             if ($createdCacheDir -and (Test-Path -LiteralPath $cacheDir)) {
                 try { if (@(Get-ChildItem -LiteralPath $cacheDir -Force).Count -eq 0) { Remove-Item -LiteralPath $cacheDir -Force } } catch { }
             }
-            Write-JsonError 'COMPILE_FAILED' ('csc failed: ' + $compileLog.Trim()) 'check scripts\helper\ZwcHelper.cs'
+            Write-JsonError 'COMPILE_FAILED' ('csc failed: ' + $compileLog.Trim()) 'check scripts\helper\CadHelper.cs'
         }
     }
 
     # ---------------------------------------------------------------- run the helper
-    $work = Join-Path $env:TEMP ('zwcad-cooperate\run-' + [guid]::NewGuid().ToString('N'))
+    $work = Join-Path $env:TEMP ('cad-cooperate\run-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $work | Out-Null
     $reqPath = Join-Path $work 'request.json'
     $respPath = Join-Path $work 'response.json'
@@ -659,7 +659,7 @@ try {
     if (-not $exited) {
         try { $proc.Kill() } catch { }
         try { Start-Sleep -Milliseconds 200 } catch { }
-        Write-JsonError 'TIMEOUT' ('the helper did not answer within ' + $timeoutSec + ' s (a CAD modal dialog or a blocked COM call is the usual cause)') 'close any dialog in CAD, then run: zwc.ps1 doctor'
+        Write-JsonError 'TIMEOUT' ('the helper did not answer within ' + $timeoutSec + ' s (a CAD modal dialog or a blocked COM call is the usual cause)') 'close any dialog in CAD, then run: cad.ps1 doctor'
     }
     $stopwatch.Stop()
 

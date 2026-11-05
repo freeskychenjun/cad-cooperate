@@ -3,7 +3,7 @@
 """make_clean_dxf.py - tiny helper: write tests/audit/fixtures/clean.dxf.
 
 The clean DXF is the "no problem here" end-to-end case: it is opened in CAD, read
-through zwc.ps1 and audited; the expected result is zero issues. The same drawing
+through cad.ps1 and audited; the expected result is zero issues. The same drawing
 exists as clean.info.json / clean.read.json for the offline regression test.
 """
 

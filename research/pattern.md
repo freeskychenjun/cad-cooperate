@@ -49,7 +49,7 @@ WPS 侧的总架构（`OPTIMIZATION-PLAN.md:17`）：**入口层 → 包装层 �
 
 **CAD 版对应物与差异**
 
-- 对应物：`zwc.cmd <zwcad> <命令> [参数]` + `zwc.ps1`，同样 `-Mta` 跑包装层。**理由同源**：包装层只拼 JSON 走管道，不需要公寓。
+- 对应物：`cad.cmd <zwcad> <命令> [参数]` + `cad.ps1`，同样 `-Mta` 跑包装层。**理由同源**：包装层只拼 JSON 走管道，不需要公寓。
 - **差异 1（更值钱）**：CAD 的 helper 不仅必须 STA，`CreateObject("ZWCAD.Application")` / attach 已运行实例的开销大概率**高于** WPS 的 attach（CAD 进程体量大）。WPS 那份"热命令 ~0.5–3.5 s"是 CAD 的下限参照，不是承诺——**首次 attach 与冷启动必须单独测**（§6.1 A）。
 - **差异 2**：CAD 参数里会有大量**几何串**（`"0,0 100,0"`、`"1.5,2.0"`）和 LISP 片段（含 `(` `)` `"` `;` `'`）。`^` 之外还要防 **cmd 的 `%` 变量展开**与 `&`。⇒ 沿用结论：**一律 PowerShell 入口 + 长/几何/LISP 参数走 `-Items <json 文件>`**（WPS 已把中文正文一律走文件，`SKILL.md:150`、`excel-quirks.md:51`）。
 - **差异 3**：CAD 有 `SendCommand` 这条"发原生命令"的通道，它**本身就是字符串→命令的注入面**。包装层必须把 `SendCommand` 收进 helper 内部（白名单化），绝不暴露成"随便传命令字符串"的 CLI 参数。
@@ -70,9 +70,9 @@ WPS 侧的总架构（`OPTIMIZATION-PLAN.md:17`）：**入口层 → 包装层 �
 
 **CAD 版对应物与差异**
 
-- 对应物：`ZwcHelper.exe --serve <pipe>`，`[STAThread] Main`，`CreateObject("ZWCAD.Application")` 或 `Marshal.GetActiveObject` 附着，管道同款协议。`serve -Action start|status|stop|reset` 同款。
+- 对应物：`CadHelper.exe --serve <pipe>`，`[STAThread] Main`，`CreateObject("ZWCAD.Application")` 或 `Marshal.GetActiveObject` 附着，管道同款协议。`serve -Action start|status|stop|reset` 同款。
 - **差异 1（必须比 WPS 更严）**：CAD 是**命令驱动**的应用，存在"当前有活动命令"这一状态（用户正拖一条线、正开着选项对话框）。daemon 缓存的 `ActiveDocument` 引用在用户切文档后会漂（WPS 已有同类问题：`wb.ActiveWindow` 常为 null，`SKILL.md:293`）。⇒ **文档必须按 `FullName` 解析，绝不依赖 ActiveDocument**（WPS 已经这么做，`DESIGN-parallel-tasks.md:83`；CAD 照抄）；并且每次写前查一次"是否有活动命令"（AutoCAD 有 `CMDACTIVE` 系统变量/`GetVariable`）→ 有则 `BUSY`。
-- **差异 2**：WPS 的 `maxInstances=1` 只保证同一 app 串行；WPS 实测"daemon 忙时第二条命令 900 ms 抢不到管道就**静默另起一个 helper**"（`DESIGN-parallel-tasks.md:80`，实测 `helper_max=2`），两个 helper 同时挂同一个 WPS 实例。**CAD 上这个 bug 更致命**：两个 helper 各自开 UndoMark、各自 Regen、各自改选择集，会把用户的命令栈搞乱。⇒ **WPS 的 900 ms 回退在 CAD 上不能照抄**，要么排队（等管道，有超时），要么落一次性模式前先抢**文档级命名互斥锁**（`Local\zwc-doc-<sha16(FullName)>`）。这是"最该改"清单外的一条硬改动。
+- **差异 2**：WPS 的 `maxInstances=1` 只保证同一 app 串行；WPS 实测"daemon 忙时第二条命令 900 ms 抢不到管道就**静默另起一个 helper**"（`DESIGN-parallel-tasks.md:80`，实测 `helper_max=2`），两个 helper 同时挂同一个 WPS 实例。**CAD 上这个 bug 更致命**：两个 helper 各自开 UndoMark、各自 Regen、各自改选择集，会把用户的命令栈搞乱。⇒ **WPS 的 900 ms 回退在 CAD 上不能照抄**，要么排队（等管道，有超时），要么落一次性模式前先抢**文档级命名互斥锁**（`Local\cad-doc-<sha16(FullName)>`）。这是"最该改"清单外的一条硬改动。
 - **差异 3**：会话状态签名要重设计。WPS 用"段数/修订数/保存标志/抽样文本哈希"；CAD 没有页/段，等价物是 **`doc.Saved` + 实体计数（按类型/空间）+ 句柄最大值 + Extents 哈希 + 当前布局名**。注意 **`Saved=false` 时磁盘 mtime 不变**，所以文件指纹必须"内存签名优先、磁盘指纹兜底"（否则用户改了没存，快照会假命中缓存）。
 - **差异 4**：CAD 的"写前快照"不能是文件拷贝。`SaveAs` 会**把活动文档换成新文件**（WPS 已踩过"SaveAs 换身份"，`memory`/`excel-quirks`），而 `Save` 会动用户文件并清撤销栈。⇒ 快照必须是**逻辑快照**：受影响实体的 `Handle` + 属性/几何前值，或"导出 DXF 到临时目录"（导出不改身份，但**是否包含未保存的内存状态必须实测**，§6.1 B）。
 
@@ -114,7 +114,7 @@ WPS 侧的总架构（`OPTIMIZATION-PLAN.md:17`）：**入口层 → 包装层 �
   2. **COM 枚举 + 批量取属性**：`ModelSpace.Item(i)` 逐实体拿 `ObjectName/Layer/GetBoundingBox`（AutoCAD 一次 `GetBoundingBox` 给 min+max 两点，`Polyline.Coordinates` 一次给全部顶点 → **"数组型属性一次取"是 CAD 比 Word 强的地方**）。**优点**：真值、含块外属性、无需临时文件。**缺点**：O(实体数) 往返，1 万实体就是 3–4 万次跨进程调用。
   3. **原生 .NET API 在进程内**（若 `api-research` 确认 ZWCAD v16 带 `ZwSoft.ZwCAD.*` 托管程序集）：可以进程内遍历，省掉全部跨进程往返。**这是最优解，但依赖版本**（task-2 第 1/2 问）。
 - **差异**：**两条路径的交叉点必须实测**（§6.1 B）。WPS 的结论是"一次取全永远赢"，因为它是一次 4 MB OOXML；CAD 上**小图 COM 枚举可能更快**（千级实体），"总是导 DXF"会亏。⇒ 设计上必须**按实体量/文件大小自动选路 + 响应里显式报 `readPath:"dxf"|"com"|"mgd"` + 保留 `-Slow` 强制开关**（双路径 A/B 逐字段比对是 WPS 最值钱的验收纪律，照抄）。
-- **缓存**：键必须是 `(FullName 小写 SHA16, doc.Saved, 指纹)` 而不是磁盘 mtime —— 用户改了没存时 mtime 不变。DXF 缓存文件放 `%LOCALAPPDATA%\zwcad-cooperate\snap\<sha16>\<tag>.dxf`，**绝不写进用户图纸目录**（WPS 同一纪律，`workflows.md:166`）。
+- **缓存**：键必须是 `(FullName 小写 SHA16, doc.Saved, 指纹)` 而不是磁盘 mtime —— 用户改了没存时 mtime 不变。DXF 缓存文件放 `%LOCALAPPDATA%\cad-cooperate\snap\<sha16>\<tag>.dxf`，**绝不写进用户图纸目录**（WPS 同一纪律，`workflows.md:166`）。
 
 ### 1.5 写侧原子批（锚点校验 + 回读校验 + 失败整体回滚）
 
@@ -248,7 +248,7 @@ WPS 侧的性能结论都是**带日期、带数字、带机器**的实测（`OP
 
 ## 4. CAD 版命令面草案（25 条）
 
-**命名约定**：`zwc.ps1 zwcad <命令>`；所有命令支持 `-TimeoutSec`（默认 180，`SendCommand` 类另设）；**响应永远是单段 JSON**；退出码沿用 WPS 分层（1=调用错、2=`ok:false`、3=`check/audit` 门禁）。**`-DryRun` 一律"只读可用"**（WPS 已验证：只读文档也能跑 dry-run，`SKILL.md:127`）。
+**命名约定**：`cad.ps1 zwcad <命令>`；所有命令支持 `-TimeoutSec`（默认 180，`SendCommand` 类另设）；**响应永远是单段 JSON**；退出码沿用 WPS 分层（1=调用错、2=`ok:false`、3=`check/audit` 门禁）。**`-DryRun` 一律"只读可用"**（WPS 已验证：只读文档也能跑 dry-run，`SKILL.md:127`）。
 
 ### 4.1 读（8 条）
 
@@ -361,7 +361,7 @@ WPS 侧的性能结论都是**带日期、带数字、带机器**的实测（`OP
     { "code": "NOT_SAVED", "message": "改动只在内存里；本 skill 绝不隐式 save（撤销/回滚依赖 undoToken）" }
   ],
   "elapsedMs": 812,
-  "daemon": { "pipe": "zwc-0a1b2c3d4e5f", "hot": true, "pid": 20416 }
+  "daemon": { "pipe": "cad-0a1b2c3d4e5f", "hot": true, "pid": 20416 }
 }
 ```
 
